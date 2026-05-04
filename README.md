@@ -1,378 +1,260 @@
- [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/guy-hartstein/company-research-agent/blob/main/README.md)
-[![zh](https://img.shields.io/badge/lang-zh-green.svg)](https://github.com/guy-hartstein/company-research-agent/blob/main/README.zh.md)
-[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](https://github.com/guy-hartstein/company-research-agent/blob/main/README.fr.md)
-[![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/guy-hartstein/company-research-agent/blob/main/README.es.md)
-[![jp](https://img.shields.io/badge/lang-jp-orange.svg)](https://github.com/guy-hartstein/company-research-agent/blob/main/README.jp.md)
-[![kr](https://img.shields.io/badge/lang-ko-purple.svg)](https://github.com/guy-hartstein/company-research-agent/blob/main/README.kr.md)
+# 中文公司调研 Agent 🔍
 
-
-# Agentic Company Researcher 🔍
+> 🙏 **本项目基于 [guy-hartstein/company-research-agent](https://github.com/guy-hartstein/company-research-agent) (MIT License) 改造,由 Guy Hartstein 创作。**
+>
+> 主要差异:
+> - 🌏 **LLM 走 [OpenRouter](https://openrouter.ai)** —— 国内 DeepSeek / Qwen / Kimi / 智谱 与国外 GPT / Claude / Gemini 通过同一接口切换
+> - 🇨🇳 **Prompt 全量中文化** —— 不是机翻,人工重写,对国内模型更友好
+> - 🎨 **UI 与示例公司中文化** —— 默认示例换成腾讯、字节、宁德时代、比亚迪
+> - 🔌 **检索层抽象化** —— 引入 `SearchProvider` 接口,Phase 2 接 Bocha AI / AKShare / 巨潮资讯网 / 企查查 等国内数据源不再动节点代码
 
 ![web ui](<static/ui-1.png>)
 
-A multi-agent tool that generates comprehensive company research reports. The platform uses a pipeline of AI agents to gather, curate, and synthesize information about any company.
+一个**多 agent 架构**的中文公司调研工具:输入一家公司的名字 → 自动产出一份面向投资 / BD / 竞品分析场景的全面调研报告。技术上基于 LangGraph 编排,通过流水线式的多个 AI 节点采集、过滤并合成信息。
 
-✨Check it out online! https://companyresearcher.tavily.com ✨
+> 原版在线 Demo(英文,可参考效果):https://companyresearcher.tavily.com
 
-https://github.com/user-attachments/assets/0e373146-26a7-4391-b973-224ded3182a9
+---
 
-## Features
+## ✨ 特性
 
-- **Multi-Source Research**: Gathers data from various sources, including company websites, news articles, financial reports, and industry analyses
-- **AI-Powered Content Filtering**: Uses Tavily's relevance scoring for content curation
-- **Asynchronous Processing**: Efficient polling-based architecture for tracking research progress
-- **Dual Model Architecture**:
-  - Gemini 2.5 Flash for high-context research synthesis
-  - GPT-5.1 for precise report formatting and editing
-- **Modern React Frontend**: Responsive UI with progress tracking and download options
-- **Modular Architecture**: Built using a pipeline of specialized research and processing nodes
+- **多源调研**:从公司官网、新闻、财报、行业分析等多个来源采集信息
+- **AI 内容过滤**:基于检索引擎打分 + LLM 二次评估
+- **异步处理**:基于轮询/流式的进度跟踪架构
+- **三段式 LLM 架构**(每节点可独立配置模型):
+  - **Researcher**(搜集与初步分析)— 默认 `deepseek-chat`,快且便宜
+  - **Briefing**(分类摘要,长上下文)— 默认 `qwen-2.5-72b-instruct`
+  - **Editor**(终稿编辑,严谨格式)— 默认 `claude-3.5-sonnet`
+- **现代 React 前端**:进度跟踪、PDF 下载
+- **模块化架构**:每个 agent 是独立的 LangGraph 节点,易于替换扩展
 
-## Agent Framework
+## 🆚 与原版的差异
 
-### Research Pipeline
+| 维度 | 原版(`guy-hartstein/company-research-agent`) | 本项目 |
+|---|---|---|
+| 语言 | 英文 prompt + 英文 UI + 英文报告 | **中文** prompt + UI + 报告 |
+| LLM provider | OpenAI(GPT-5.1 / GPT-4o)+ Google(Gemini 2.5 Flash)硬编码 | **OpenRouter 网关**,国内外模型逐节点可切 |
+| 检索 | 直接调 Tavily 客户端,5 个文件分散调用 | `SearchProvider` 抽象接口,Tavily 收拢为默认 provider |
+| 默认示例 | Apple、Stripe 等欧美公司 | 腾讯、字节跳动、宁德时代、比亚迪 |
+| 国内可用性 | 需要科学上网调 OpenAI/Gemini | OpenRouter + 国产模型可纯境内跑通 |
+| 国内数据源 | 无 | Phase 2 计划接入 AKShare / 巨潮 / 企查查 / Bocha AI |
 
-The platform follows an agentic framework with specialized nodes that process data sequentially:
+> Phase 1 范围与详细决策见 [`openspec/changes/cn-localization-phase1/`](openspec/changes/cn-localization-phase1/)。本仓库使用 [openSpec](https://github.com/Fission-AI/OpenSpec) 进行 spec-driven 开发。
 
-1. **Research Nodes**:
-   - `CompanyAnalyzer`: Researches core business information
-   - `IndustryAnalyzer`: Analyzes market position and trends
-   - `FinancialAnalyst`: Gathers financial metrics and performance data
-   - `NewsScanner`: Collects recent news and developments
+---
 
-2. **Processing Nodes**:
-   - `Collector`: Aggregates research data from all analyzers
-   - `Curator`: Implements content filtering and relevance scoring
-   - `Briefing`: Generates category-specific summaries using Gemini 2.5 Flash
-   - `Editor`: Compiles and formats the briefings into a final report using GPT-5.1
+## 🧠 Agent 框架
 
-   ![web ui](<static/agent-flow.png>)
+### 调研流水线
 
-### Content Generation Architecture
+10 个节点的有向无环图(DAG),并行 + 串行混合编排:
 
-The platform leverages separate models for optimal performance:
+```
+                ┌─→ FinancialAnalyst  ─┐
+                ├─→ NewsScanner       │
+GroundingNode ──┼─→ IndustryAnalyzer  ┼─→ Collector → Curator → Enricher → Briefing → Editor
+                └─→ CompanyAnalyzer   ─┘
+```
 
-1. **Gemini 2.5 Flash** (`briefing.py`):
-   - Handles high-context research synthesis tasks
-   - Excels at processing and summarizing large volumes of data
-   - Used for generating initial category briefings
-   - Efficient at maintaining context across multiple documents
+1. **入口节点 `GroundingNode`**:从用户输入抓取公司官网做初步定位(Tavily Crawl)
+2. **4 个并行 Researcher**:
+   - `CompanyAnalyzer`:核心业务、产品、团队
+   - `IndustryAnalyzer`:行业地位、市场趋势、竞品
+   - `FinancialAnalyst`:融资、营收、估值等财务指标
+   - `NewsScanner`:近期新闻与重要事件
+3. **后处理节点(串行)**:
+   - `Collector`:汇总四路 researcher 结果
+   - `Curator`:相关性过滤(默认阈值 0.4)
+   - `Enricher`:对入选文档做内容补全
+   - `Briefing`:生成 4 份分类摘要(用 briefing role LLM)
+   - `Editor`:整合为终稿(用 editor role LLM,流式输出)
 
-2. **GPT-5.1** (`editor.py`):
-   - Specializes in precise formatting and editing tasks
-   - Handles markdown structure and consistency
-   - Superior at following exact formatting instructions
-   - Used for:
-     - Final report compilation
-     - Content deduplication
-     - Markdown formatting
-     - Real-time report streaming
+![web ui](<static/agent-flow.png>)
 
-This approach combines Gemini's strength in handling large context windows with GPT-5.1's precision in following specific formatting instructions.
+### 内容生成架构(三段式 LLM)
 
-### Content Curation System
+不同节点对模型能力需求不同,本项目通过 `LLMFactory.get_llm(role)` 按角色绑定模型:
 
-The platform uses a content filtering system in `curator.py`:
+| Role | 默认模型(可在 `.env` 覆盖) | 强项 | 用在哪 |
+|---|---|---|---|
+| `researcher` | `deepseek/deepseek-chat` | 速度 + 性价比 | 4 个 researcher 节点搜集与分析 |
+| `briefing` | `qwen/qwen-2.5-72b-instruct` | 长上下文归纳 | `briefing.py` 生成分类摘要 |
+| `editor` | `anthropic/claude-3.5-sonnet` | 格式严谨 + 流式 | `editor.py` 整合终稿 |
 
-1. **Relevance Scoring**:
-   - Documents are scored by Tavily's AI-powered search
-   - A minimum threshold (default 0.4) is required to proceed
-   - Scores reflect relevance to the specific research query
-   - Higher scores indicate better matches to the research intent
+> 配置示例见下方 [环境变量](#环境变量)。如果你只有 OpenAI Key,工厂会自动降级到原生 OpenAI 端点。
 
-2. **Document Processing**:
-   - Content is normalized and cleaned
-   - URLs are deduplicated and standardized
-   - Documents are sorted by relevance scores
-   - Research runs asynchronously in the background
+### 内容过滤系统
 
-### Backend Architecture
+`backend/nodes/curator.py` 实现:
 
-The platform implements a simple polling-based communication system:
+1. **相关性打分**:由检索引擎(默认 Tavily)在搜索时返回 score(0-1),低于阈值(默认 0.4)的文档过滤掉
+2. **文档处理**:URL 去重、内容标准化、按相关度排序;调研全程异步执行
+
+### 后端架构
+
+基于 FastAPI + 异步任务,前端通过轮询 + 流式接口接收结果。
 
 ![web ui](<static/ui-2.png>)
 
-1. **Backend Implementation**:
-   - Uses FastAPI with async support
-   - Research tasks run in background
-   - Results are stored and accessed via REST endpoints
-   - Simple job status tracking
-   
-2. **Frontend Integration**:
-   - React frontend submits research requests
-   - Receives job_id for tracking
-   - Polls `/research/{job_id}/report` endpoint
-   - Displays final report when complete
+API 端点:
 
-3. **API Endpoints**:
-   - `POST /research`: Submit new research request
-   - `GET /research/{job_id}/report`: Poll for completed report
-   - `POST /generate-pdf`: Generate PDF from report content
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| `POST` | `/research` | 提交调研请求,返回 `job_id` |
+| `GET` | `/research/{job_id}` | 查询任务状态 |
+| `GET` | `/research/{job_id}/stream` | 订阅进度流(SSE) |
+| `GET` | `/research/{job_id}/report` | 拉取终稿报告 |
+| `POST` | `/generate-pdf` | 生成 PDF |
 
-## Setup
+---
 
-### Quick Setup (Recommended)
+## 🚀 安装与运行
 
-The easiest way to get started is using the setup script, which automatically detects and uses `uv` for faster Python package installation when available:
+### 快速开始(推荐)
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/guy-hartstein/tavily-company-research.git
-cd tavily-company-research
-```
+git clone https://github.com/BovmantH/cn-company-research-agent.git
+cd cn-company-research-agent
 
-2. Make the setup script executable and run it:
-```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-The setup script will:
+`setup.sh` 会自动:
 
-- Detect and use `uv` for faster Python package installation (if available)
-- Check for required Python and Node.js versions
-- Optionally create a Python virtual environment (recommended)
-- Install all dependencies (Python and Node.js)
-- Guide you through setting up your environment variables
-- Optionally start both backend and frontend servers
+- 检测并优先使用 [`uv`](https://github.com/astral-sh/uv)(Python 包管理器,比 pip 快 10-100×)
+- 检查 Python / Node.js 版本
+- 创建虚拟环境(可选)
+- 安装后端 + 前端依赖
+- 引导你填写环境变量
+- 一键启动两端服务
 
-> **💡 Pro Tip**: Install [uv](https://github.com/astral-sh/uv) for significantly faster Python package installation:
->
-> ```bash
-> curl -LsSf https://astral.sh/uv/install.sh | sh
-> ```
+> **💡 提示**:用 `uv` 装依赖快很多:`curl -LsSf https://astral.sh/uv/install.sh | sh`(Windows 用户用 PowerShell 版本)
 
-You'll need the following API keys ready:
-- Tavily API Key
-- Google Gemini API Key
-- OpenAI API Key
-- Google Maps API Key
-- MongoDB URI (optional)
-
-### Manual Setup
-
-If you prefer to set up manually, follow these steps:
-
-1. Clone the repository:
-```bash
-git clone https://github.com/guy-hartstein/tavily-company-research.git
-cd tavily-company-research
-```
-
-2. Install backend dependencies:
-```bash
-# Optional: Create and activate virtual environment
-# With uv (faster - recommended if available):
-uv venv .venv
-source .venv/bin/activate
-
-# Or with standard Python:
-# python -m venv .venv
-# source .venv/bin/activate
-
-# Install Python dependencies
-# With uv (faster):
-uv pip install -r requirements.txt
-
-# Or with pip:
-# pip install -r requirements.txt
-```
-
-3. Install frontend dependencies:
-```bash
-cd ui
-npm install
-```
-
-4. **Set up Environment Variables**:
-
-This project requires two separate `.env` files for the backend and frontend.
-
-**For the Backend:**
-
-Create a `.env` file in the project's root directory and add your backend API keys:
-
-```env
-TAVILY_API_KEY=your_tavily_key
-GEMINI_API_KEY=your_gemini_key
-OPENAI_API_KEY=your_openai_key
-
-# Optional: Enable MongoDB persistence
-# MONGODB_URI=your_mongodb_connection_string
-```
-
-**For the Frontend:**
-
-Create a `.env` file inside the `ui` directory. You can copy the example file first:
+### 手动安装
 
 ```bash
-cp ui/.env.development.example ui/.env
+# 1) 克隆
+git clone https://github.com/BovmantH/cn-company-research-agent.git
+cd cn-company-research-agent
+
+# 2) 后端
+uv venv .venv && source .venv/bin/activate    # 或 python -m venv .venv
+uv pip install -r requirements.txt            # 或 pip install -r requirements.txt
+
+# 3) 前端
+cd ui && npm install && cd ..
+
+# 4) 配置 .env(见下一节),然后:
+uvicorn application:app --reload --port 8000     # 一个终端跑后端
+cd ui && npm run dev                              # 另一个终端跑前端
+# 访问 http://localhost:5173
 ```
 
-Then, open `ui/.env` and add your frontend environment variables:
-
-```env
-VITE_API_URL=http://localhost:8000
-VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
-```
-
-### Docker Setup
-
-The application can be run using Docker and Docker Compose:
-
-1. Clone the repository:
-```bash
-git clone https://github.com/guy-hartstein/tavily-company-research.git
-cd tavily-company-research
-```
-
-2. **Set up Environment Variables**:
-
-The Docker setup uses two separate `.env` files.
-
-**For the Backend:**
-
-Create a `.env` file in the project's root directory with your backend API keys:
-
-```env
-TAVILY_API_KEY=your_tavily_key
-GEMINI_API_KEY=your_gemini_key
-OPENAI_API_KEY=your_openai_key
-
-# Optional: Enable MongoDB persistence
-# MONGODB_URI=your_mongodb_connection_string
-```
-
-**For the Frontend:**
-
-Create a `.env` file inside the `ui` directory. You can copy the example file first:
+### Docker 一键启动
 
 ```bash
-cp ui/.env.development.example ui/.env
-```
+git clone https://github.com/BovmantH/cn-company-research-agent.git
+cd cn-company-research-agent
 
-Then, open `ui/.env` and add your frontend environment variables:
-
-```env
-VITE_API_URL=http://localhost:8000
-VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
-```
-
-3. Build and start the containers:
-```bash
+# 配好两个 .env 文件(根目录 + ui/),然后:
 docker compose up --build
 ```
 
-This will start both the backend and frontend services:
-- Backend API will be available at `http://localhost:8000`
-- Frontend will be available at `http://localhost:5174`
+- 后端:`http://localhost:8000`
+- 前端:`http://localhost:5174`
 
-To stop the services:
-```bash
-docker compose down
+修改 `.env` 后需要重启:`docker compose down && docker compose up`
+
+---
+
+## 🔧 环境变量
+
+需要两个 `.env` 文件:**根目录**(后端)与 **`ui/.env`**(前端)。
+
+### 根目录 `.env`(后端)
+
+```env
+# === LLM(必填:OpenRouter 或 OpenAI 至少一个)===
+OPENROUTER_API_KEY=sk-or-...                                 # 推荐
+LLM_MODEL_RESEARCHER=deepseek/deepseek-chat                  # researcher 用啥模型
+LLM_MODEL_BRIEFING=qwen/qwen-2.5-72b-instruct                # briefing 用啥模型
+LLM_MODEL_EDITOR=anthropic/claude-3.5-sonnet                 # editor 用啥模型
+LLM_TEMPERATURE=0
+LLM_STREAMING=true
+# LLM_BASE_URL=http://localhost:11434/v1                     # 可选:走本地 vLLM/Ollama 等
+
+# 降级:仅有 OpenAI Key 时自动用原生 OpenAI 端点
+# OPENAI_API_KEY=sk-...
+
+# === 检索(必填)===
+SEARCH_PROVIDER=tavily                                       # 默认 tavily,Phase 2 可选 bocha 等
+TAVILY_API_KEY=tvly-...
+
+# === 可选:MongoDB 持久化 ===
+# MONGODB_URI=mongodb://localhost:27017/cn-research
 ```
 
-Note: When updating environment variables in `.env`, you'll need to restart the containers:
-```bash
-docker compose down && docker compose up
+完整变量列表见 [`.env.example`](.env.example)。
+
+### `ui/.env`(前端)
+
+```env
+VITE_API_URL=http://localhost:8000
+VITE_GOOGLE_MAPS_API_KEY=...                                 # 可选,LocationInput 用
 ```
 
-### Running the Application
+可以从 `ui/.env.development.example` 复制起步。
 
-1. Start the backend server (choose one):
+### 国内访问 OpenRouter
+
+OpenRouter 在中国大陆访问需要代理。最简单的办法是设置 `HTTPS_PROXY`:
+
 ```bash
-# Option 1: Direct Python Module
-python -m application.py
-
-# Option 2: FastAPI with Uvicorn
-uvicorn application:app --reload --port 8000
+export HTTPS_PROXY=http://127.0.0.1:7890
+export HTTP_PROXY=http://127.0.0.1:7890
 ```
 
-2. In a new terminal, start the frontend:
-```bash
-cd ui
-npm run dev
-```
+或者直接用国产模型 + 自己 host 的转发服务,把 `LLM_BASE_URL` 指过去即可。
 
-3. Access the application at `http://localhost:5173`
+---
 
-## Usage
+## 🌐 部署
 
-### Local Development
+平台无关,常见选择:
 
-1. Start the backend server (choose one option):
+- **Docker**:仓库自带 `Dockerfile` 与 `docker-compose.yml`
+- **AWS Elastic Beanstalk**:`pip install awsebcli && eb init && eb create`
+- **Google Cloud Run** / **Render** / **Railway**:容器化部署友好
+- **国内部署**:阿里云函数计算 / 腾讯云 SCF / 自建 K8s
 
-   **Option 1: Direct Python Module**
-   ```bash
-   python -m application.py
-   ```
+> ⚠️ 国内服务器部署如果走 OpenRouter,记得给容器配 outbound 代理。
 
-   **Option 2: FastAPI with Uvicorn**
-   ```bash
-   # Install uvicorn if not already installed
-   # With uv (faster):
-   uv pip install uvicorn
-   # Or with pip:
-   # pip install uvicorn
+---
 
-   # Run the FastAPI application with hot reload
-   uvicorn application:app --reload --port 8000
-   ```
+## 🤝 贡献
 
-   The backend will be available at:
-   - API Endpoint: `http://localhost:8000`
+1. Fork 仓库
+2. 创建 feature 分支:`git checkout -b feat/your-feature`
+3. 提交:`git commit -m 'feat: ...'`(中文 commit message 也欢迎)
+4. 推送并开 PR:`git push origin feat/your-feature`
 
-2. Start the frontend development server:
-   ```bash
-   cd ui
-   npm run dev
-   ```
+本项目使用 [openSpec](https://github.com/Fission-AI/OpenSpec) 做 spec-driven 开发,新增大改动前请先在 `openspec/changes/<your-change>/` 提交 proposal + design + tasks。
 
-3. Access the application at `http://localhost:5173`
+## 📜 License
 
-> **⚡ Performance Note**: If you used `uv` during setup, you'll benefit from significantly faster package installation and dependency resolution. `uv` is a modern Python package manager written in Rust that can be 10-100x faster than pip.
+MIT License,与原项目一致。详见 [LICENSE](LICENSE)。
 
-### Deployment Options
+原版权声明保留:`Copyright (c) Guy Hartstein`(完整内容见 LICENSE 文件)。本中文化版本由后续贡献者在 MIT 协议下补充。
 
-The application can be deployed to various cloud platforms. Here are some common options:
+## 🙏 致谢
 
-#### AWS Elastic Beanstalk
+- **[Guy Hartstein](https://github.com/guy-hartstein)** —— 原项目作者,本仓库的所有架构骨架来自 [`guy-hartstein/company-research-agent`](https://github.com/guy-hartstein/company-research-agent)
+- **[Tavily](https://tavily.com/)** —— 默认检索 provider
+- **[OpenRouter](https://openrouter.ai/)** —— 统一 LLM 网关
+- 所有底层开源依赖的维护者们
 
-1. Install the EB CLI:
-   ```bash
-   pip install awsebcli
-   ```
+---
 
-2. Initialize EB application:
-   ```bash
-   eb init -p python-3.11 tavily-research
-   ```
-
-3. Create and deploy:
-   ```bash
-   eb create tavily-research-prod
-   ```
-
-#### Other Deployment Options
-
-- **Docker**: The application includes a Dockerfile for containerized deployment
-- **Heroku**: Deploy directly from GitHub with the Python buildpack
-- **Google Cloud Run**: Suitable for containerized deployment with automatic scaling
-
-Choose the platform that best suits your needs. The application is platform-agnostic and can be hosted anywhere that supports Python web applications.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Tavily](https://tavily.com/) for the research API
-- All other open-source libraries and their contributors
+> 📍 **项目状态**:Phase 1(prompt + UI 中文化 + LLM 网关 + 检索抽象)进行中
+> Phase 2 计划:Bocha AI 检索 + AKShare / 巨潮资讯网 / 企查查等国内专用数据源 node
