@@ -57,10 +57,10 @@
 
 ## 8. README 与文档
 
-- [ ] 8.1 重写 `README.md` 为中文版,保留架构图、安装步骤、env 变量说明,顶部加 MIT 致谢与原仓库链接
-- [ ] 8.2 删除 `README.es.md`、`README.fr.md`、`README.jp.md`、`README.kr.md`、`README.zh.md`(原中文 README 已被新版主 README 取代)
-- [ ] 8.3 保留 `LICENSE` 不动;检查 `git diff --stat` 确认 LICENSE 字节数与原版一致
-- [ ] 8.4 在 README 加一个「与原版差异」表格,简述:LLM 走 OpenRouter、检索抽象、prompt 中文化、UI 中文化
+- [x] 8.1 重写 `README.md` 为中文版,保留架构图、安装步骤、env 变量说明,顶部加 MIT 致谢与原仓库链接
+- [x] 8.2 删除 `README.es.md`、`README.fr.md`、`README.jp.md`、`README.kr.md`、`README.zh.md`(原中文 README 已被新版主 README 取代)
+- [x] 8.3 保留 `LICENSE` 不动;检查 `git diff --stat` 确认 LICENSE 字节数与原版一致
+- [x] 8.4 在 README 加一个「与原版差异」表格,简述:LLM 走 OpenRouter、检索抽象、prompt 中文化、UI 中文化
 
 ## 9. 端到端验收
 
