@@ -1,0 +1,6 @@
+# 开发依赖(测试 + lint)
+# 运行测试:`uv pip install -r requirements-dev.txt && pytest`
+
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-mock==3.14.0

@@ -6,6 +6,7 @@ reports/*
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
 
 # Virtual Environment
 .venv/

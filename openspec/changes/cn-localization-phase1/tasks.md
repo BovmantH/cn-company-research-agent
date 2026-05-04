@@ -1,11 +1,11 @@
 ## 1. 抽象层基础设施(后端)
 
-- [ ] 1.1 创建 `backend/services/__init__.py`(已存在则跳过),确认 `services` 模块可导入
-- [ ] 1.2 创建 `backend/services/llm_factory.py`,定义 `get_llm(role: str, **overrides) -> BaseChatModel`,支持 `OPENROUTER_API_KEY` + `LLM_MODEL_*` 环境变量,实现 OpenAI fallback 与缺 key 时的明确报错
-- [ ] 1.3 在 `tests/services/test_llm_factory.py` 写单元测试覆盖:OpenRouter 路径、OpenAI 降级、缺 key 报错、role 隔离、overrides 覆盖
-- [ ] 1.4 创建 `backend/services/search/__init__.py`,定义 `SearchProvider` Protocol、`SearchResult`、`CrawledPage` dataclass、`get_search_provider()` 工厂
-- [ ] 1.5 创建 `backend/services/search/tavily_provider.py`,实现 `TavilyProvider`,封装现 Tavily 客户端的 search/crawl/extract 三类调用
-- [ ] 1.6 在 `tests/services/search/test_tavily_provider.py` 用 `respx` 或 `pytest-mock` mock Tavily HTTP 响应,验证返回值映射正确(包括 `score`、`raw` 字段)
+- [x] 1.1 创建 `backend/services/__init__.py`(已存在则跳过),确认 `services` 模块可导入
+- [x] 1.2 创建 `backend/services/llm_factory.py`,定义 `get_llm(role: str, **overrides) -> BaseChatModel`,支持 `OPENROUTER_API_KEY` + `LLM_MODEL_*` 环境变量,实现 OpenAI fallback 与缺 key 时的明确报错
+- [x] 1.3 在 `tests/services/test_llm_factory.py` 写单元测试覆盖:OpenRouter 路径、OpenAI 降级、缺 key 报错、role 隔离、overrides 覆盖
+- [x] 1.4 创建 `backend/services/search/__init__.py`,定义 `SearchProvider` Protocol、`SearchResult`、`CrawledPage` dataclass、`get_search_provider()` 工厂
+- [x] 1.5 创建 `backend/services/search/tavily_provider.py`,实现 `TavilyProvider`,封装现 Tavily 客户端的 search/crawl/extract 三类调用
+- [x] 1.6 在 `tests/services/search/test_tavily_provider.py` 用 `respx` 或 `pytest-mock` mock Tavily HTTP 响应,验证返回值映射正确(包括 `score`、`raw` 字段)
 
 ## 2. LLM 工厂接入现有节点
 
