@@ -1,14 +1,13 @@
 import logging
-import os
 from typing import Dict
 
 from langchain_core.messages import AIMessage
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from ..classes import ResearchState
 from ..classes.state import job_status
+from ..services.llm_factory import get_llm
 from ..utils.references import format_references_section
 from ..prompts import (
     EDITOR_SYSTEM_MESSAGE,
@@ -21,20 +20,14 @@ logger = logging.getLogger(__name__)
 
 class Editor:
     """Compiles individual section briefings into a cohesive final report."""
-    
+
     def __init__(self) -> None:
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if not openai_key:
-            raise ValueError("OPENAI_API_KEY environment variable is not set")
-        
-        # Configure LangChain ChatOpenAI
-        self.llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0,
-            streaming=True,
-            api_key=openai_key
-        )
-        
+        # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
+        # 模型可通过 LLM_MODEL_EDITOR 环境变量覆盖(默认 anthropic/claude-3.5-sonnet)。
+        # editor 阶段需要流式把报告 chunk 推送到前端 SSE,这里显式打开 streaming
+        # 以避免 LLM_STREAMING=false 时整篇报告变成一次性返回。
+        self.llm = get_llm("editor", streaming=True)
+
         # Initialize context dictionary
         self.context = {
             "company": "Unknown Company",

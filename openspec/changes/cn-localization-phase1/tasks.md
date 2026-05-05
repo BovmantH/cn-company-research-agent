@@ -9,11 +9,11 @@
 
 ## 2. LLM 工厂接入现有节点
 
-- [ ] 2.1 修改 `backend/nodes/researchers/base.py`,把 `ChatOpenAI(model="gpt-5.1", ...)` 替换为 `LLMFactory.get_llm("researcher")`,删除直接 import
-- [ ] 2.2 修改 `backend/nodes/briefing.py`,把 `ChatGoogleGenerativeAI(model="gemini-2.5-flash", ...)` 替换为 `get_llm("briefing")`
-- [ ] 2.3 修改 `backend/nodes/editor.py`,把 `ChatOpenAI(model="gpt-4o", ...)` 替换为 `get_llm("editor")`,保持 streaming 行为
-- [ ] 2.4 用 `pytest-asyncio` 跑一次集成测试:在 mock LLM 下,3 个节点能成功初始化、`astream` 正常产出 chunk
-- [ ] 2.5 把 `langchain-google-genai` 改为 try-import,缺失依赖时不阻塞启动(`requirements.txt` 改为 optional 注释)
+- [x] 2.1 修改 `backend/nodes/researchers/base.py`,把 `ChatOpenAI(model="gpt-5.1", ...)` 替换为 `LLMFactory.get_llm("researcher")`,删除直接 import
+- [x] 2.2 修改 `backend/nodes/briefing.py`,把 `ChatGoogleGenerativeAI(model="gemini-2.5-flash", ...)` 替换为 `get_llm("briefing")`
+- [x] 2.3 修改 `backend/nodes/editor.py`,把 `ChatOpenAI(model="gpt-4o", ...)` 替换为 `get_llm("editor")`,保持 streaming 行为
+- [x] 2.4 用 `pytest-asyncio` 跑一次集成测试:在 mock LLM 下,3 个节点能成功初始化、`astream` 正常产出 chunk
+- [x] 2.5 把 `langchain-google-genai` 改为 try-import,缺失依赖时不阻塞启动(`requirements.txt` 改为 optional 注释)
 
 ## 3. SearchProvider 接入现有节点
 

@@ -2,10 +2,20 @@ certifi==2025.1.31
 fastapi==0.121.2
 langchain==1.2.17
 langchain-openai==1.2.1
-langchain-google-genai==3.0.3
 langchain-community==0.4.1
 pymongo==4.17.0
 reportlab==4.5.0
 tavily-python==0.7.24
 uvicorn[standard]==0.38.0
 python-dotenv==1.2.1
+
+# === 可选依赖(optional)===
+#
+# 本项目所有 LLM 调用统一走 ``backend/services/llm_factory.get_llm``,
+# 默认通过 OpenRouter(走 ``langchain-openai`` 兼容协议)调用任意上游
+# 模型(GPT/Claude/Gemini/DeepSeek/Qwen 等),不再硬依赖 Gemini 直连。
+#
+# 仅当你想**绕开 OpenRouter 直接用 Google 原生 Gemini SDK**(自行扩展
+# llm_factory)时,才需要安装下面这一项。缺失它**不会**阻塞应用启动。
+#
+# langchain-google-genai==3.0.3

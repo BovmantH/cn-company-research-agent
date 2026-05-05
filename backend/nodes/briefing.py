@@ -1,14 +1,13 @@
 import asyncio
 import logging
-import os
 from typing import Any, Dict, List, Union
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from ..classes import ResearchState
 from ..classes.state import job_status
+from ..services.llm_factory import get_llm
 from ..prompts import (
     COMPANY_BRIEFING_PROMPT,
     INDUSTRY_BRIEFING_PROMPT,
@@ -21,20 +20,13 @@ logger = logging.getLogger(__name__)
 
 class Briefing:
     """Creates briefings for each research category and updates the ResearchState."""
-    
+
     def __init__(self) -> None:
         self.max_doc_length = 8000  # Maximum document content length
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
-        
-        # Configure LangChain ChatGoogleGenerativeAI
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0,
-            google_api_key=gemini_key,
-            max_retries=0
-        )
+        # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
+        # 模型可通过 LLM_MODEL_BRIEFING 环境变量覆盖(默认 qwen/qwen-2.5-72b-instruct)。
+        # 简报阶段不需要流式输出,关掉以减少与上游的连接开销。
+        self.llm = get_llm("briefing", streaming=False)
 
     def _get_category_prompt(self, category: str) -> str:
         """Get the category-specific prompt template"""

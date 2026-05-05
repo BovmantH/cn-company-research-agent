@@ -4,12 +4,12 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List
 
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from tavily import AsyncTavilyClient
 
 from ...classes import ResearchState
 from ...classes.state import job_status
+from ...services.llm_factory import get_llm
 from ...utils.references import clean_title
 from ...prompts import QUERY_FORMAT_GUIDELINES
 
@@ -18,18 +18,13 @@ logger = logging.getLogger(__name__)
 class BaseResearcher:
     def __init__(self):
         tavily_key = os.getenv("TAVILY_API_KEY")
-        openai_key = os.getenv("OPENAI_API_KEY")
-        
-        if not tavily_key or not openai_key:
-            raise ValueError("Missing API keys")
-            
+        if not tavily_key:
+            raise ValueError("缺少 TAVILY_API_KEY 环境变量")
+
         self.tavily_client = AsyncTavilyClient(api_key=tavily_key)
-        self.llm = ChatOpenAI(
-            model="gpt-5.1",
-            temperature=0,
-            streaming=True,
-            api_key=openai_key
-        )
+        # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
+        # 模型可通过 LLM_MODEL_RESEARCHER 环境变量覆盖。
+        self.llm = get_llm("researcher")
         self.analyst_type = "base_researcher"
 
     @property
