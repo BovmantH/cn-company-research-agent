@@ -30,3 +30,6 @@ node_modules/
 Procfile
 .vercel
 .ebextensions
+
+# Local planning / spec drafts (not for upstream)
+openspec/

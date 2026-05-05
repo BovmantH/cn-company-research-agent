@@ -30,16 +30,18 @@
 
 ## 🆚 与原版的差异
 
+本项目并非简单翻译,而是围绕"中国用户调研中国公司"这一场景的针对性改造。
+
 | 维度 | 原版(`guy-hartstein/company-research-agent`) | 本项目 |
 |---|---|---|
 | 语言 | 英文 prompt + 英文 UI + 英文报告 | **中文** prompt + UI + 报告 |
-| LLM provider | OpenAI(GPT-5.1 / GPT-4o)+ Google(Gemini 2.5 Flash)硬编码 | **OpenRouter 网关**,国内外模型逐节点可切 |
-| 检索 | 直接调 Tavily 客户端,5 个文件分散调用 | `SearchProvider` 抽象接口,Tavily 收拢为默认 provider |
+| Prompt 质量 | 英文(中文公司用英文 prompt 时模型偏向英文资料) | **人工重写而非机翻**,占位符与下游解析依赖的标题(`### 核心产品/服务` 等)同步迁移,对国产模型更友好 |
+| LLM provider | OpenAI(GPT-5.1 / GPT-4o)+ Google(Gemini 2.5 Flash)硬编码 | 统一 `LLMFactory.get_llm(role)`,**OpenRouter 主路径 + OpenAI 降级路径**,researcher / briefing / editor 三角色独立配置模型 |
+| 模型成本控制 | 无 | **`LLM_MAX_TOKENS` 兜底**避免 OpenRouter 按模型最大窗口预扣余额导致小余额账号 402 |
+| 检索层 | 直接调 Tavily 客户端,5 个文件分散调用 | **`SearchProvider` 抽象接口**,Tavily 收拢为默认 provider,新增 provider 无需改节点代码 |
+| 启动校验 | 缺 key 运行时报错 | **启动期校验**,中文报错并立即退出 |
 | 默认示例 | Apple、Stripe 等欧美公司 | 腾讯、字节跳动、宁德时代、比亚迪 |
-| 国内可用性 | 需要科学上网调 OpenAI/Gemini | OpenRouter + 国产模型可纯境内跑通 |
-| 国内数据源 | 无 | Phase 2 计划接入 AKShare / 巨潮 / 企查查 / Bocha AI |
-
-> Phase 1 范围与详细决策见 [`openspec/changes/cn-localization-phase1/`](openspec/changes/cn-localization-phase1/)。本仓库使用 [openSpec](https://github.com/Fission-AI/OpenSpec) 进行 spec-driven 开发。
+| 国内可用性 | 需要科学上网调 OpenAI / Gemini | OpenRouter + 国产模型可纯境内跑通 |
 
 ---
 
@@ -238,8 +240,6 @@ export HTTP_PROXY=http://127.0.0.1:7890
 2. 创建 feature 分支:`git checkout -b feat/your-feature`
 3. 提交:`git commit -m 'feat: ...'`(中文 commit message 也欢迎)
 4. 推送并开 PR:`git push origin feat/your-feature`
-
-本项目使用 [openSpec](https://github.com/Fission-AI/OpenSpec) 做 spec-driven 开发,新增大改动前请先在 `openspec/changes/<your-change>/` 提交 proposal + design + tasks。
 
 ## 📜 License
 
