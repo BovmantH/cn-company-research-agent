@@ -52,8 +52,8 @@
 
 ## 7. API 响应文案中文化
 
-- [ ] 7.1 修改 `application.py` 中所有面向用户的 `message` 字段、HTTP error detail、日志提示(保留日志的英文 logger name 但中文化对外消息)
-- [ ] 7.2 用 `curl` 验证 POST `/research` 返回中文 message;构造一个错误请求验证错误消息也是中文
+- [x] 7.1 修改 `application.py` 中所有面向用户的 `message` 字段、HTTP error detail、日志提示(保留日志的英文 logger name 但中文化对外消息)
+- [x] 7.2 用 `curl` 验证 POST `/research` 返回中文 message;构造一个错误请求验证错误消息也是中文
 
 ## 8. README 与文档
 
