@@ -27,9 +27,9 @@
 
 ## 4. 配置与依赖
 
-- [ ] 4.1 重写 `.env.example`,加中文注释,新增 `OPENROUTER_API_KEY`、`LLM_MODEL_RESEARCHER`、`LLM_MODEL_BRIEFING`、`LLM_MODEL_EDITOR`、`LLM_TEMPERATURE`、`LLM_STREAMING`、`LLM_BASE_URL`、`SEARCH_PROVIDER` 等键,标注哪些必填、哪些可选
-- [ ] 4.2 整理 `requirements.txt`:`langchain-google-genai` 移到注释段(或 `requirements-optional.txt`),保留 `langchain-openai`、`tavily-python`、`langchain`、`langgraph` 等核心依赖
-- [ ] 4.3 在 `application.py` 启动时读取 `.env` 后,对 `OPENROUTER_API_KEY`/`OPENAI_API_KEY` 至少一个存在做启动校验,缺失则打印中文警告并退出
+- [x] 4.1 重写 `.env.example`,加中文注释,新增 `OPENROUTER_API_KEY`、`LLM_MODEL_RESEARCHER`、`LLM_MODEL_BRIEFING`、`LLM_MODEL_EDITOR`、`LLM_TEMPERATURE`、`LLM_STREAMING`、`LLM_BASE_URL`、`SEARCH_PROVIDER` 等键,标注哪些必填、哪些可选
+- [x] 4.2 整理 `requirements.txt`:`langchain-google-genai` 移到注释段(或 `requirements-optional.txt`),保留 `langchain-openai`、`tavily-python`、`langchain`、`langgraph` 等核心依赖
+- [x] 4.3 在 `application.py` 启动时读取 `.env` 后,对 `OPENROUTER_API_KEY`/`OPENAI_API_KEY` 至少一个存在做启动校验,缺失则打印中文警告并退出
 
 ## 5. Prompt 中文化
 

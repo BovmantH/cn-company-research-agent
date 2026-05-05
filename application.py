@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,26 @@ from backend.classes.state import job_status
 env_path = Path(__file__).parent / '.env'
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=True)
+
+# 启动校验: LLMFactory 依赖至少一个 LLM provider key,缺失则直接退出,
+# 避免在第一次请求时才发现 key 没配,把错误推到用户面前。
+if not os.getenv("OPENROUTER_API_KEY") and not os.getenv("OPENAI_API_KEY"):
+    # 把 stderr 切到 UTF-8,避免 Windows GBK 控制台把中文打成 mojibake
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    print(
+        "\n[启动失败] 未检测到 LLM provider 凭证。\n"
+        "请在 .env 中至少配置以下其中一项:\n"
+        "  - OPENROUTER_API_KEY  (主推,见 https://openrouter.ai/)\n"
+        "  - OPENAI_API_KEY      (降级路径,见 https://platform.openai.com/)\n"
+        "\n参考 .env.example 复制一份 .env 后填写。\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 # Configure logging
 logger = logging.getLogger()
