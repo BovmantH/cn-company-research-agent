@@ -33,12 +33,12 @@
 
 ## 5. Prompt 中文化
 
-- [ ] 5.1 重写 `backend/prompts.py` 中 `COMPANY_BRIEFING_PROMPT`、`INDUSTRY_BRIEFING_PROMPT` 为中文(占位符与小标题保持一致映射:`### Core Product/Service` → `### 核心产品/服务` 等)
-- [ ] 5.2 重写 `backend/prompts.py` 中 financial / news / company / industry 各 researcher 的 query 生成 prompt 与 analyzer prompt 为中文
-- [ ] 5.3 重写 curator / enricher / editor / collector 相关 prompt 为中文
-- [ ] 5.4 同步修改 `briefing.py`、`editor.py` 等下游节点中**依赖标题字符串解析**的代码(把 `"### Core Product/Service"` 换成 `"### 核心产品/服务"` 等)
-- [ ] 5.5 用一家中国公司(建议「宁德时代」)跑一次端到端,人工核查输出 4 份 briefing(company/industry/news/financial)是否中文、格式是否对齐
-- [ ] 5.6 commit 当前进度,留好回退点
+- [x] 5.1 重写 `backend/prompts.py` 中 `COMPANY_BRIEFING_PROMPT`、`INDUSTRY_BRIEFING_PROMPT` 为中文(占位符与小标题保持一致映射:`### Core Product/Service` → `### 核心产品/服务` 等)
+- [x] 5.2 重写 `backend/prompts.py` 中 financial / news / company / industry 各 researcher 的 query 生成 prompt 与 analyzer prompt 为中文
+- [x] 5.3 重写 curator / enricher / editor / collector 相关 prompt 为中文
+- [x] 5.4 同步修改 `briefing.py`、`editor.py` 等下游节点中**依赖标题字符串解析**的代码(把 `"### Core Product/Service"` 换成 `"### 核心产品/服务"` 等)
+- [x] 5.5 用一家中国公司(建议「宁德时代」)跑一次端到端,人工核查输出 4 份 briefing(company/industry/news/financial)是否中文、格式是否对齐
+- [x] 5.6 commit 当前进度,留好回退点
 
 ## 6. 前端文案中文化
 
