@@ -215,3 +215,54 @@ def test_streaming_env_parsing(
         monkeypatch.setenv("LLM_STREAMING", env_value)
         llm = get_llm("researcher")
         assert llm.streaming is expected
+
+
+# === LLM_MAX_TOKENS ===
+
+
+def test_max_tokens_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_MAX_TOKENS 应注入到 ChatOpenAI 实例,避免 OpenRouter 按模型最大窗口预扣费。"""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("LLM_MAX_TOKENS", "2048")
+
+    llm = get_llm("researcher")
+
+    # ChatOpenAI 把 max_tokens 存到 max_tokens 字段(LangChain 0.3+)
+    assert getattr(llm, "max_tokens", None) == 2048
+
+
+def test_max_tokens_unset_means_no_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """没设 LLM_MAX_TOKENS 时不传该参数,行为等同上游默认。"""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+
+    llm = get_llm("researcher")
+
+    # max_tokens 应为 None / 未设定(具体取决于 ChatOpenAI 默认)
+    assert getattr(llm, "max_tokens", None) in (None, 0)
+
+
+def test_max_tokens_invalid_falls_back_silently(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """LLM_MAX_TOKENS 不是合法整数时,只 warn 不 raise。"""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("LLM_MAX_TOKENS", "not-an-int")
+
+    with caplog.at_level("WARNING"):
+        llm = get_llm("researcher")
+
+    assert getattr(llm, "max_tokens", None) in (None, 0)
+    assert any("LLM_MAX_TOKENS" in r.message for r in caplog.records)
+
+
+def test_max_tokens_override_takes_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """overrides['max_tokens'] 应该覆盖环境变量。"""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("LLM_MAX_TOKENS", "1024")
+
+    llm = get_llm("researcher", max_tokens=8192)
+
+    assert getattr(llm, "max_tokens", None) == 8192

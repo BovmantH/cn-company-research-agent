@@ -16,6 +16,12 @@
     LLM_TEMPERATURE           温度,默认 0
     LLM_STREAMING             是否流式,默认 true
     LLM_BASE_URL              覆盖 base_url(用于本地 vLLM/Ollama 等)
+    LLM_MAX_TOKENS            单次响应 max_tokens 上限。OpenRouter 按
+                              `max_tokens × per-token-price` 预扣余额,
+                              不设的话 OpenRouter 会按模型最大窗口(数万)
+                              预扣,贵模型 + 小余额会直接 402。建议设到
+                              足够覆盖最长输出(editor 写完整报告通常
+                              4096~8192 够用)。
 """
 
 from __future__ import annotations
@@ -35,10 +41,13 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 # 各角色默认模型(可被环境变量覆盖)
+# 注:OpenRouter 上的 slug 会随版本更替,这里用 2026-05 实际存在的 slug。
+# 老 slug(deepseek-chat、qwen-2.5-72b-instruct 等)在 OpenRouter
+# /models 接口已下线,请用 OpenRouter 当前列表里的 slug。
 DEFAULT_MODELS: dict[str, str] = {
-    "researcher": "deepseek/deepseek-chat",
-    "briefing": "qwen/qwen-2.5-72b-instruct",
-    "editor": "anthropic/claude-3.5-sonnet",
+    "researcher": "deepseek/deepseek-v4-flash",
+    "briefing": "qwen/qwen3.6-flash",
+    "editor": "moonshotai/kimi-k2.6",
 }
 
 VALID_ROLES = frozenset(DEFAULT_MODELS.keys())
@@ -117,6 +126,18 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel:
         "temperature": float(os.getenv("LLM_TEMPERATURE", "0")),
         "streaming": _str_to_bool(os.getenv("LLM_STREAMING"), default=True),
     }
+
+    # max_tokens: OpenRouter 按 max_tokens × per-token-cost 预扣费,
+    # 不设的话默认拉到模型最大窗口(数万 token),贵模型 + 小余额会
+    # 直接 402。统一通过 LLM_MAX_TOKENS 兜一个保守上限。
+    max_tokens_env = os.getenv("LLM_MAX_TOKENS")
+    if max_tokens_env:
+        try:
+            kwargs["max_tokens"] = int(max_tokens_env)
+        except ValueError:
+            logger.warning(
+                "LLM_MAX_TOKENS=%r 不是合法整数,已忽略", max_tokens_env
+            )
 
     # overrides 覆盖一切(api_key / base_url 也允许覆盖,方便测试)
     kwargs.update(overrides)
