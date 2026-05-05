@@ -17,13 +17,13 @@
 
 ## 3. SearchProvider 接入现有节点
 
-- [ ] 3.1 修改 `backend/nodes/grounding.py`,改为通过 `get_search_provider()` 获取 provider,所有 Tavily 调用走接口
-- [ ] 3.2 修改 `backend/nodes/enricher.py`,移除直接 `tavily` import,改走 provider
-- [ ] 3.3 修改 `backend/nodes/curator.py`,移除直接 `tavily` import,改走 provider
-- [ ] 3.4 修改 `backend/nodes/researchers/base.py`,把其中 Tavily 搜索调用改为 provider(注意此文件第 1 步已替换 LLM,这里只动 search 相关行)
-- [ ] 3.5 修改 `backend/utils/references.py`,Tavily 调用改走 provider
-- [ ] 3.6 在 `backend/__init__.py` 删除遗留 `tavily` import(若存在)
-- [ ] 3.7 静态校验:`grep -r "from tavily\|AsyncTavilyClient" backend/nodes backend/utils` 应输出 0 行
+- [x] 3.1 修改 `backend/nodes/grounding.py`,改为通过 `get_search_provider()` 获取 provider,所有 Tavily 调用走接口
+- [x] 3.2 修改 `backend/nodes/enricher.py`,移除直接 `tavily` import,改走 provider
+- [x] 3.3 修改 `backend/nodes/curator.py`,移除直接 `tavily` import,改走 provider
+- [x] 3.4 修改 `backend/nodes/researchers/base.py`,把其中 Tavily 搜索调用改为 provider(注意此文件第 1 步已替换 LLM,这里只动 search 相关行)
+- [x] 3.5 修改 `backend/utils/references.py`,Tavily 调用改走 provider
+- [x] 3.6 在 `backend/__init__.py` 删除遗留 `tavily` import(若存在)
+- [x] 3.7 静态校验:`grep -r "from tavily\|AsyncTavilyClient" backend/nodes backend/utils` 应输出 0 行
 
 ## 4. 配置与依赖
 

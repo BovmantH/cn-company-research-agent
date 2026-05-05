@@ -17,7 +17,7 @@ def extract_domain_name(url: str) -> str:
         # Get the main domain part (before first slash or query)
         domain = domain.split('/')[0].split('?')[0]
         
-        # Extract the main part (e.g., 'tavily' from 'tavily.com')
+        # Extract the main part (e.g., 'example' from 'example.com')
         parts = domain.split('.')
         if len(parts) >= 2:
             main_name = parts[0]
@@ -111,7 +111,7 @@ def extract_website_name_from_domain(domain: str) -> str:
     if domain.startswith('www.'):
         domain = domain[4:]  # Remove www. prefix
     
-    # Extract the main part (e.g., 'tavily' from 'tavily.com')
+    # Extract the main part (e.g., 'example' from 'example.com')
     website_name = domain.split('.')[0].capitalize()
     
     # Handle special cases

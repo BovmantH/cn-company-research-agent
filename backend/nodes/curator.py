@@ -16,38 +16,38 @@ class Curator:
         logger.info(f"Curator initialized with relevance threshold: {self.relevance_threshold}")
 
     def evaluate_documents(self, docs: list, context: Dict[str, str]) -> list:
-        """Evaluate documents based on Tavily's scoring."""
+        """Evaluate documents based on the SearchProvider's relevance score."""
         if not docs:
             return []
 
         logger.info(f"Evaluating {len(docs)} documents")
-        
+
         evaluated_docs = []
         try:
-            # Evaluate each document using Tavily's score
+            # Evaluate each document using the provider-supplied relevance score
             for doc in docs:
                 try:
                     # Ensure score is a valid float
-                    tavily_score = float(doc.get('score', 0))  # Default to 0 if no score
-                    
+                    relevance_score = float(doc.get('score', 0))  # Default to 0 if no score
+
                     # Always keep company website data regardless of score (first-party information)
                     is_company_website = doc.get('source') == 'company_website'
-                    
-                    # Keep documents with good Tavily score or company website data
-                    if tavily_score >= self.relevance_threshold or is_company_website:
-                        reason = "company website" if is_company_website else f"score {tavily_score:.4f}"
+
+                    # Keep documents with good relevance score or company website data
+                    if relevance_score >= self.relevance_threshold or is_company_website:
+                        reason = "company website" if is_company_website else f"score {relevance_score:.4f}"
                         logger.info(f"Document kept ({reason}) for '{doc.get('title', 'No title')}')")
-                        
+
                         evaluated_doc = {
                             **doc,
                             "evaluation": {
-                                "overall_score": tavily_score,  # Store as float
+                                "overall_score": relevance_score,  # Store as float
                                 "query": doc.get('query', '')
                             }
                         }
                         evaluated_docs.append(evaluated_doc)
                     else:
-                        logger.info(f"Document below threshold with score {tavily_score:.4f} for '{doc.get('title', 'No title')}'")
+                        logger.info(f"Document below threshold with score {relevance_score:.4f} for '{doc.get('title', 'No title')}'")
                 except (ValueError, TypeError) as e:
                     logger.warning(f"Error processing score for document: {e}")
                     continue
@@ -63,7 +63,7 @@ class Curator:
         return evaluated_docs
 
     async def curate_data(self, state: ResearchState) -> ResearchState:
-        """Curate all collected data based on Tavily scores."""
+        """Curate all collected data based on the provider's relevance scores."""
         company = state.get('company', 'Unknown Company')
         job_id = state.get('job_id')
         logger.info(f"Starting curation for company: {company}, job_id={job_id}")
@@ -127,7 +127,7 @@ class Curator:
                 msg.append("  ⚠️ No relevant documents found")
                 continue
 
-            # Filter and sort by Tavily score
+            # Filter and sort by relevance score
             relevant_docs = {doc['url']: doc for doc in evaluated_docs}
             sorted_items = sorted(relevant_docs.items(), key=lambda item: item[1]['evaluation']['overall_score'], reverse=True)
             
