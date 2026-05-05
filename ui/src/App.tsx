@@ -120,29 +120,39 @@ function App() {
       try {
         const data = JSON.parse(event.data);
         
-        // Helper function to map node names to user-friendly step names
+        // 把后端节点名映射为用户可读的中文阶段名
         const getStepName = (nodeName: string): string => {
           const stepMap: Record<string, string> = {
-            'grounding': 'Search',
-            'financial_analyst': 'Search',
-            'news_scanner': 'Search',
-            'industry_analyst': 'Search',
-            'company_analyst': 'Search',
-            'collector': 'Search',
-            'curator': 'Enriching',
-            'enricher': 'Enriching',
-            'briefing': 'Briefing',
-            'editor': 'Finalizing'
+            'grounding': '检索',
+            'financial_analyst': '检索',
+            'news_scanner': '检索',
+            'industry_analyst': '检索',
+            'company_analyst': '检索',
+            'collector': '检索',
+            'curator': '抽取增强',
+            'enricher': '抽取增强',
+            'briefing': '简报生成',
+            'editor': '收尾整理'
           };
           return stepMap[nodeName] || nodeName;
         };
 
-        // Handle progress events from backend (node transitions)
+        // 分类英文 key 与中文显示名映射(key 不能改,后端事件用同样字符串)
+        const CATEGORY_LABELS: Record<string, string> = {
+          company: '公司',
+          industry: '行业',
+          financial: '财务',
+          news: '新闻',
+        };
+        const labelOf = (cat?: string) =>
+          (cat && CATEGORY_LABELS[cat]) || cat || '';
+
+        // 处理后端进度事件(节点切换)
         if (data.type === 'progress' && data.step) {
           const stepName = getStepName(data.step);
           setStatus({
             step: stepName,
-            message: `Processing ${data.step}...`
+            message: `正在处理「${data.step}」节点……`
           });
           
           // Update phase based on step
@@ -157,15 +167,15 @@ function App() {
           scrollToStatus();
         }
         
-        // Direct event-to-phase mapping
+        // 直接事件 → 阶段映射
         if (data.type === 'query_generating') {
-          // Show query being generated and update streaming queries
+          // 显示正在生成的 query,并维护流式 query 列表
           setCurrentPhase('search');
           setStatus({
-            step: 'Search',
-            message: `Query ${data.query_number}: ${data.query}`
+            step: '检索',
+            message: `第 ${data.query_number} 条 Query：${data.query}`
           });
-          // Update streaming queries with current partial query
+          // 把当前部分 query 写入流式列表
           const key = `${data.category}_${data.query_number}`;
           setStreamingQueries(prev => ({
             ...prev,
@@ -177,19 +187,19 @@ function App() {
             }
           }));
         } else if (data.type === 'query_generated') {
-          // Show completed query and move to queries list
+          // 显示已完成的 query,并把它移入完成列表
           setCurrentPhase('search');
           setStatus({
-            step: 'Search',
-            message: `Generated: ${data.query}`
+            step: '检索',
+            message: `已生成 Query：${data.query}`
           });
-          // Add to completed queries
+          // 加入已完成 query 列表
           setQueries(prev => [...prev, {
             text: data.query,
             number: data.query_number,
             category: data.category
           }]);
-          // Remove from streaming queries
+          // 从流式列表中移除
           const key = `${data.category}_${data.query_number}`;
           setStreamingQueries(prev => {
             const updated = { ...prev };
@@ -198,27 +208,27 @@ function App() {
           });
           scrollToStatus();
         } else if (data.type === 'research_init') {
-          // Show research initialization
+          // 调研初始化
           setCurrentPhase('search');
           setStatus({
-            step: 'Initializing',
-            message: data.message || `Initiating research for ${data.company}`
+            step: '初始化',
+            message: data.message || `开始调研 ${data.company}`
           });
         } else if (data.type === 'crawl_start') {
-          // Show website crawl starting
+          // 网站抓取开始
           setCurrentPhase('search');
           setStatus({
-            step: 'Website Crawl',
-            message: data.message || 'Crawling company website'
+            step: '网站抓取',
+            message: data.message || '正在抓取公司官网……'
           });
         } else if (data.type === 'curation') {
-          // Show curation progress - transition to enrichment phase
+          // 数据筛选 → 切换到抽取增强阶段
           setCurrentPhase('enrichment');
           setStatus({
-            step: 'Curating data',
-            message: data.message || `Curating ${data.category} documents`
+            step: '数据筛选',
+            message: data.message || `正在筛选「${labelOf(data.category)}」类文档`
           });
-          // Initialize enrichment counts when curation starts for a category
+          // 当某分类的筛选开始时,初始化抽取计数
           if (data.category) {
             setEnrichmentCounts(prev => ({
               ...prev,
@@ -228,19 +238,19 @@ function App() {
               }
             } as typeof enrichmentCounts));
           }
-          // Collapse queries section when moving to enrichment
+          // 进入抽取阶段后折叠 query 区域
           setTimeout(() => {
             setIsQueriesExpanded(false);
           }, 1000);
           scrollToStatus();
         } else if (data.type === 'enrichment') {
-          // Show enrichment progress
+          // 抽取增强进度
           setCurrentPhase('enrichment');
           setStatus({
-            step: 'Enriching',
-            message: data.message || 'Enriching documents with additional content'
+            step: '抽取增强',
+            message: data.message || '正在为文档抽取补充内容'
           });
-          // Update enriched count if provided
+          // 如果带 enriched 字段则更新
           if (data.category && data.enriched !== undefined) {
             const category = data.category as 'company' | 'industry' | 'financial' | 'news';
             setEnrichmentCounts(prev => {
@@ -255,54 +265,54 @@ function App() {
             });
           }
         } else if (data.type === 'briefing_start') {
-          // Show briefing generation starting
+          // 简报生成开始
           setCurrentPhase('briefing');
           setStatus({
-            step: 'Generating briefings',
-            message: `Creating ${data.category} briefing from ${data.total_docs} documents`
+            step: '简报生成中',
+            message: `基于 ${data.total_docs} 篇文档生成「${labelOf(data.category)}」简报`
           });
-          // Collapse enrichment section when moving to briefing
+          // 进入简报阶段后折叠抽取区域
           setTimeout(() => {
             setIsEnrichmentExpanded(false);
           }, 1000);
           scrollToStatus();
         } else if (data.type === 'briefing_complete') {
-          // Show briefing completion and mark category as complete
+          // 简报完成 → 标记该分类为完成
           setCurrentPhase('briefing');
           setStatus({
-            step: 'Briefing complete',
-            message: `${data.category} briefing generated (${data.content_length} characters)`
+            step: '简报完成',
+            message: `「${labelOf(data.category)}」简报已生成(${data.content_length} 字符)`
           });
-          // Mark briefing as complete for this category
+          // 标记该分类的简报状态为完成
           if (data.category) {
             setBriefingStatus(prev => {
               const newBriefingStatus = {
                 ...prev,
                 [data.category]: true
               };
-              
-              // Check if all briefings are complete
+
+              // 检查是否四份简报全部完成
               const allBriefingsComplete = Object.values(newBriefingStatus).every(status => status);
-              
-              // Collapse briefing section when all briefings are complete
+
+              // 如果全部完成则折叠简报区域
               if (allBriefingsComplete) {
                 setTimeout(() => {
                   setIsBriefingExpanded(false);
                 }, 2000);
               }
-              
+
               return newBriefingStatus;
             });
           }
         } else if (data.type === 'report_compilation') {
-          // Show report compilation
+          // 报告编排
           setCurrentPhase('briefing');
           setStatus({
-            step: 'Finalizing report',
-            message: data.message || 'Compiling final report'
+            step: '报告生成中',
+            message: data.message || '正在编排最终报告'
           });
         } else if (data.type === 'report_chunk' && data.chunk) {
-          // Stream report chunks as they arrive
+          // 流式追加报告内容
           setIsReportStreaming(true);
           setOutput((prev) => {
             const currentReport = prev?.details?.report || '';
@@ -312,8 +322,8 @@ function App() {
             };
           });
           setStatus({
-            step: 'Finalizing report',
-            message: 'Generating final report...'
+            step: '报告生成中',
+            message: '正在生成最终报告……'
           });
         } else if (data.type === 'complete' && data.report) {
           setIsReportStreaming(false);
@@ -321,7 +331,7 @@ function App() {
             summary: "",
             details: { report: data.report },
           });
-          setStatus({ step: "Complete", message: "Research completed successfully" });
+          setStatus({ step: "完成", message: "调研已完成" });
           setIsComplete(true);
           setIsResearching(false);
           eventSource.close();
@@ -331,12 +341,12 @@ function App() {
           eventSource.close();
         }
       } catch (err) {
-        console.error('Error parsing SSE data:', err);
+        console.error('解析 SSE 事件出错:', err);
       }
     };
 
     eventSource.onerror = () => {
-      setError('Connection lost or server error');
+      setError('连接已断开或服务端出错');
       setIsResearching(false);
       eventSource.close();
     };
@@ -378,8 +388,8 @@ function App() {
     setIsResearching(true);
     setOriginalCompanyName(formData.companyName);
     setStatus({
-      step: "Processing",
-      message: "Starting research..."
+      step: "处理中",
+      message: "正在启动调研……"
     });
 
     try {
@@ -411,7 +421,7 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP 请求失败,状态码:${response.status}`);
       }
 
       const data = await response.json();
@@ -419,10 +429,10 @@ function App() {
       if (data.job_id) {
         streamResults(data.job_id);
       } else {
-        throw new Error("No job ID received");
+        throw new Error("未收到任务 ID");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start research");
+      setError(err instanceof Error ? err.message : "启动调研失败");
       setIsResearching(false);
     }
   };
@@ -445,47 +455,47 @@ function App() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate PDF');
+        throw new Error('生成 PDF 失败');
       }
-      
-      // Get the blob from the response
+
+      // 取出响应 blob
       const blob = await response.blob();
-      
-      // Create a URL for the blob
+
+      // 为 blob 创建临时 URL
       const url = window.URL.createObjectURL(blob);
-      
-      // Create a temporary link element
+
+      // 创建临时 <a> 节点触发下载
       const link = document.createElement('a');
       link.href = url;
       link.download = `${originalCompanyName || 'research_report'}.pdf`;
-      
-      // Append to body, click, and remove
+
+      // 挂载、点击、移除
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Clean up the URL
+
+      // 释放 URL
       window.URL.revokeObjectURL(url);
-      
+
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      setError(error instanceof Error ? error.message : 'Failed to generate PDF');
+      console.error('生成 PDF 出错:', error);
+      setError(error instanceof Error ? error.message : '生成 PDF 失败');
     } finally {
       setIsGeneratingPdf(false);
     }
   };
 
-  // Add new function to handle copying to clipboard
+  // 复制报告到剪贴板
   const handleCopyToClipboard = async () => {
     if (!output?.details?.report) return;
-    
+
     try {
       await navigator.clipboard.writeText(output.details.report);
       setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
+      setTimeout(() => setIsCopied(false), 2000); // 2 秒后重置
     } catch (err) {
-      console.error('Failed to copy text: ', err);
-      setError('Failed to copy to clipboard');
+      console.error('复制失败:', err);
+      setError('复制到剪贴板失败');
     }
   };
 

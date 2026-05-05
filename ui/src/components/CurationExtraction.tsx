@@ -2,6 +2,14 @@ import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import type { EnrichmentCounts } from '../types';
 import { glassStyle } from '../styles';
 
+// 分类英文 key 与中文显示名映射(key 不能改,Backend 事件用同样字符串)
+const CATEGORY_LABELS: Record<string, string> = {
+  company: '公司',
+  industry: '行业',
+  financial: '财务',
+  news: '新闻',
+};
+
 interface CurationExtractionProps {
   enrichmentCounts: EnrichmentCounts | undefined;
   isExpanded: boolean;
@@ -28,7 +36,7 @@ const CurationExtraction = ({
         onClick={onToggleExpand}
       >
         <h2 className="text-xl font-semibold text-gray-900">
-          Curation and Extraction
+          数据筛选与抽取
         </h2>
         <button className="text-gray-600 hover:text-gray-900 transition-colors">
           {isExpanded ? (
@@ -47,7 +55,7 @@ const CurationExtraction = ({
             const counts = enrichmentCounts?.[category as keyof EnrichmentCounts];
             return (
               <div key={category} className="backdrop-blur-2xl bg-white/95 border border-gray-200/50 rounded-xl p-3 shadow-none">
-                <h3 className="text-sm font-medium text-gray-700 mb-2 capitalize">{category}</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">{CATEGORY_LABELS[category]}</h3>
                 <div className="text-gray-900">
                   <div className="text-2xl font-bold mb-1">
                     {counts ? (
@@ -60,9 +68,9 @@ const CurationExtraction = ({
                   </div>
                   <div className="text-sm text-gray-600">
                     {counts ? (
-                      `selected from ${counts.total}`
+                      `从 ${counts.total} 条中筛出`
                     ) : (
-                      "waiting..."
+                      "等待中……"
                     )}
                   </div>
                 </div>
@@ -74,7 +82,7 @@ const CurationExtraction = ({
 
       {!isExpanded && enrichmentCounts && (
         <div className="mt-2 text-sm text-gray-600">
-          {Object.values(enrichmentCounts).reduce((acc, curr) => acc + curr.enriched, 0)} documents enriched from {Object.values(enrichmentCounts).reduce((acc, curr) => acc + curr.total, 0)} total
+          已抽取 {Object.values(enrichmentCounts).reduce((acc, curr) => acc + curr.enriched, 0)} / {Object.values(enrichmentCounts).reduce((acc, curr) => acc + curr.total, 0)} 篇文档
         </div>
       )}
     </div>

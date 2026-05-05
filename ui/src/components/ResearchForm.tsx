@@ -139,7 +139,7 @@ const ResearchForm = ({
                 htmlFor="companyName"
                 className="block text-base font-medium text-gray-700 mb-2.5 transition-all duration-200 group-hover:text-gray-900 font-['DM_Sans']"
               >
-                Company Name <span className="text-gray-900/70">*</span>
+                公司名称 <span className="text-gray-900/70">*</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-gray-50/0 via-gray-100/50 to-gray-50/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-lg"></div>
@@ -156,7 +156,7 @@ const ResearchForm = ({
                     }))
                   }
                   className={`${glassStyle.input} transition-all duration-300 focus:border-[#468BFF]/50 focus:ring-1 focus:ring-[#468BFF]/50 group-hover:border-[#468BFF]/30 bg-white/80 backdrop-blur-sm text-lg py-4 pl-12 font-['DM_Sans']`}
-                  placeholder="Enter company name"
+                  placeholder="输入公司名称"
                 />
               </div>
             </div>
@@ -167,7 +167,7 @@ const ResearchForm = ({
                 htmlFor="companyUrl"
                 className="block text-base font-medium text-gray-700 mb-2.5 transition-all duration-200 group-hover:text-gray-900 font-['DM_Sans']"
               >
-                Company URL
+                公司网址
               </label>
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-gray-50/0 via-gray-100/50 to-gray-50/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-lg"></div>
@@ -194,7 +194,7 @@ const ResearchForm = ({
                 htmlFor="companyHq"
                 className="block text-base font-medium text-gray-700 mb-2.5 transition-all duration-200 group-hover:text-gray-900 font-['DM_Sans']"
               >
-                Company HQ
+                公司总部
               </label>
               <LocationInput
                 value={formData.companyHq}
@@ -214,7 +214,7 @@ const ResearchForm = ({
                 htmlFor="companyIndustry"
                 className="block text-base font-medium text-gray-700 mb-2.5 transition-all duration-200 group-hover:text-gray-900 font-['DM_Sans']"
               >
-                Company Industry
+                所属行业
               </label>
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-gray-50/0 via-gray-100/50 to-gray-50/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-lg"></div>
@@ -230,7 +230,7 @@ const ResearchForm = ({
                     }))
                   }
                   className={`${glassStyle.input} transition-all duration-300 focus:border-[#468BFF]/50 focus:ring-1 focus:ring-[#468BFF]/50 group-hover:border-[#468BFF]/30 bg-white/80 backdrop-blur-sm text-lg py-4 pl-12 font-['DM_Sans']`}
-                  placeholder="e.g. Technology, Healthcare"
+                  placeholder="如:互联网、新能源"
                 />
               </div>
             </div>
@@ -246,12 +246,12 @@ const ResearchForm = ({
               {isResearching ? (
                 <>
                   <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5 loader-icon" style={{ stroke: loaderColor }} />
-                  <span className="text-base font-medium text-gray-900/90">Researching...</span>
+                  <span className="text-base font-medium text-gray-900/90">调研中……</span>
                 </>
               ) : (
                 <>
                   <Search className="-ml-1 mr-2 h-5 w-5 text-gray-900/90" />
-                  <span className="text-base font-medium text-gray-900/90">Start Research</span>
+                  <span className="text-base font-medium text-gray-900/90">开始调研</span>
                 </>
               )}
             </div>

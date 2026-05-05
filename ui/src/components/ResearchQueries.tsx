@@ -2,6 +2,14 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { ResearchQueriesProps } from '../types';
 import { fadeInAnimation } from '../styles';
 
+// 分类英文 key 与中文显示名映射(key 不能改,Backend 事件用同样字符串)
+const CATEGORY_LABELS: Record<string, string> = {
+  company: '公司',
+  industry: '行业',
+  financial: '财务',
+  news: '新闻',
+};
+
 const ResearchQueries = ({
   queries,
   streamingQueries,
@@ -21,7 +29,7 @@ const ResearchQueries = ({
         onClick={onToggleExpand}
       >
         <h2 className="text-xl font-semibold text-gray-900">
-          Generated Research Queries
+          已生成的检索 Query
         </h2>
         <button className="text-gray-600 hover:text-gray-900 transition-colors">
           {isExpanded ? (
@@ -38,8 +46,8 @@ const ResearchQueries = ({
         <div className="grid grid-cols-2 gap-4">
           {['company', 'industry', 'financial', 'news'].map((category) => (
             <div key={category} className={`${glassStyle} rounded-xl p-3`}>
-              <h3 className="text-base font-medium text-gray-900 mb-3 capitalize">
-                {category.charAt(0).toUpperCase() + category.slice(1)} Queries
+              <h3 className="text-base font-medium text-gray-900 mb-3">
+                {CATEGORY_LABELS[category]} Query
               </h3>
               <div className="space-y-2">
                 {/* Show streaming queries first */}
@@ -67,7 +75,7 @@ const ResearchQueries = ({
       
       {!isExpanded && (
         <div className="mt-2 text-sm text-gray-600">
-          {queries.length} queries generated across {['company', 'industry', 'financial', 'news'].length} categories
+          共生成 {queries.length} 条 query,覆盖 {['company', 'industry', 'financial', 'news'].length} 个分类
         </div>
       )}
     </div>

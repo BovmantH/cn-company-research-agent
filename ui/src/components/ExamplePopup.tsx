@@ -2,49 +2,49 @@ import { useState, useEffect } from 'react';
 import type { RefObject } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
-// Sample companies for examples
+// 默认示例公司,覆盖互联网/新能源/电商/家电几个常见赛道
 export const EXAMPLE_COMPANIES = [
   {
-    name: "Stripe",
-    url: "stripe.com",
-    hq: "San Francisco, CA",
-    industry: "Financial Technology"
+    name: "腾讯",
+    url: "tencent.com",
+    hq: "深圳,中国",
+    industry: "互联网"
   },
   {
-    name: "Shopify",
-    url: "shopify.com",
-    hq: "Ottawa, Canada",
-    industry: "E-commerce"
+    name: "字节跳动",
+    url: "bytedance.com",
+    hq: "北京,中国",
+    industry: "互联网"
   },
   {
-    name: "Notion",
-    url: "notion.so",
-    hq: "San Francisco, CA",
-    industry: "Productivity Software"
+    name: "宁德时代",
+    url: "catl.com",
+    hq: "宁德,中国",
+    industry: "新能源"
   },
   {
-    name: "Tesla",
-    url: "tesla.com",
-    hq: "Austin, TX",
-    industry: "Automotive & Energy"
+    name: "比亚迪",
+    url: "bydglobal.com",
+    hq: "深圳,中国",
+    industry: "新能源汽车"
   },
   {
-    name: "Airbnb",
-    url: "airbnb.com",
-    hq: "San Francisco, CA",
-    industry: "Travel & Hospitality"
+    name: "美团",
+    url: "meituan.com",
+    hq: "北京,中国",
+    industry: "本地生活"
   },
   {
-    name: "Slack",
-    url: "slack.com",
-    hq: "San Francisco, CA",
-    industry: "Business Communication"
+    name: "拼多多",
+    url: "pinduoduo.com",
+    hq: "上海,中国",
+    industry: "电商"
   },
   {
-    name: "Spotify",
-    url: "spotify.com",
-    hq: "Stockholm, Sweden",
-    industry: "Music Streaming"
+    name: "海尔智家",
+    url: "haier.com",
+    hq: "青岛,中国",
+    industry: "家电"
   }
 ];
 
@@ -103,7 +103,7 @@ const ExamplePopup = ({
     >
       <Sparkles className="h-4 w-4 text-blue-500 group-hover:text-blue-600 animate-pulse group-hover:animate-none group-hover:scale-110 transition-all" />
       <div>
-        <span className="text-sm font-medium text-gray-700 group-hover:text-gray-800 transition-colors">Try an example: </span>
+        <span className="text-sm font-medium text-gray-700 group-hover:text-gray-800 transition-colors">试一个示例:</span>
         <span 
           className={`text-sm font-bold text-blue-600 group-hover:text-blue-700 transition-all inline-block
             ${isNameAnimating ? 'opacity-0 transform -translate-y-3 scale-95' : 'opacity-100 transform translate-y-0 scale-100'}`}
