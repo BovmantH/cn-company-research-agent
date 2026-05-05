@@ -347,7 +347,7 @@ def format_references_section(references: List[str], reference_info: Dict[str, D
     logger.info("Maintaining reference order based on scores")
     
     # Format references in MLA style
-    reference_lines = ["\n## References"]
+    reference_lines = ["\n## 参考文献"]
     for entry in reference_entries:
         reference_line = format_reference_for_markdown(entry)
         reference_lines.append(reference_line)

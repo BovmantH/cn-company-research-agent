@@ -1,233 +1,244 @@
 """
-Centralized prompts for the company research agent.
-All LLM prompts are defined here for easy maintenance and updates.
+公司调研 agent 集中 prompt 模块。
+
+所有面向 LLM 的 prompt 在此统一维护,方便迭代与回退。
+设计原则:
+- 占位符变量名(``{company}``、``{industry}``、``{hq_location}`` 等)**保持原样**,
+  与调用方代码契约不变;只改写自然语言部分
+- 章节标题与原版**一一映射**(如 ``### Core Product/Service`` → ``### 核心产品/服务``),
+  保证下游 editor 拼接报告时结构对齐
+- 否定指令(如「不得提及『未找到信息』」)完整保留,防止国产模型瞎补
+- 不引入新的占位符
 """
 
 # ============================================================================
-# BRIEFING PROMPTS
+# BRIEFING PROMPTS — 4 类简报模板
 # ============================================================================
 
-COMPANY_BRIEFING_PROMPT = """Create a focused, yet comprehensive company briefing for {company}, a {industry} company based in {hq_location}.
-Key requirements:
-1. Start with: "{company} is a [what] that [does what] for [whom]"
-2. Structure using these headers and bullet points:
+COMPANY_BRIEFING_PROMPT = """你正在为 {company} 撰写一份聚焦但完整的公司简报。该公司位于 {hq_location},所属行业为 {industry}。
 
-### Core Product/Service
-* List distinct products/features
-* Include only verified technical capabilities
+写作要求:
+1. 第一句必须是:「{company} 是一家[做什么]的[什么类型公司],为[谁]提供[什么价值]」
+2. 必须严格使用以下小标题与项目符号结构(原 ### 标题不得删改):
 
-### Leadership Team
-* List key leadership team members
-* Include their roles and expertise
+### 核心产品/服务
+* 列出每一项可识别的产品或核心功能
+* 仅纳入有据可查的技术能力
 
-### Target Market
-* List specific target audiences
-* List verified use cases
-* List confirmed customers/partners
+### 领导团队
+* 列出关键高管
+* 注明他们的职务与专业背景
 
-### Key Differentiators
-* List unique features
-* List proven advantages
+### 目标市场
+* 列出明确的目标人群
+* 列出已验证的应用场景
+* 列出已确认的客户或合作伙伴
 
-### Business Model
-* Discuss product / service pricing
-* List distribution channels
+### 核心差异化优势
+* 列出独有的功能特性
+* 列出经过验证的优势
 
-3. Each bullet must be a single, complete fact
-4. Never mention "no information found" or "no data available"
-5. No paragraphs, only bullet points
-6. Provide only the briefing. No explanations or commentary."""
+### 商业模式
+* 说明产品/服务的定价方式
+* 列出主要分销渠道
 
-INDUSTRY_BRIEFING_PROMPT = """Create a focused, yet comprehensive industry briefing for {company}, a {industry} company based in {hq_location}.
-Key requirements:
-1. Structure using these exact headers and bullet points:
+3. 每条要点必须是单一、完整的事实
+4. 不得提及「未找到信息」「暂无数据」之类的措辞
+5. 仅使用项目符号,不要写成段落
+6. 直接输出简报正文,不要解释或寒暄。"""
 
-### Market Overview
-* State {company}'s exact market segment
-* List market size with year
-* List growth rate with year range
+INDUSTRY_BRIEFING_PROMPT = """你正在为 {company} 撰写一份聚焦但完整的行业简报。该公司位于 {hq_location},所属行业为 {industry}。
 
-### Direct Competition
-* List named direct competitors
-* List specific competing products
-* List market positions
+写作要求:
+1. 必须严格使用以下小标题与项目符号结构(原 ### 标题不得删改):
 
-### Competitive Advantages
-• List unique technical features
-• List proven advantages
+### 市场概览
+* 明确指出 {company} 所处的细分市场
+* 给出市场规模并标注年份
+* 给出增长率并标注覆盖年份区间
 
-### Market Challenges
-• List specific verified challenges
+### 直接竞争对手
+* 列出有名有姓的直接竞争对手
+* 列出对应的竞争产品
+* 列出各家的市场地位
 
-2. Each bullet must be a single, complete news event.
-3. No paragraphs, only bullet points
-4. Never mention "no information found" or "no data available"
-5. Provide only the briefing. No explanation."""
+### 竞争优势
+• 列出独有的技术特性
+• 列出经过验证的优势
 
-FINANCIAL_BRIEFING_PROMPT = """Create a focused, yet comprehensive financial briefing for {company}, a {industry} company based in {hq_location}.
-Key requirements:
-1. Structure using these headers and bullet points:
+### 市场挑战
+• 列出有据可查的具体挑战
 
-### Funding & Investment
-* Total funding amount with date
-* List each funding round with date
-* List named investors
+2. 每条要点必须是单一、完整的事实或事件
+3. 仅使用项目符号,不要写成段落
+4. 不得提及「未找到信息」「暂无数据」之类的措辞
+5. 直接输出简报正文,不要解释或寒暄。"""
 
-### Revenue Model
-* Discuss product / service pricing if applicable
+FINANCIAL_BRIEFING_PROMPT = """你正在为 {company} 撰写一份聚焦但完整的财务简报。该公司位于 {hq_location},所属行业为 {industry}。
 
-2. Include specific numbers when possible
-3. No paragraphs, only bullet points
-4. Never mention "no information found" or "no data available"
-5. NEVER repeat the same round of funding multiple times. ALWAYS assume that multiple funding rounds in the same month are the same round.
-6. NEVER include a range of funding amounts. Use your best judgement to determine the exact amount based on the information provided.
-6. Provide only the briefing. No explanation or commentary."""
+写作要求:
+1. 必须严格使用以下小标题与项目符号结构(原 ### 标题不得删改):
 
-NEWS_BRIEFING_PROMPT = """Create a focused, yet comprehensive news briefing for {company}, a {industry} company based in {hq_location}.
-Key requirements:
-1. Structure into these categories using bullet points:
+### 融资与投资
+* 给出累计融资总额并标注时间
+* 列出每一轮融资及其时间
+* 列出有名有姓的投资方
 
-### Major Announcements
-* Product / service launches
-* New initiatives
+### 营收模式
+* 如适用,说明产品/服务的定价方式
 
-### Partnerships
-* Integrations
-* Collaborations
+2. 尽可能给出具体数字
+3. 仅使用项目符号,不要写成段落
+4. 不得提及「未找到信息」「暂无数据」之类的措辞
+5. 严禁把同一轮融资重复罗列;同一月内的多次融资记录应当默认视为同一轮
+6. 严禁给出融资金额的「区间」表达,要基于材料判断后给出确切数字
+7. 直接输出简报正文,不要解释或寒暄。"""
 
-### Recognition
-* Awards
-* Press coverage
+NEWS_BRIEFING_PROMPT = """你正在为 {company} 撰写一份聚焦但完整的新闻简报。该公司位于 {hq_location},所属行业为 {industry}。
 
-2. Sort newest to oldest
-3. One event per bullet point
-4. Do not mention "no information found" or "no data available"
-5. Never use ### headers, only bullet points
-6. Provide only the briefing. Do not provide explanations or commentary."""
+写作要求:
+1. 必须按以下三类组织内容,使用项目符号(类目标题不得删改):
 
-BRIEFING_ANALYSIS_INSTRUCTION = """Analyze the following documents and extract key information. Provide only the briefing, no explanations or commentary:"""
+### 重要公告
+* 产品或服务发布
+* 新业务/新方向
+
+### 合作伙伴
+* 集成与对接
+* 联合项目
+
+### 荣誉与媒体报道
+* 获奖
+* 媒体曝光
+
+2. 同一类目下,按时间从新到旧排序
+3. 每条要点对应一个独立事件
+4. 不得提及「未找到信息」「暂无数据」之类的措辞
+5. 严禁使用 ### 之外的标题,只用项目符号(原 ### 类目标题保留)
+6. 直接输出简报正文,不要解释或寒暄。"""
+
+BRIEFING_ANALYSIS_INSTRUCTION = """请分析以下文档,提取关键信息。直接输出简报正文,不要解释或寒暄:"""
 
 
 # ============================================================================
-# EDITOR PROMPTS
+# EDITOR PROMPTS — 报告编排与清扫
 # ============================================================================
 
-EDITOR_SYSTEM_MESSAGE = "You are an expert report editor that compiles research briefings into comprehensive company reports."
+EDITOR_SYSTEM_MESSAGE = "你是一名资深报告编辑,负责把多份调研简报合并为一份完整的公司报告。"
 
-COMPILE_CONTENT_PROMPT = """You are compiling a comprehensive research report about {company}.
+COMPILE_CONTENT_PROMPT = """你正在为 {company} 整合一份完整的调研报告。
 
-Compiled briefings:
+各分项简报如下:
 {combined_content}
 
-Create a deep, comprehensive, and thorough report on {company}, a {industry} company headquartered in {hq_location} that:
-1. Integrates information from all sections into a cohesive non-repetitive narrative
-2. Maintains important details from each section
-3. Logically organizes information and removes transitional commentary / explanations
-4. Uses clear section headers and structure
+请基于以上简报,生成一份关于 {company}(位于 {hq_location} 的 {industry} 公司)的深度、完整、详尽的报告,要求:
+1. 把各部分信息整合为连贯且不重复的叙述
+2. 保留每个部分的关键细节
+3. 逻辑清晰地组织信息,删除过渡性评论与解释
+4. 使用清晰的章节标题与结构
 
-Formatting rules:
-Strictly enforce this EXACT document structure:
+格式硬性要求:
+严格按以下文档结构输出(章节顺序与标题原文不得改动):
 
-# {company} Research Report
+# {company} 调研报告
 
-## Company Overview
-[Company content with ### subsections]
+## 公司概览
+[公司部分内容,使用 ### 子标题]
 
-## Industry Overview
-[Industry content with ### subsections]
+## 行业概览
+[行业部分内容,使用 ### 子标题]
 
-## Financial Overview
-[Financial content with ### subsections]
+## 财务概览
+[财务部分内容,使用 ### 子标题]
 
-## News
-[News content with ### subsections]
+## 新闻动态
+[新闻部分内容,使用 ### 子标题]
 
-Return the report in clean markdown format. No explanations or commentary."""
+以干净的 markdown 输出报告,不要任何解释或寒暄。"""
 
-CONTENT_SWEEP_SYSTEM_MESSAGE = "You are an expert markdown formatter that ensures consistent document structure."
+CONTENT_SWEEP_SYSTEM_MESSAGE = "你是一名资深 markdown 编辑,负责保证文档结构一致、表述精炼。"
 
-CONTENT_SWEEP_PROMPT = """You are an expert briefing editor. You are given a report on {company}.
+CONTENT_SWEEP_PROMPT = """你是一名资深简报编辑。下面是一份关于 {company} 的报告:
 
-Current report:
+当前报告:
 {content}
 
-1. Remove redundant or repetitive information
-2. Remove information that is not relevant to {company}, the {industry} company headquartered in {hq_location}.
-3. Remove sections lacking substantial content
-4. Remove any meta-commentary (e.g. "Here is the news...")
+请完成以下清扫工作:
+1. 删除冗余或重复的信息
+2. 删除与 {company}(位于 {hq_location} 的 {industry} 公司)不相关的信息
+3. 删除内容稀薄、缺乏实质的小节
+4. 删除一切 meta 评论(如「以下是新闻……」之类的开场白)
 
-Strictly enforce this document structure:
+最终必须严格使用以下文档结构:
 
-## Company Overview
-[Company content with ### subsections]
+## 公司概览
+[公司部分内容,使用 ### 子标题]
 
-## Industry Overview
-[Industry content with ### subsections]
+## 行业概览
+[行业部分内容,使用 ### 子标题]
 
-## Financial Overview
-[Financial content with ### subsections]
+## 财务概览
+[财务部分内容,使用 ### 子标题]
 
-## News
-[News content with ### subsections]
+## 新闻动态
+[新闻部分内容,使用 ### 子标题]
 
-## References
-[References in MLA format - PRESERVE EXACTLY AS PROVIDED]
+## 参考文献
+[MLA 风格的参考文献 — 务必原样保留,不得改动]
 
-Critical rules:
-1. The document MUST start with "# {company} Research Report"
-2. The document MUST ONLY use these exact ## headers in this order:
-   - ## Company Overview
-   - ## Industry Overview
-   - ## Financial Overview
-   - ## News
-   - ## References
-3. NO OTHER ## HEADERS ARE ALLOWED
-4. Use ### for subsections in Company/Industry/Financial sections
-5. News section should only use bullet points (*), never headers
-6. Never use code blocks (```)
-7. Never use more than one blank line between sections
-8. Format all bullet points with *
-9. Add one blank line before and after each section/list
-10. DO NOT CHANGE the format of the references section
+关键规则:
+1. 文档第一行必须是 "# {company} 调研报告"
+2. 文档**只允许**出现以下 ## 大标题,且按此顺序出现:
+   - ## 公司概览
+   - ## 行业概览
+   - ## 财务概览
+   - ## 新闻动态
+   - ## 参考文献
+3. 不允许出现任何其他 ## 标题
+4. 公司概览 / 行业概览 / 财务概览 三个章节内部用 ### 子标题
+5. 新闻动态章节只用项目符号(*),不要使用任何标题
+6. 不允许使用代码块(```)
+7. 章节之间不允许超过一个空行
+8. 所有项目符号统一使用 *
+9. 每个章节/列表前后各留一个空行
+10. 参考文献章节的格式不得修改
 
-Return the polished report in flawless markdown format. No explanation.
-
-Return the cleaned report in flawless markdown format. No explanations or commentary."""
+以干净、规范的 markdown 输出最终报告,不要解释或寒暄。"""
 
 
 # ============================================================================
-# RESEARCH QUERY GENERATION PROMPTS
+# RESEARCH QUERY GENERATION PROMPTS — 各 researcher 的 query 生成模板
 # ============================================================================
 
-COMPANY_ANALYZER_QUERY_PROMPT = """Generate queries on the company fundamentals of {company} in the {industry} industry such as:
-- Core products and services
-- Company history and milestones
-- Leadership team
-- Business model and strategy
+COMPANY_ANALYZER_QUERY_PROMPT = """请围绕 {company}({industry} 行业)的公司基本面生成检索 query,例如:
+- 核心产品与服务
+- 公司发展史与里程碑事件
+- 高管/领导团队
+- 商业模式与战略
 """
 
-FINANCIAL_ANALYZER_QUERY_PROMPT = """Generate queries on the financial analysis of {company} in the {industry} industry such as:
-- Fundraising history and valuation
-- Financial statements and key metrics
-- Revenue and profit sources
+FINANCIAL_ANALYZER_QUERY_PROMPT = """请围绕 {company}({industry} 行业)的财务情况生成检索 query,例如:
+- 融资历史与估值
+- 财务报表与关键指标
+- 营收与利润来源
 """
 
-INDUSTRY_ANALYZER_QUERY_PROMPT = """Generate queries on the industry analysis of {company} in the {industry} industry such as:
-- Market position
-- Competitors
-- {industry} industry trends and challenges
-- Market size and growth
+INDUSTRY_ANALYZER_QUERY_PROMPT = """请围绕 {company}({industry} 行业)的行业分析生成检索 query,例如:
+- 市场地位
+- 主要竞争对手
+- {industry} 行业趋势与挑战
+- 市场规模与增长
 """
 
-NEWS_SCANNER_QUERY_PROMPT = """Generate queries on the recent news coverage of {company} such as:
-- Recent company announcements
-- Press releases
-- New partnerships
+NEWS_SCANNER_QUERY_PROMPT = """请围绕 {company} 的近期新闻生成检索 query,例如:
+- 最新公司公告
+- 新闻稿
+- 新合作伙伴
 """
 
 QUERY_FORMAT_GUIDELINES = """
-Important Guidelines:
-- Focus ONLY on {company}-specific information
-- Make queries very brief and to the point
-- Provide exactly 4 search queries (one per line), with no hyphens or dashes
-- DO NOT make assumptions about the industry - use only the provided industry information"""
+重要约束:
+- 只生成与 {company} 强相关的 query
+- query 必须简短直接,不要长句
+- **正好** 输出 4 条检索 query,每行一条,不要加横线或破折号
+- 不要主观推断行业属性,严格使用上文给出的行业信息"""
