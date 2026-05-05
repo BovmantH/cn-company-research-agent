@@ -1,33 +1,30 @@
 import asyncio
 import logging
-import os
 from typing import Dict, List
 
 from langchain_core.messages import AIMessage
-from tavily import AsyncTavilyClient
 
 from ..classes import ResearchState
 from ..classes.state import job_status
+from ..services.search import get_search_provider
 
 logger = logging.getLogger(__name__)
 
 
 class Enricher:
     """Enriches curated documents with raw content."""
-    
+
     def __init__(self) -> None:
-        tavily_key = os.getenv("TAVILY_API_KEY")
-        if not tavily_key:
-            raise ValueError("TAVILY_API_KEY environment variable is not set")
-        self.tavily_client = AsyncTavilyClient(api_key=tavily_key)
+        # 默认 TavilyProvider,API key 由 provider 内部校验
+        self.search = get_search_provider()
         self.batch_size = 20
 
     async def fetch_single_content(self, url: str) -> Dict[str, str]:
         """Fetch raw content for a single URL."""
         try:
-            result = await self.tavily_client.extract(url)
-            if result and result.get('results'):
-                return {url: result['results'][0].get('raw_content', '')}
+            pages = await self.search.extract([url])
+            if pages:
+                return {url: pages[0].raw_content}
         except Exception as e:
             logger.error(f"Error fetching raw content for {url}: {e}")
             return {url: ''}

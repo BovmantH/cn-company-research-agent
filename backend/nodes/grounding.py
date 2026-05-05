@@ -1,19 +1,20 @@
 import logging
-import os
 
 from langchain_core.messages import AIMessage
-from tavily import AsyncTavilyClient
 
 from ..classes import InputState, ResearchState
 from ..classes.state import job_status
+from ..services.search import get_search_provider
 
 logger = logging.getLogger(__name__)
 
 class GroundingNode:
     """Gathers initial grounding data about the company."""
-    
+
     def __init__(self) -> None:
-        self.tavily_client = AsyncTavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+        # 通过统一的 SearchProvider 调用,默认走 Tavily,可由
+        # SEARCH_PROVIDER 环境变量切换为其他实现(Phase 2)。
+        self.search = get_search_provider()
 
     async def initial_search(self, state: InputState):
         """Initial search and yield events"""
@@ -63,23 +64,23 @@ class GroundingNode:
             yield event
 
             try:
-                logger.info("Initiating Tavily crawl")
-                site_extraction = await self.tavily_client.crawl(
-                    url=url, 
+                logger.info("通过 SearchProvider 发起站点抓取")
+                pages = await self.search.crawl(
+                    url,
+                    max_pages=50,  # 等价于原 Tavily 调用的 max_breadth=50
                     instructions="Find any pages that will help us understand the company's business, products, services, and any other relevant information.",
-                    max_depth=1, 
-                    max_breadth=50, 
-                    extract_depth="advanced"
+                    max_depth=1,
+                    extract_depth="advanced",
                 )
-                
+
                 site_scrape = {}
-                for item in site_extraction.get("results", []):
-                    if item.get("raw_content"):
-                        page_url = item.get("url", url)
-                        site_scrape[page_url] = {
-                            'raw_content': item.get('raw_content'),
-                            'source': 'company_website'
-                        }
+                for page in pages:
+                    # provider 已过滤掉空 raw_content,这里 page.url 兜底用入口 url
+                    page_url = page.url or url
+                    site_scrape[page_url] = {
+                        'raw_content': page.raw_content,
+                        'source': 'company_website'
+                    }
                 
                 if site_scrape:
                     logger.info(f"Successfully crawled {len(site_scrape)} pages from website")

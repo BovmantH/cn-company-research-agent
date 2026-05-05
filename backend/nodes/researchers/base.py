@@ -1,15 +1,14 @@
 import asyncio
 import logging
-import os
 from datetime import datetime
 from typing import Any, Dict, List
 
 from langchain_core.prompts import ChatPromptTemplate
-from tavily import AsyncTavilyClient
 
 from ...classes import ResearchState
 from ...classes.state import job_status
 from ...services.llm_factory import get_llm
+from ...services.search import SearchResult, get_search_provider
 from ...utils.references import clean_title
 from ...prompts import QUERY_FORMAT_GUIDELINES
 
@@ -17,11 +16,9 @@ logger = logging.getLogger(__name__)
 
 class BaseResearcher:
     def __init__(self):
-        tavily_key = os.getenv("TAVILY_API_KEY")
-        if not tavily_key:
-            raise ValueError("缺少 TAVILY_API_KEY 环境变量")
-
-        self.tavily_client = AsyncTavilyClient(api_key=tavily_key)
+        # 检索通过统一 SearchProvider 调用,默认 Tavily;
+        # API key 校验由 provider 内部完成,缺失时会抛 RuntimeError。
+        self.search = get_search_provider()
         # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
         # 模型可通过 LLM_MODEL_RESEARCHER 环境变量覆盖。
         self.llm = get_llm("researcher")
@@ -153,46 +150,53 @@ class BaseResearcher:
             raise RuntimeError(f"Fatal API error - query generation failed: {str(e)}") from e
 
     def _get_search_params(self) -> Dict[str, Any]:
-        """Get search parameters based on analyst type"""
+        """Get search parameters based on analyst type.
+
+        ``max_results`` 是 ``SearchProvider.search`` 的显式参数,其余字段
+        (``search_depth``、``include_raw_content``、``topic``)是 Tavily
+        专有参数,通过 provider 的 ``**kwargs`` 透传;未来切换到其他
+        provider 时,可在该方法里基于 ``self.analyst_type`` 输出对应的
+        参数集合。
+        """
         params = {
             "search_depth": "basic",
             "include_raw_content": False,
             "max_results": 5
         }
-        
+
         topic_map = {
             "news_analyzer": "news",
             "financial_analyzer": "finance"
         }
-        
+
         if topic := topic_map.get(self.analyst_type):
             params["topic"] = topic
-            
+
         return params
-    
-    def _process_search_result(self, result: Dict[str, Any], query: str) -> Dict[str, Any]:
-        """Process a single search result into standardized format"""
-        if not result.get("content") or not result.get("url"):
+
+    def _process_search_result(self, result: SearchResult, query: str) -> Dict[str, Any]:
+        """把单条 ``SearchResult`` 标准化为下游节点期望的 dict 形态。"""
+        if not result.content or not result.url:
             return {}
-            
-        url = result.get("url")
-        title = clean_title(result.get("title", "")) if result.get("title") else ""
-        
+
+        url = result.url
+        title = clean_title(result.title) if result.title else ""
+
         # Reset empty or invalid titles
         if not title or title.lower() == url.lower():
             title = ""
-        
+
         return {
             "title": title,
-            "content": result.get("content", ""),
+            "content": result.content,
             "query": query,
             "url": url,
             "source": "web_search",
-            "score": result.get("score", 0.0)
+            "score": result.score,
         }
 
     async def search_documents(self, state: ResearchState, queries: List[str]):
-        """Execute all Tavily searches in parallel and yield events"""
+        """通过 SearchProvider 并行执行所有查询并 yield 进度事件。"""
         if not queries:
             logger.error("No valid queries to search")
             yield {"type": "error", "error": "No valid queries to search"}
@@ -205,9 +209,9 @@ class BaseResearcher:
             "total_queries": len(queries)
         }
 
-        # Execute all searches in parallel
+        # Execute all searches in parallel through the provider abstraction
         search_params = self._get_search_params()
-        search_tasks = [self.tavily_client.search(query, **search_params) for query in queries]
+        search_tasks = [self.search.search(query, **search_params) for query in queries]
 
         try:
             results = await asyncio.gather(*search_tasks, return_exceptions=True)
@@ -217,14 +221,15 @@ class BaseResearcher:
             return
 
         # Process and merge results
-        merged_docs = {}
+        merged_docs: Dict[str, Dict[str, Any]] = {}
         for query, result in zip(queries, results):
             if isinstance(result, Exception):
                 logger.error(f"Search failed for query '{query}': {result}")
                 yield {"type": "query_error", "query": query, "error": str(result)}
                 continue
-                
-            for item in result.get("results", []):
+
+            # provider 直接返回 list[SearchResult]
+            for item in result:
                 if doc := self._process_search_result(item, query):
                     merged_docs[doc["url"]] = doc
 

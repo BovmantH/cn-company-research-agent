@@ -84,12 +84,17 @@ def test_base_researcher_still_requires_tavily_key(
     monkeypatch: pytest.MonkeyPatch,
     patch_get_llm: GenericFakeChatModel,
 ) -> None:
-    """Task 2.1 只重构 LLM,Tavily 客户端仍由 base.py 直接构造,需要 key。"""
+    """检索 provider 仍校验 TAVILY_API_KEY,缺失时抛 RuntimeError。
+
+    Task 2.1 的 LLM 重构后,Task 3.4 又把 search 也改走 provider,
+    TAVILY_API_KEY 校验从 BaseResearcher 转移到 TavilyProvider.__init__,
+    错误类型从 ValueError 变为 RuntimeError(由 provider 抛出)。
+    """
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
 
     from backend.nodes.researchers.base import BaseResearcher
 
-    with pytest.raises(ValueError, match="TAVILY_API_KEY"):
+    with pytest.raises(RuntimeError, match="TAVILY_API_KEY"):
         BaseResearcher()
 
 
