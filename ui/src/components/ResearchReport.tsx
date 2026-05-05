@@ -43,7 +43,7 @@ const ResearchReport = ({
       {isStreaming && (
         <div className="flex items-center gap-2 mb-4 px-4 py-2 bg-[#468BFF]/10 rounded-lg border border-[#468BFF]/20">
           <Loader2 className="h-4 w-4 animate-spin" style={{ stroke: loaderColor }} />
-          <span className="text-sm text-gray-600">Generating report...</span>
+          <span className="text-sm text-gray-600">正在生成报告……</span>
         </div>
       )}
       <div className="flex justify-end gap-2 mb-4">
@@ -67,7 +67,7 @@ const ResearchReport = ({
               {isGeneratingPdf ? (
                 <>
                   <Loader2 className="animate-spin h-5 w-5 mr-2" style={{ stroke: loaderColor }} />
-                  Generating PDF...
+                  正在生成 PDF……
                 </>
               ) : (
                 <>
@@ -90,8 +90,11 @@ const ResearchReport = ({
               ),
               h1: ({node, children, ...props}) => {
                 const text = String(children);
-                const isFirstH1 = text.includes("Research Report");
-                const isReferences = text.includes("References");
+                // Group 5 prompt 中文化后,LLM 输出的一级标题已改为
+                // "# {company} 调研报告",这里同步改为中文判断;
+                // "参考文献" 是 references.py 自己拼装的,保持中文一致
+                const isFirstH1 = text.includes("调研报告");
+                const isReferences = text.includes("参考文献");
                 return (
                   <div>
                     <h1 
@@ -114,16 +117,17 @@ const ResearchReport = ({
               ),
               p: ({node, children, ...props}) => {
                 const text = String(children);
+                // 把以中/英文冒号结尾的短句当 h3 渲染(LLM 偶尔会忘记 ### 前缀)
                 const isSubsectionHeader = (
-                  text.includes('\n') === false && 
-                  text.length < 50 && 
-                  (text.endsWith(':') || /^[A-Z][A-Za-z\s\/]+$/.test(text))
+                  text.includes('\n') === false &&
+                  text.length < 50 &&
+                  (text.endsWith(':') || text.endsWith(':') || /^[A-Z][A-Za-z\s\/]+$/.test(text))
                 );
-                
+
                 if (isSubsectionHeader) {
                   return (
                     <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3">
-                      {text.endsWith(':') ? text.slice(0, -1) : text}
+                      {(text.endsWith(':') || text.endsWith(':')) ? text.slice(0, -1) : text}
                     </h3>
                   );
                 }
@@ -182,7 +186,7 @@ const ResearchReport = ({
               ),
             }}
           >
-            {output.details.report || "No report available"}
+            {output.details.report || "暂无报告内容"}
           </ReactMarkdown>
         </div>
       </div>

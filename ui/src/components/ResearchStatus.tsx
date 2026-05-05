@@ -25,11 +25,11 @@ const ResearchStatus = ({
             <div className={`${glassStyle.base} p-2 rounded-full bg-[#FE363B]/10 border-[#FE363B]/20`}>
               <XCircle className="h-5 w-5 text-[#FE363B]" />
             </div>
-          ) : status?.step === "Complete" || isComplete ? (
+          ) : status?.step === "完成" || isComplete ? (
             <div className={`${glassStyle.base} p-2 rounded-full bg-[#22C55E]/10 border-[#22C55E]/20`}>
               <CheckCircle2 className="h-5 w-5 text-[#22C55E]" />
             </div>
-          ) : currentPhase === 'search' || currentPhase === 'enrichment' || (status?.step === "Processing" && status.message.includes("scraping")) ? (
+          ) : currentPhase === 'search' || currentPhase === 'enrichment' || status?.step === "网站抓取" ? (
             <div className={`${glassStyle.base} p-2 rounded-full bg-[#468BFF]/10 border-[#468BFF]/20`}>
               <Loader2 className="h-5 w-5 animate-spin loader-icon" style={{ stroke: loaderColor }} />
             </div>

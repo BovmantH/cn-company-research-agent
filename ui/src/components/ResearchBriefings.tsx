@@ -8,6 +8,14 @@ type BriefingStatus = {
   news: boolean;
 };
 
+// 分类英文 key 与中文显示名映射(key 不能改,Backend 事件用同样字符串)
+const CATEGORY_LABELS: Record<keyof BriefingStatus, string> = {
+  company: '公司',
+  industry: '行业',
+  financial: '财务',
+  news: '新闻',
+};
+
 interface ResearchBriefingsProps {
   briefingStatus: BriefingStatus;
   isExpanded: boolean;
@@ -32,7 +40,7 @@ const ResearchBriefings = ({
         onClick={onToggleExpand}
       >
         <h2 className="text-xl font-semibold text-gray-900">
-          Research Briefings
+          调研简报
         </h2>
         <button className="text-gray-600 hover:text-gray-900 transition-colors">
           {isExpanded ? (
@@ -65,11 +73,11 @@ const ResearchBriefings = ({
               />
               
               <div className="relative z-10 flex items-center justify-between">
-                <h3 className={`text-sm font-medium capitalize transition-all duration-500 ${
+                <h3 className={`text-sm font-medium transition-all duration-500 ${
                   briefingStatus[category as keyof BriefingStatus]
                     ? 'text-[#468BFF]'
                     : 'text-gray-700 group-hover:text-gray-900'
-                }`}>{category}</h3>
+                }`}>{CATEGORY_LABELS[category as keyof BriefingStatus]}简报</h3>
                 {briefingStatus[category as keyof BriefingStatus] ? (
                   <CheckCircle2 className="h-4 w-4 text-[#468BFF] transition-all duration-300" />
                 ) : (
@@ -83,7 +91,7 @@ const ResearchBriefings = ({
 
       {!isExpanded && (
         <div className="mt-2 text-sm text-gray-600">
-          {Object.values(briefingStatus).filter(Boolean).length} of {Object.keys(briefingStatus).length} briefings completed
+          已完成 {Object.values(briefingStatus).filter(Boolean).length} / {Object.keys(briefingStatus).length} 份简报
         </div>
       )}
     </div>

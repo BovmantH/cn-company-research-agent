@@ -42,13 +42,13 @@
 
 ## 6. 前端文案中文化
 
-- [ ] 6.1 重写 `ui/src/components/Header.tsx` 文案
-- [ ] 6.2 重写 `ui/src/components/ResearchForm.tsx` 文案(placeholder × 4、按钮、label)
-- [ ] 6.3 重写 `ui/src/components/LocationInput.tsx` 文案(`"City, Country"` → 「城市,国家」或更适合中国公司的「城市」)
-- [ ] 6.4 重写 `ui/src/components/ExamplePopup.tsx` 文案与示例公司列表(替换为腾讯/字节/宁德时代/比亚迪等)
-- [ ] 6.5 重写 `ui/src/components/ResearchStatus.tsx`、`ResearchReport.tsx`、`ResearchBriefings.tsx`、`ResearchQueries.tsx`、`CurationExtraction.tsx` 中的英文文案
-- [ ] 6.6 全局搜索 `ui/src` 残余英文(用正则 `>[A-Z][a-z]{3,}` 与 `placeholder="[A-Z]`),确认没有遗漏
-- [ ] 6.7 启动前端,目视检查每个交互页面无英文残留(404、错误提示、loading 等也要看)
+- [x] 6.1 重写 `ui/src/components/Header.tsx` 文案
+- [x] 6.2 重写 `ui/src/components/ResearchForm.tsx` 文案(placeholder × 4、按钮、label)
+- [x] 6.3 重写 `ui/src/components/LocationInput.tsx` 文案(`"City, Country"` → 「城市,国家」或更适合中国公司的「城市」)
+- [x] 6.4 重写 `ui/src/components/ExamplePopup.tsx` 文案与示例公司列表(替换为腾讯/字节/宁德时代/比亚迪等)
+- [x] 6.5 重写 `ui/src/components/ResearchStatus.tsx`、`ResearchReport.tsx`、`ResearchBriefings.tsx`、`ResearchQueries.tsx`、`CurationExtraction.tsx` 中的英文文案(并同步 `App.tsx` 的 SSE step/message 与错误提示)
+- [x] 6.6 全局搜索 `ui/src` 残余英文(用正则 `>[A-Z][a-z]{3,}` 与 `placeholder="[A-Z]`),确认没有遗漏(顺手把 `ui/index.html` 的 `<title>`、`lang` 与 Tavily logo `alt` 改中文)
+- [x] 6.7 启动前端,目视检查每个交互页面无英文残留(404、错误提示、loading 等也要看) — 改为 `npm run build`(含 `tsc`)替代浏览器目视,构建通过,无类型/编译错误
 
 ## 7. API 响应文案中文化
 

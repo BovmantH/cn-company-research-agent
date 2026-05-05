@@ -239,7 +239,7 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
           }
         }}
         className={`${className} !font-['DM_Sans']`}
-        placeholder="City, Country"
+        placeholder="城市,国家(如「深圳」)"
       />
     </div>
   );
