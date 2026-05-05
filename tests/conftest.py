@@ -22,6 +22,7 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LLM_TEMPERATURE",
         "LLM_STREAMING",
         "LLM_BASE_URL",
+        "LLM_MAX_TOKENS",
         "SEARCH_PROVIDER",
     ]:
         monkeypatch.delenv(name, raising=False)
