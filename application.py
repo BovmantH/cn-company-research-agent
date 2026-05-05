@@ -246,28 +246,28 @@ async def stream_research(job_id: str):
 
                 # step 切换时推一条 progress 事件
                 if status == "processing" and current_step and current_step != last_step:
-                    data = json.dumps({"type": "progress", "step": current_step})
+                    data = json.dumps({"type": "progress", "step": current_step}, ensure_ascii=False)
                     yield f"data: {data}\n\n"
                     last_step = current_step
 
                 # 把队列里的事件按 FIFO 顺序推完
                 while events:
                     event = events.pop(0)
-                    data = json.dumps(event)
+                    data = json.dumps(event, ensure_ascii=False)
                     yield f"data: {data}\n\n"
 
                 if status == "completed" and (report := result.get("report")):
-                    data = json.dumps({"type": "complete", "report": report})
+                    data = json.dumps({"type": "complete", "report": report}, ensure_ascii=False)
                     yield f"data: {data}\n\n"
                     break
                 elif status == "failed":
-                    data = json.dumps({"type": "error", "error": result.get("error", "未知错误")})
+                    data = json.dumps({"type": "error", "error": result.get("error", "未知错误")}, ensure_ascii=False)
                     yield f"data: {data}\n\n"
                     break
 
                 await asyncio.sleep(0.1)  # 加快轮询,前端反馈更跟手
         except Exception as e:
-            data = json.dumps({"type": "error", "error": str(e)})
+            data = json.dumps({"type": "error", "error": str(e)}, ensure_ascii=False)
             yield f"data: {data}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
