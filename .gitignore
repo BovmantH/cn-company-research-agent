@@ -13,6 +13,8 @@ __pycache__/
 
 # IDE and OS
 .vscode/
+.idea/
+*.iml
 .DS_Store
 
 # Frontend
