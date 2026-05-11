@@ -23,9 +23,9 @@
 - **AI 内容过滤**:基于检索引擎打分 + LLM 二次评估
 - **异步处理**:基于轮询/流式的进度跟踪架构
 - **三段式 LLM 架构**(每节点可独立配置模型):
-  - **Researcher**(搜集与初步分析)— 默认 `deepseek-chat`,快且便宜
-  - **Briefing**(分类摘要,长上下文)— 默认 `qwen-2.5-72b-instruct`
-  - **Editor**(终稿编辑,严谨格式)— 默认 `claude-3.5-sonnet`
+  - **Researcher**(搜集与初步分析)— 默认 `deepseek-v4-flash`,快且便宜,1M 上下文
+  - **Briefing**(分类摘要,长上下文)— 默认 `qwen3.6-plus` / `qwen/qwen3.6-flash`(走 OpenRouter)
+  - **Editor**(终稿编辑,严谨格式)— 默认 `kimi-k2.5` / `moonshotai/kimi-k2.6`(走 OpenRouter)
 - **现代 React 前端**:进度跟踪、PDF 下载
 - **模块化架构**:每个 agent 是独立的 LangGraph 节点,易于替换扩展
 
@@ -37,7 +37,7 @@
 |---|---|---|
 | 语言 | 英文 prompt + 英文 UI + 英文报告 | **中文** prompt + UI + 报告 |
 | Prompt 质量 | 英文(中文公司用英文 prompt 时模型偏向英文资料) | **人工重写而非机翻**,占位符与下游解析依赖的标题(`### 核心产品/服务` 等)同步迁移,对国产模型更友好 |
-| LLM provider | OpenAI(GPT-5.1 / GPT-4o)+ Google(Gemini 2.5 Flash)硬编码 | 统一 `LLMFactory.get_llm(role)`,**国产原厂直连(DeepSeek / Qwen / Kimi)+ OpenRouter 聚合 + OpenAI 兜底**,启动期单 vendor 全包 |
+| LLM provider | OpenAI(GPT 系列)+ Google(Gemini 系列)硬编码 | 统一 `LLMFactory.get_llm(role)`,**国产原厂直连(DeepSeek / Qwen / Kimi / MiMo)+ OpenRouter 聚合 + OpenAI 兜底**,启动期单 vendor 全包 |
 | 模型成本控制 | 无 | **`LLM_MAX_TOKENS` 兜底**避免 OpenRouter 按模型最大窗口预扣余额导致小余额账号 402 |
 | 检索层 | 直接调 Tavily 客户端,5 个文件分散调用 | **`SearchProvider` 抽象接口**,Tavily 收拢为默认 provider,新增 provider 无需改节点代码 |
 | 启动校验 | 缺 key 运行时报错 | **启动期校验**,中文报错并立即退出 |
@@ -48,15 +48,53 @@
 
 ## 🧠 Agent 框架
 
+### 系统架构
+
+```mermaid
+flowchart TB
+    UI["前端 React + Vite<br/>(ui/)"] -.HTTP / SSE.-> API
+    subgraph Backend["FastAPI 后端(application.py)"]
+        API["REST + SSE 接口<br/>POST /research · GET /stream"]
+        Graph["LangGraph 编排<br/>(backend/graph.py)"]
+        API --> Graph
+        Graph --> Pipeline["10 节点 DAG<br/>见下方流水线"]
+    end
+    Pipeline --> LLM["LLMFactory.get_llm(role)<br/>(backend/services/llm_factory.py)"]
+    Pipeline --> Search["SearchProvider<br/>(backend/services/search/)"]
+    LLM -.单 vendor 全包<br/>启动期探测.-> Vendors
+    Search --> Tavily[Tavily Search API]
+    subgraph Vendors["LLM Vendor"]
+        D[DeepSeek 原厂]
+        Q[Qwen / 阿里百炼]
+        K[Kimi / Moonshot]
+        M[MiMo / 小米]
+        OR[OpenRouter 聚合]
+        OAI[OpenAI 兜底]
+    end
+```
+
 ### 调研流水线
 
 10 个节点的有向无环图(DAG),并行 + 串行混合编排:
 
-```
-                ┌─→ FinancialAnalyst  ─┐
-                ├─→ NewsScanner       │
-GroundingNode ──┼─→ IndustryAnalyzer  ┼─→ Collector → Curator → Enricher → Briefing → Editor
-                └─→ CompanyAnalyzer   ─┘
+```mermaid
+flowchart LR
+    Input([用户输入<br/>公司名]) --> Grounding
+    Grounding["GroundingNode<br/>Tavily Crawl 公司官网"] --> R1 & R2 & R3 & R4
+    R1["CompanyAnalyzer<br/>核心业务 / 产品 / 团队"] --> Collector
+    R2["IndustryAnalyzer<br/>行业地位 / 市场 / 竞品"] --> Collector
+    R3["FinancialAnalyst<br/>融资 / 营收 / 估值"] --> Collector
+    R4["NewsScanner<br/>近期新闻 / 事件"] --> Collector
+    Collector["Collector<br/>汇总四路结果"] --> Curator["Curator<br/>相关性过滤 score≥0.4"]
+    Curator --> Enricher["Enricher<br/>文档内容补全"]
+    Enricher --> Briefing["Briefing × LLM<br/>4 份分类摘要"]
+    Briefing --> Editor["Editor × LLM<br/>终稿编辑(流式)"]
+    Editor --> Report([中文调研报告])
+
+    classDef llmnode fill:#fff4e1,stroke:#d4a017
+    classDef parallel fill:#e1f5ff,stroke:#0288d1
+    class R1,R2,R3,R4 parallel
+    class Briefing,Editor llmnode
 ```
 
 1. **入口节点 `GroundingNode`**:从用户输入抓取公司官网做初步定位(Tavily Crawl)
@@ -78,11 +116,11 @@ GroundingNode ──┼─→ IndustryAnalyzer  ┼─→ Collector → Curator 
 
 不同节点对模型能力需求不同,本项目通过 `LLMFactory.get_llm(role)` 按角色绑定模型:
 
-| Role | 默认模型(可在 `.env` 覆盖) | 强项 | 用在哪 |
+| Role | OpenRouter 默认 slug | 原厂直连默认(DeepSeek / Qwen / Kimi / MiMo) | 用在哪 |
 |---|---|---|---|
-| `researcher` | `deepseek/deepseek-chat` | 速度 + 性价比 | 4 个 researcher 节点搜集与分析 |
-| `briefing` | `qwen/qwen-2.5-72b-instruct` | 长上下文归纳 | `briefing.py` 生成分类摘要 |
-| `editor` | `anthropic/claude-3.5-sonnet` | 格式严谨 + 流式 | `editor.py` 整合终稿 |
+| `researcher` | `deepseek/deepseek-v4-flash` | `deepseek-v4-flash` / `qwen3.6-flash` / `kimi-k2.5` / `mimo-v2.5-pro` | 4 个 researcher 节点搜集与分析 |
+| `briefing` | `qwen/qwen3.6-flash` | `deepseek-v4-flash` / `qwen3.6-plus` / `kimi-k2-turbo-preview` / `mimo-v2.5-pro` | `briefing.py` 生成分类摘要 |
+| `editor` | `moonshotai/kimi-k2.6` | `deepseek-v4-flash` / `qwen3-max` / `kimi-k2.5` / `mimo-v2.5-pro` | `editor.py` 整合终稿(流式) |
 
 > 配置示例见下方 [环境变量](#环境变量)。如果你只有 OpenAI Key,工厂会自动降级到原生 OpenAI 端点。
 
@@ -178,16 +216,24 @@ docker compose up --build
 ### 根目录 `.env`(后端)
 
 ```env
-# === LLM(必填:OpenRouter 或 OpenAI 至少一个)===
-OPENROUTER_API_KEY=sk-or-...                                 # 推荐
-LLM_MODEL_RESEARCHER=deepseek/deepseek-chat                  # researcher 用啥模型
-LLM_MODEL_BRIEFING=qwen/qwen-2.5-72b-instruct                # briefing 用啥模型
-LLM_MODEL_EDITOR=anthropic/claude-3.5-sonnet                 # editor 用啥模型
+# === LLM(必填:下方任意 vendor key 至少配一个,启动期会探测)===
+# A) OpenRouter(海外聚合,model slug 必须带 vendor/ 前缀)
+OPENROUTER_API_KEY=sk-or-...
+LLM_MODEL_RESEARCHER=deepseek/deepseek-v4-flash
+LLM_MODEL_BRIEFING=qwen/qwen3.6-flash
+LLM_MODEL_EDITOR=moonshotai/kimi-k2.6
 LLM_TEMPERATURE=0
 LLM_STREAMING=true
-# LLM_BASE_URL=http://localhost:11434/v1                     # 可选:走本地 vLLM/Ollama 等
+LLM_MAX_TOKENS=4096
+# LLM_BASE_URL=http://localhost:11434/v1   # 可选:走本地 vLLM / Ollama 等
 
-# 降级:仅有 OpenAI Key 时自动用原生 OpenAI 端点
+# B) 国产原厂直连(P1 新增,不需要代理。详见下方"国产原厂直连"段落)
+# DEEPSEEK_API_KEY=sk-...                  # 默认 slug deepseek-v4-flash
+# DASHSCOPE_API_KEY=sk-...                 # 阿里百炼 / Qwen3 系列
+# MOONSHOT_API_KEY=sk-...                  # Moonshot / Kimi K2 系列
+# XIAOMI_API_KEY=tp-...                    # 小米 MiMo
+
+# C) OpenAI 兜底
 # OPENAI_API_KEY=sk-...
 
 # === 检索(必填)===
@@ -294,5 +340,7 @@ MIT License,与原项目一致。详见 [LICENSE](LICENSE)。
 
 ---
 
-> 📍 **项目状态**:Phase 1(prompt + UI 中文化 + LLM 网关 + 检索抽象)进行中
-> Phase 2 计划:Bocha AI 检索 + AKShare / 巨潮资讯网 / 企查查等国内专用数据源 node
+> 📍 **项目状态**:Phase 1(prompt + UI 中文化 + LLM 网关 + 检索抽象)✅ 已完成
+> Phase 2 P1(国产原厂直连)✅ 代码完成,等真厂 key 端到端验收
+> Phase 2 P2 计划:Curator 交叉验证 / 时效过滤 / 来源权威度分级
+> Phase 2 P3 计划:Bocha AI 检索 + AKShare / 巨潮资讯网等国内专用数据源 node
