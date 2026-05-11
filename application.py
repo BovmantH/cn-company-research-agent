@@ -27,7 +27,15 @@ if env_path.exists():
 
 # 启动校验: LLMFactory 依赖至少一个 LLM provider key,缺失则直接退出,
 # 避免在第一次请求时才发现 key 没配,把错误推到用户面前。
-if not os.getenv("OPENROUTER_API_KEY") and not os.getenv("OPENAI_API_KEY"):
+_LLM_KEY_CANDIDATES = (
+    ("DEEPSEEK_API_KEY",   "DeepSeek 原厂",       "https://api-docs.deepseek.com/"),
+    ("DASHSCOPE_API_KEY",  "阿里百炼(Qwen)",     "https://help.aliyun.com/zh/dashscope/"),
+    ("MOONSHOT_API_KEY",   "Moonshot(Kimi)",     "https://platform.moonshot.cn/"),
+    ("XIAOMI_API_KEY",     "小米 MiMo",          "https://api.xiaomimimo.com/"),
+    ("OPENROUTER_API_KEY", "OpenRouter 聚合",     "https://openrouter.ai/"),
+    ("OPENAI_API_KEY",     "OpenAI 原生(降级)", "https://platform.openai.com/"),
+)
+if not any(os.getenv(name) for name, _, _ in _LLM_KEY_CANDIDATES):
     # 把 stderr 切到 UTF-8,避免 Windows GBK 控制台把中文打成 mojibake
     if hasattr(sys.stderr, "reconfigure"):
         try:
@@ -35,11 +43,14 @@ if not os.getenv("OPENROUTER_API_KEY") and not os.getenv("OPENAI_API_KEY"):
         except Exception:
             pass
 
+    candidates = "\n".join(
+        f"  - {name:<22}({label},见 {url})"
+        for name, label, url in _LLM_KEY_CANDIDATES
+    )
     print(
         "\n[启动失败] 未检测到 LLM provider 凭证。\n"
         "请在 .env 中至少配置以下其中一项:\n"
-        "  - OPENROUTER_API_KEY  (主推,见 https://openrouter.ai/)\n"
-        "  - OPENAI_API_KEY      (降级路径,见 https://platform.openai.com/)\n"
+        f"{candidates}\n"
         "\n参考 .env.example 复制一份 .env 后填写。\n",
         file=sys.stderr,
     )

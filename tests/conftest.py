@@ -11,7 +11,8 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
     确保测试不被本地 .env 或 CI 环境变量干扰。
     """
-    for name in [
+    names = [
+        # Phase 1
         "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",
         "GEMINI_API_KEY",
@@ -24,5 +25,18 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LLM_BASE_URL",
         "LLM_MAX_TOKENS",
         "SEARCH_PROVIDER",
-    ]:
+        # Phase 2: vendor 路由与原厂 key
+        "LLM_VENDOR",
+        "LLM_VENDOR_PRIORITY",
+        "DEEPSEEK_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "MOONSHOT_API_KEY",
+        "ZAI_API_KEY",
+        "XIAOMI_API_KEY",
+        "MINIMAX_API_KEY",
+    ]
+    # 单 vendor 维度 base_url 覆盖,全部清掉
+    for vendor in ("DEEPSEEK", "QWEN", "KIMI", "GLM", "MIMO", "MINIMAX", "OPENROUTER", "OPENAI"):
+        names.append(f"LLM_BASE_URL_{vendor}")
+    for name in names:
         monkeypatch.delenv(name, raising=False)

@@ -266,3 +266,264 @@ def test_max_tokens_override_takes_precedence(
     llm = get_llm("researcher", max_tokens=8192)
 
     assert getattr(llm, "max_tokens", None) == 8192
+
+
+# === Phase 2: vendor 探测 ===
+
+
+def test_detect_deepseek_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """仅配 DEEPSEEK_API_KEY 时,所有 role 都走 DeepSeek 原厂。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+
+    for role in ("researcher", "briefing", "editor"):
+        llm = get_llm(role)
+        base_url = str(getattr(llm, "openai_api_base", "") or "")
+        assert "api.deepseek.com" in base_url
+        # 默认 slug 应该是 DeepSeek 原厂 slug,而非 OpenRouter 前缀
+        assert "/" not in llm.model_name
+        assert llm.model_name == "deepseek-v4-flash"
+
+
+def test_detect_qwen_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-qwen-test")
+
+    llm = get_llm("editor")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "dashscope.aliyuncs.com" in base_url
+    assert llm.model_name == "qwen3-max"
+
+
+def test_detect_kimi_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MOONSHOT_API_KEY", "sk-kimi-test")
+
+    llm = get_llm("briefing")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "api.moonshot.cn" in base_url
+    assert llm.model_name == "kimi-k2-turbo-preview"
+
+
+def test_detect_mimo_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XIAOMI_API_KEY", "tp-mimo-test")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "api.xiaomimimo.com" in base_url
+    assert llm.model_name == "mimo-v2.5-pro"
+
+
+def test_mimo_token_plan_base_url_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_BASE_URL_MIMO 切到 token plan 充值版端点。"""
+    monkeypatch.setenv("XIAOMI_API_KEY", "tp-mimo-test")
+    monkeypatch.setenv("LLM_BASE_URL_MIMO", "https://token-plan-cn.xiaomimimo.com/v1")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "token-plan-cn.xiaomimimo.com" in base_url
+
+
+# === Phase 2: 优先级 ===
+
+
+def test_priority_default_picks_deepseek_over_qwen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DeepSeek + Qwen 共存时按默认优先级命中 DeepSeek。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-qwen-test")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "api.deepseek.com" in base_url
+
+
+def test_priority_env_var_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_VENDOR_PRIORITY=qwen,deepseek 让 Qwen 胜出。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-qwen-test")
+    monkeypatch.setenv("LLM_VENDOR_PRIORITY", "qwen,deepseek")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "dashscope.aliyuncs.com" in base_url
+
+
+def test_priority_unknown_vendor_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """LLM_VENDOR_PRIORITY 含未知 vendor 名时记录 warning 并跳过。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("LLM_VENDOR_PRIORITY", "wenxin,deepseek")
+
+    with caplog.at_level("WARNING"):
+        llm = get_llm("researcher")
+
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "api.deepseek.com" in base_url
+    assert any("wenxin" in r.message for r in caplog.records)
+
+
+def test_priority_phase1_compat_openrouter_still_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase 1 配置(仅 OPENROUTER_API_KEY)行为零破坏。"""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("LLM_MODEL_RESEARCHER", "deepseek/deepseek-v4-flash")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert OPENROUTER_BASE_URL in base_url
+    # OpenRouter 必须保留 vendor/ 前缀
+    assert llm.model_name == "deepseek/deepseek-v4-flash"
+
+
+# === Phase 2: 显式锁定 ===
+
+
+def test_explicit_lock_uses_locked_vendor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_VENDOR=qwen 锁定后忽略 DeepSeek key,即使后者在默认优先级更靠前。"""
+    monkeypatch.setenv("LLM_VENDOR", "qwen")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-qwen-test")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "dashscope.aliyuncs.com" in base_url
+
+
+def test_explicit_lock_missing_key_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_VENDOR=deepseek 但 DEEPSEEK_API_KEY 缺失 → RuntimeError,不退回探测。"""
+    monkeypatch.setenv("LLM_VENDOR", "deepseek")
+    # 配了 Qwen key,但 LLM_VENDOR 锁死了 deepseek,不应退回
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-qwen-test")
+
+    with pytest.raises(RuntimeError) as exc_info:
+        get_llm("researcher")
+
+    msg = str(exc_info.value)
+    assert "LLM_VENDOR" in msg
+    assert "DEEPSEEK_API_KEY" in msg
+
+
+def test_explicit_lock_unknown_vendor_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LLM_VENDOR=wenxin(未支持)→ RuntimeError 列出支持列表。"""
+    monkeypatch.setenv("LLM_VENDOR", "wenxin")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+
+    with pytest.raises(RuntimeError, match="不在支持列表"):
+        get_llm("researcher")
+
+
+def test_explicit_lock_case_insensitive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_VENDOR 大小写不敏感。"""
+    monkeypatch.setenv("LLM_VENDOR", "DeepSeek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "api.deepseek.com" in base_url
+
+
+# === Phase 2: 前缀剥离 ===
+
+
+def test_prefix_stripped_for_direct_vendor_with_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """vendor=DeepSeek 但 LLM_MODEL_RESEARCHER 带 vendor/ 前缀 → 剥离 + WARN。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("LLM_MODEL_RESEARCHER", "deepseek/deepseek-v4-flash")
+
+    with caplog.at_level("WARNING"):
+        llm = get_llm("researcher")
+
+    assert llm.model_name == "deepseek-v4-flash"
+    assert any(
+        "LLM_MODEL_RESEARCHER" in r.message and "vendor/" in r.message
+        for r in caplog.records
+    )
+
+
+def test_prefix_kept_for_openrouter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """vendor=OpenRouter 时 vendor/ 前缀必须原样保留(回归)。"""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("LLM_MODEL_RESEARCHER", "deepseek/deepseek-v4-flash")
+
+    llm = get_llm("researcher")
+
+    assert llm.model_name == "deepseek/deepseek-v4-flash"
+
+
+def test_prefix_override_does_not_warn(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """通过 overrides 显式传带前缀的 model → 剥离但不 warn(调用方明示)。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+
+    with caplog.at_level("WARNING"):
+        llm = get_llm("researcher", model="deepseek/some-slug")
+
+    assert llm.model_name == "some-slug"
+    assert not any("vendor/" in r.message for r in caplog.records)
+
+
+# === Phase 2: 单 vendor 维度 base_url 覆盖 ===
+
+
+def test_per_vendor_base_url_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_BASE_URL_DEEPSEEK 覆盖 DeepSeek 默认 base_url。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("LLM_BASE_URL_DEEPSEEK", "http://localhost:3000/v1")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "localhost:3000" in base_url
+
+
+def test_global_base_url_beats_per_vendor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LLM_BASE_URL 全局优先于 LLM_BASE_URL_<VENDOR>。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("LLM_BASE_URL", "http://global-gateway/v1")
+    monkeypatch.setenv("LLM_BASE_URL_DEEPSEEK", "http://deepseek-gateway/v1")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "global-gateway" in base_url
+
+
+def test_per_vendor_base_url_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_BASE_URL_DEEPSEEK 不影响 Qwen 选中时的 base_url。"""
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-qwen-test")
+    monkeypatch.setenv("LLM_BASE_URL_DEEPSEEK", "http://localhost:3000/v1")
+
+    llm = get_llm("researcher")
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "dashscope.aliyuncs.com" in base_url
+
+
+# === Phase 2: 启动校验报错文案 ===
+
+
+def test_all_keys_missing_lists_all_vendors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """所有 key 全空时,RuntimeError 应列出 DeepSeek/Qwen/Kimi/OpenRouter/OpenAI 全部。"""
+    # conftest 已经清空全部 env
+
+    with pytest.raises(RuntimeError) as exc_info:
+        get_llm("researcher")
+
+    msg = str(exc_info.value)
+    for env_key in (
+        "DEEPSEEK_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "MOONSHOT_API_KEY",
+        "XIAOMI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        assert env_key in msg, f"报错信息缺少 {env_key}"

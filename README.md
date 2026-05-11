@@ -3,6 +3,7 @@
 > 🙏 **本项目基于 [guy-hartstein/company-research-agent](https://github.com/guy-hartstein/company-research-agent) (MIT License) 改造,由 Guy Hartstein 创作。**
 >
 > 主要差异:
+> - 🇨🇳 **国产原厂直连** —— 拿 DeepSeek / Qwen / Kimi 原厂 key 即可直跑,无需 OpenRouter / 代理(Phase 2)
 > - 🌏 **LLM 走 [OpenRouter](https://openrouter.ai)** —— 国内 DeepSeek / Qwen / Kimi / 智谱 与国外 GPT / Claude / Gemini 通过同一接口切换
 > - 🇨🇳 **Prompt 全量中文化** —— 不是机翻,人工重写,对国内模型更友好
 > - 🎨 **UI 与示例公司中文化** —— 默认示例换成腾讯、字节、宁德时代、比亚迪
@@ -36,7 +37,7 @@
 |---|---|---|
 | 语言 | 英文 prompt + 英文 UI + 英文报告 | **中文** prompt + UI + 报告 |
 | Prompt 质量 | 英文(中文公司用英文 prompt 时模型偏向英文资料) | **人工重写而非机翻**,占位符与下游解析依赖的标题(`### 核心产品/服务` 等)同步迁移,对国产模型更友好 |
-| LLM provider | OpenAI(GPT-5.1 / GPT-4o)+ Google(Gemini 2.5 Flash)硬编码 | 统一 `LLMFactory.get_llm(role)`,**OpenRouter 主路径 + OpenAI 降级路径**,researcher / briefing / editor 三角色独立配置模型 |
+| LLM provider | OpenAI(GPT-5.1 / GPT-4o)+ Google(Gemini 2.5 Flash)硬编码 | 统一 `LLMFactory.get_llm(role)`,**国产原厂直连(DeepSeek / Qwen / Kimi)+ OpenRouter 聚合 + OpenAI 兜底**,启动期单 vendor 全包 |
 | 模型成本控制 | 无 | **`LLM_MAX_TOKENS` 兜底**避免 OpenRouter 按模型最大窗口预扣余额导致小余额账号 402 |
 | 检索层 | 直接调 Tavily 客户端,5 个文件分散调用 | **`SearchProvider` 抽象接口**,Tavily 收拢为默认 provider,新增 provider 无需改节点代码 |
 | 启动校验 | 缺 key 运行时报错 | **启动期校验**,中文报错并立即退出 |
@@ -218,6 +219,43 @@ export HTTP_PROXY=http://127.0.0.1:7890
 ```
 
 或者直接用国产模型 + 自己 host 的转发服务,把 `LLM_BASE_URL` 指过去即可。
+
+### 国产原厂直连(Phase 2)
+
+如果不想开代理 / 不想为 OpenRouter 单独充值,可以直接配国产原厂 key,工厂会自动探测:
+
+```env
+# 只需配一家就够,所有 role 都走这家(单 vendor 全包)
+DEEPSEEK_API_KEY=sk-...          # 或
+DASHSCOPE_API_KEY=sk-...         # 阿里百炼 / Qwen
+MOONSHOT_API_KEY=sk-...          # Moonshot / Kimi
+```
+
+P1 入选 vendor:
+
+| Vendor | env key | 端点 | 默认 slug |
+|---|---|---|---|
+| **DeepSeek** | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | `deepseek-v4-flash`(V4,1M 上下文) |
+| **Qwen**(阿里百炼) | `DASHSCOPE_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen3.6-flash` / `qwen3.6-plus` / `qwen3-max` |
+| **Kimi**(Moonshot) | `MOONSHOT_API_KEY` | `https://api.moonshot.cn/v1` | `kimi-k2.5` / `kimi-k2-turbo-preview` |
+| **MiMo**(小米) | `XIAOMI_API_KEY` | `https://api.xiaomimimo.com/v1` | `mimo-v2.5-pro` |
+| GLM(智谱)/ MiniMax | — | — | **P1 暂不支持**,待兼容性 smoke test 通过后补入 |
+
+进阶选项:
+
+```env
+# 同时配多家时按默认顺序探测(deepseek → qwen → kimi → openrouter → openai)
+# 想换顺序:
+LLM_VENDOR_PRIORITY=qwen,deepseek,openrouter
+
+# 想锁死一家不参与探测:
+LLM_VENDOR=deepseek
+
+# 走自建网关(OneAPI / LiteLLM)代理某一家:
+LLM_BASE_URL_DEEPSEEK=http://localhost:3000/v1
+```
+
+完整说明见 [`.env.example`](.env.example) 第 1~4 节。
 
 ---
 
