@@ -170,7 +170,10 @@ chmod +x setup.sh
 - 引导你填写环境变量
 - 一键启动两端服务
 
-> **💡 提示**:用 `uv` 装依赖快很多:`curl -LsSf https://astral.sh/uv/install.sh | sh`(Windows 用户用 PowerShell 版本)
+> **💡 提示**:用 `uv` 装依赖快很多。
+>
+> - macOS / Linux:`curl -LsSf https://astral.sh/uv/install.sh | sh`
+> - Windows PowerShell:`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
 ### 手动安装
 
