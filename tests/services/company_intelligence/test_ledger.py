@@ -5,6 +5,8 @@ from backend.services.company_intelligence.ledger import (
     BudgetLimits,
     BudgetRequest,
     InMemoryUsageLedger,
+    OperationStatus,
+    operation_fingerprint,
 )
 
 
@@ -27,6 +29,7 @@ def _request(key: str, job: str, requester: str = "requester-a") -> BudgetReques
         requester_id=requester,
         plan="professional_research",
         capabilities=FULL_PLAN,
+        request_fingerprint=operation_fingerprint("query-a"),
     )
 
 
@@ -49,6 +52,7 @@ def test_same_requester_and_key_with_different_payload_is_conflict() -> None:
         requester_id="requester-a",
         plan="professional_research",
         capabilities=FULL_PLAN[:-1],
+        request_fingerprint=operation_fingerprint("query-a"),
     )
     decision = ledger.reserve(changed, LIMITS)
     assert decision.allowed is False
@@ -119,6 +123,7 @@ def test_call_limit_is_checked_during_reservation() -> None:
         requester_id="requester-a",
         plan="professional_research",
         capabilities=FULL_PLAN,
+        request_fingerprint=operation_fingerprint("query-a"),
     )
     decision = ledger.reserve(request, low_call_limits)
     assert decision.allowed is False
@@ -133,6 +138,7 @@ def test_unknown_or_duplicate_capability_cannot_lowball_budget() -> None:
         requester_id="requester-a",
         plan="professional_research",
         capabilities=("identity.resolve", "identity.resolve"),
+        request_fingerprint=operation_fingerprint("query-a"),
     )
     unknown = BudgetRequest(
         idempotency_key="unknown",
@@ -140,6 +146,7 @@ def test_unknown_or_duplicate_capability_cannot_lowball_budget() -> None:
         requester_id="requester-a",
         plan="professional_research",
         capabilities=("cheap.fake.tool",),
+        request_fingerprint=operation_fingerprint("query-a"),
     )
     assert ledger.reserve(duplicate, LIMITS).reason == "invalid_call_plan"
     assert ledger.reserve(unknown, LIMITS).reason == "invalid_call_plan"
@@ -153,6 +160,7 @@ def test_only_fixed_plan_shapes_are_accepted() -> None:
         requester_id="requester-a",
         plan="identity_resolution",
         capabilities=("identity.resolve",),
+        request_fingerprint=operation_fingerprint("query-a"),
     )
     assert ledger.reserve(resolution, LIMITS).allowed
 
@@ -162,6 +170,7 @@ def test_only_fixed_plan_shapes_are_accepted() -> None:
         requester_id="requester-b",
         plan="professional_research",
         capabilities=("company.registration",),
+        request_fingerprint=operation_fingerprint("query-a"),
     )
     assert ledger.reserve(lowball, LIMITS).reason == "invalid_call_plan"
 
@@ -178,3 +187,49 @@ def test_concurrent_reservations_cannot_overspend_daily_budget() -> None:
     with ThreadPoolExecutor(max_workers=8) as executor:
         decisions = list(executor.map(reserve, range(8)))
     assert sum(decisions) == 2
+
+
+def test_same_key_and_plan_with_different_request_fingerprint_is_conflict() -> None:
+    ledger = InMemoryUsageLedger()
+    assert ledger.reserve(_request("same", "job-1"), LIMITS).allowed
+    changed_query = BudgetRequest(
+        idempotency_key="same",
+        job_id="job-2",
+        requester_id="requester-a",
+        plan="professional_research",
+        capabilities=FULL_PLAN,
+        request_fingerprint=operation_fingerprint("query-b"),
+    )
+    decision = ledger.reserve(changed_query, LIMITS)
+    assert decision.allowed is False
+    assert decision.reason == "idempotency_conflict"
+
+
+def test_completed_operation_result_is_replayed_without_mutable_alias() -> None:
+    ledger = InMemoryUsageLedger()
+    first = ledger.reserve(_request("same", "job-1"), LIMITS)
+    assert first.reservation_id
+    ledger.complete_operation(first.reservation_id, {"kind": "not_found", "items": []})
+
+    replay = ledger.reserve(_request("same", "job-2"), LIMITS)
+    assert replay.replayed is True
+    assert replay.operation_status == OperationStatus.COMPLETED
+    assert replay.result == {"kind": "not_found", "items": []}
+    assert replay.result is not None
+    replay.result["items"].append("tampered")
+
+    second_replay = ledger.reserve(_request("same", "job-3"), LIMITS)
+    assert second_replay.result == {"kind": "not_found", "items": []}
+
+
+def test_in_progress_and_failed_operation_states_are_visible_to_replayers() -> None:
+    ledger = InMemoryUsageLedger()
+    first = ledger.reserve(_request("same", "job-1"), LIMITS)
+    assert first.reservation_id
+    in_progress = ledger.reserve(_request("same", "job-2"), LIMITS)
+    assert in_progress.operation_status == OperationStatus.IN_PROGRESS
+
+    ledger.fail_operation(first.reservation_id, "provider_unavailable")
+    failed = ledger.reserve(_request("same", "job-3"), LIMITS)
+    assert failed.operation_status == OperationStatus.FAILED
+    assert failed.reason == "provider_unavailable"

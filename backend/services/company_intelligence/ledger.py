@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
+import re
 import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Callable, Literal, Protocol
+from enum import StrEnum
+from typing import Any, Callable, Literal, Protocol
 
 from .config import DATA_CAPABILITIES, TOOL_COST_CATALOG
 
@@ -14,6 +19,17 @@ from .config import DATA_CAPABILITIES, TOOL_COST_CATALOG
 def utc_day(now: datetime | None = None) -> str:
     value = now or datetime.now(timezone.utc)
     return value.astimezone(timezone.utc).date().isoformat()
+
+
+def operation_fingerprint(value: str) -> str:
+    """把规范化请求内容压成账本可比较、不可逆的摘要。"""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+class OperationStatus(StrEnum):
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True)
@@ -32,6 +48,7 @@ class BudgetRequest:
     requester_id: str
     plan: Literal["identity_resolution", "professional_research"]
     capabilities: tuple[str, ...]
+    request_fingerprint: str
 
 
 @dataclass(frozen=True)
@@ -41,6 +58,8 @@ class ReservationDecision:
     reason: str | None = None
     replayed: bool = False
     job_id: str | None = None
+    operation_status: OperationStatus | None = None
+    result: dict[str, Any] | None = None
 
 
 class UsageLedger(Protocol):
@@ -54,6 +73,10 @@ class UsageLedger(Protocol):
     def settle(self, reservation_id: str, *, actual_points: int, actual_calls: int) -> None: ...
 
     def consume_token(self, token_id: str, expires_at: int) -> bool: ...
+
+    def complete_operation(self, reservation_id: str, result: dict[str, Any]) -> None: ...
+
+    def fail_operation(self, reservation_id: str, safe_reason: str) -> None: ...
 
 
 class InMemoryUsageLedger:
@@ -76,14 +99,28 @@ class InMemoryUsageLedger:
             idempotency_scope = (request.requester_id, request.idempotency_key)
             if existing_id := self._idempotency.get(idempotency_scope):
                 existing = self._reservations[existing_id]
-                if tuple(existing["plan_fingerprint"]) != plan_fingerprint:
+                if (
+                    tuple(existing["plan_fingerprint"]) != plan_fingerprint
+                    or existing["request_fingerprint"] != request.request_fingerprint
+                ):
                     return ReservationDecision(False, reason="idempotency_conflict")
+                operation_status = OperationStatus(str(existing["operation_status"]))
                 return ReservationDecision(
                     allowed=True,
                     reservation_id=existing_id,
                     replayed=True,
                     job_id=str(existing["job_id"]),
+                    operation_status=operation_status,
+                    result=copy.deepcopy(existing["operation_result"]),
+                    reason=(
+                        str(existing["operation_reason"])
+                        if operation_status == OperationStatus.FAILED
+                        else None
+                    ),
                 )
+
+            if not re.fullmatch(r"[0-9a-f]{64}", request.request_fingerprint):
+                return ReservationDecision(False, reason="invalid_request_fingerprint")
 
             expected_plan = (
                 ("identity.resolve",)
@@ -127,6 +164,7 @@ class InMemoryUsageLedger:
                 "requester_id": request.requester_id,
                 "day": day,
                 "plan_fingerprint": plan_fingerprint,
+                "request_fingerprint": request.request_fingerprint,
                 "reserved_points": points,
                 "reserved_calls": calls,
                 "original_reserved_points": points,
@@ -134,10 +172,16 @@ class InMemoryUsageLedger:
                 "actual_points": None,
                 "actual_calls": None,
                 "settled": False,
+                "operation_status": OperationStatus.IN_PROGRESS.value,
+                "operation_result": None,
+                "operation_reason": None,
             }
             self._idempotency[idempotency_scope] = reservation_id
             return ReservationDecision(
-                True, reservation_id=reservation_id, job_id=request.job_id
+                True,
+                reservation_id=reservation_id,
+                job_id=request.job_id,
+                operation_status=OperationStatus.IN_PROGRESS,
             )
 
     def settle(
@@ -176,3 +220,44 @@ class InMemoryUsageLedger:
                 return False
             self._consumed_tokens[token_id] = expires_at
             return True
+
+    def complete_operation(
+        self, reservation_id: str, result: dict[str, Any]
+    ) -> None:
+        # JSON round-trip both verifies persistence compatibility and breaks aliases.
+        encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+        if len(encoded.encode("utf-8")) > 1_000_000:
+            raise ValueError("operation result exceeds size limit")
+        safe_result = json.loads(encoded)
+        with self._lock:
+            item = self._reservations.get(reservation_id)
+            if item is None:
+                raise KeyError("unknown reservation")
+            status = OperationStatus(str(item["operation_status"]))
+            if status == OperationStatus.COMPLETED:
+                if item["operation_result"] == safe_result:
+                    return
+                raise ValueError("operation already completed with different result")
+            if status != OperationStatus.IN_PROGRESS:
+                raise ValueError("operation is not in progress")
+            item["operation_result"] = safe_result
+            item["operation_reason"] = None
+            item["operation_status"] = OperationStatus.COMPLETED.value
+
+    def fail_operation(self, reservation_id: str, safe_reason: str) -> None:
+        if not re.fullmatch(r"[a-z0-9_]{1,80}", safe_reason):
+            raise ValueError("safe_reason must be a stable reason code")
+        with self._lock:
+            item = self._reservations.get(reservation_id)
+            if item is None:
+                raise KeyError("unknown reservation")
+            status = OperationStatus(str(item["operation_status"]))
+            if status == OperationStatus.FAILED:
+                if item["operation_reason"] == safe_reason:
+                    return
+                raise ValueError("operation already failed with different reason")
+            if status != OperationStatus.IN_PROGRESS:
+                raise ValueError("operation is not in progress")
+            item["operation_result"] = None
+            item["operation_reason"] = safe_reason
+            item["operation_status"] = OperationStatus.FAILED.value
