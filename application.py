@@ -4,8 +4,11 @@ import logging
 import os
 import sys
 import uuid
+from collections.abc import Coroutine
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 from dotenv import load_dotenv
@@ -13,13 +16,18 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.graph import Graph
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
 from backend.services.company_intelligence.mongo_ledger import MongoLedgerUnavailable
+from backend.services.company_intelligence.collection import (
+    PreparationKind,
+    ProfessionalPreparation,
+)
+from backend.services.company_intelligence.requester import resolve_client_ip
 from backend.api.company_intelligence import router as company_intelligence_router
 from backend.classes.state import job_status
 
@@ -67,6 +75,7 @@ logger.addHandler(console_handler)
 
 app = FastAPI(title="公司调研助手 API")
 app.state.company_intelligence = CompanyIntelligenceRuntime.from_env()
+app.state.research_tasks = set()
 app.include_router(company_intelligence_router)
 
 app.add_middleware(
@@ -77,6 +86,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 pdf_service = PDFService({"pdf_output_dir": "pdfs"})
+_PROFESSIONAL_COLLECTION_TIMEOUT_SECONDS = 120.0
 
 
 # Pydantic / 请求体解析失败时,FastAPI 默认抛 422 + 英文 detail。
@@ -121,38 +131,392 @@ if mongo_uri := os.getenv("MONGODB_URI"):
             type(exc).__name__,
         )
 
+class ProfessionalDataRequest(BaseModel):
+    """用户显式开启专业增强时，只接受服务端签发的一次性主体 Token。"""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    enabled: bool = False
+    resolution_token: str | None = Field(default=None, max_length=4096)
+
+    @model_validator(mode="after")
+    def require_token_when_enabled(self) -> "ProfessionalDataRequest":
+        if self.enabled and not self.resolution_token:
+            raise ValueError("启用专业数据时必须提交主体确认 Token")
+        return self
+
+
 class ResearchRequest(BaseModel):
     company: str
     company_url: str | None = None
     industry: str | None = None
     hq_location: str | None = None
+    professional_data: ProfessionalDataRequest | None = None
 
 class PDFGenerationRequest(BaseModel):
     report_content: str
     company_name: str | None = None
 
+def _research_accepted_response(
+    job_id: str,
+    professional_data: dict[str, str | None] | None = None,
+) -> dict[str, object]:
+    """构造兼容旧客户端的受理响应，并按需附加专业分支状态。"""
+    response: dict[str, object] = {
+        "status": "accepted",
+        "job_id": job_id,
+        "message": (
+            f"调研任务已启动,请连接 /research/{job_id}/stream 获取实时进度。"
+        ),
+    }
+    if professional_data is not None:
+        response["professional_data"] = professional_data
+    return response
+
+
+def _register_background_task(task: asyncio.Task) -> None:
+    """持有后台任务强引用，并在终态后从运行时集合移除。"""
+    app.state.research_tasks.add(task)
+    task.add_done_callback(app.state.research_tasks.discard)
+
+
+@dataclass
+class _ResearchTaskControl:
+    started: bool = False
+
+
+async def _run_scheduled_research(
+    coroutine: Coroutine[Any, Any, None],
+    control: _ResearchTaskControl,
+) -> None:
+    control.started = True
+    await coroutine
+
+
+def _schedule_research(
+    coroutine: Coroutine[Any, Any, None],
+    *,
+    runtime: CompanyIntelligenceRuntime,
+    preparation: ProfessionalPreparation | None,
+) -> asyncio.Task:
+    """托管调研任务；首次运行前取消时释放尚未执行的专业预留。"""
+    control = _ResearchTaskControl()
+    runner = _run_scheduled_research(coroutine, control)
+    try:
+        task = asyncio.create_task(runner)
+    except BaseException:
+        runner.close()
+        coroutine.close()
+        raise
+
+    def cleanup_unstarted(done_task: asyncio.Task) -> None:
+        if not control.started:
+            coroutine.close()
+            if preparation is not None:
+                try:
+                    runtime.abandon_professional_research(preparation)
+                except Exception as exc:
+                    logger.warning(
+                        "未启动专业预留释放失败，异常类型=%s",
+                        type(exc).__name__,
+                    )
+        app.state.research_tasks.discard(done_task)
+
+    app.state.research_tasks.add(task)
+    task.add_done_callback(cleanup_unstarted)
+    return task
+
+
 @app.post("/research")
-async def research(data: ResearchRequest):
+async def research(data: ResearchRequest, request: Request):
+    """受理基础调研；专业分支只在显式请求且原子准入成功后启动。"""
     try:
         logger.info(f"收到调研请求: {data.company}")
         job_id = str(uuid.uuid4())
-        asyncio.create_task(process_research(job_id, data))
+        preparation: ProfessionalPreparation | None = None
+        blocked_reason: str | None = None
+        professional_response: dict[str, str | None] | None = None
+        professional = data.professional_data
+        runtime = request.app.state.company_intelligence
+        scheduled = False
 
-        return JSONResponse(content={
-            "status": "accepted",
-            "job_id": job_id,
-            "message": "调研任务已启动,请连接 /research/{job_id}/stream 获取实时进度。"
-        })
+        if professional is not None and professional.enabled:
+            peer_ip = request.client.host if request.client else "unknown"
+            client_ip = resolve_client_ip(
+                peer_ip=peer_ip,
+                forwarded_for=request.headers.get("x-forwarded-for"),
+                trusted_proxy_cidrs=runtime.settings.trusted_proxy_cidrs,
+            )
+            preparation = runtime.prepare_professional_research(
+                job_id=job_id,
+                resolution_token=professional.resolution_token or "",
+                client_ip=client_ip,
+            )
+            if preparation.kind in {
+                PreparationKind.IN_PROGRESS,
+                PreparationKind.REPLAYED,
+            }:
+                replayed_job_id = preparation.job_id or job_id
+                state = (
+                    "in_progress"
+                    if preparation.kind == PreparationKind.IN_PROGRESS
+                    else "replayed"
+                )
+                return JSONResponse(
+                    content=_research_accepted_response(
+                        replayed_job_id,
+                        {"status": state, "reason": None},
+                    )
+                )
+            if preparation.kind == PreparationKind.BLOCKED:
+                blocked_reason = preparation.reason_code or "provider_unavailable"
+                professional_response = {
+                    "status": "degraded",
+                    "reason": blocked_reason,
+                }
+                preparation = None
+            else:
+                if (
+                    preparation.identity is None
+                    or preparation.reservation_id is None
+                ):
+                    runtime.abandon_professional_research(preparation)
+                    blocked_reason = "provider_unavailable"
+                    professional_response = {
+                        "status": "degraded",
+                        "reason": blocked_reason,
+                    }
+                    preparation = None
+                else:
+                    professional_response = {
+                        "status": "accepted",
+                        "reason": None,
+                    }
 
-    except Exception as e:
-        logger.error(f"启动调研任务失败: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"启动调研任务失败: {str(e)}")
+        # Token 已在准入阶段消费；后台任务和 Mongo 只接收基础字段。
+        sanitized_update = {"professional_data": None}
+        if preparation is not None and preparation.identity is not None:
+            # 专业 Evidence 与基础报告必须使用 Token 内同一规范主体，不能信任
+            # 客户端在确认主体后再次提交的 company 文本。
+            sanitized_update["company"] = preparation.identity.canonical_name
+        sanitized_data = data.model_copy(update=sanitized_update)
+        _schedule_research(
+            process_research(
+                job_id,
+                sanitized_data,
+                professional_preparation=preparation,
+                professional_blocked_reason=blocked_reason,
+            ),
+            runtime=runtime,
+            preparation=preparation,
+        )
+        scheduled = True
 
-async def process_research(job_id: str, data: ResearchRequest):
+        return JSONResponse(
+            content=_research_accepted_response(job_id, professional_response)
+        )
+
+    except Exception as exc:
+        if (
+            "scheduled" in locals()
+            and not scheduled
+            and "preparation" in locals()
+            and preparation is not None
+        ):
+            try:
+                runtime.abandon_professional_research(preparation)
+            except Exception as abandon_error:
+                logger.warning(
+                    "专业数据启动失败终态写入失败，异常类型=%s",
+                    type(abandon_error).__name__,
+                )
+        logger.error(
+            "启动调研任务失败，异常类型=%s",
+            type(exc).__name__,
+        )
+        raise HTTPException(status_code=500, detail="启动调研任务失败") from exc
+
+
+async def _collect_professional_for_job(
+    job_id: str,
+    preparation: ProfessionalPreparation,
+    control: "_ProfessionalTaskControl",
+) -> None:
+    """采集专业证据并写入安全任务状态；失败不向基础 Graph 传播。"""
+    control.started = True
+    job_status[job_id]["events"].append({"type": "professional_data_started"})
+    try:
+        evidence = await app.state.company_intelligence.collect_professional_research(
+            preparation
+        )
+    except BaseException as exc:
+        current_task = asyncio.current_task()
+        if (
+            isinstance(exc, asyncio.CancelledError)
+            and current_task is not None
+            and current_task.cancelling()
+        ):
+            raise
+        if not isinstance(exc, Exception) and not isinstance(
+            exc, asyncio.CancelledError
+        ):
+            raise
+        logger.warning(
+            "专业数据分支降级，job_id=%s，异常类型=%s",
+            job_id,
+            type(exc).__name__,
+        )
+        if control.publish_results:
+            job_status[job_id]["events"].append(
+                {
+                    "type": "professional_data_degraded",
+                    "reason": "provider_unavailable",
+                }
+            )
+        return
+
+    if not control.publish_results:
+        return
+    job_status[job_id]["professional_evidence"] = evidence.model_dump(mode="json")
+    job_status[job_id]["events"].append(
+        {"type": "professional_data_completed"}
+    )
+
+
+@dataclass
+class _ProfessionalTaskControl:
+    started: bool = False
+    publish_results: bool = True
+
+
+def _schedule_professional_for_job(
+    job_id: str,
+    preparation: ProfessionalPreparation,
+    control: _ProfessionalTaskControl,
+) -> asyncio.Task[None]:
+    """创建专业子任务；首次执行前取消时释放未 claim 的预算预留。"""
+    runtime = app.state.company_intelligence
+    coroutine = _collect_professional_for_job(job_id, preparation, control)
+    try:
+        task = asyncio.create_task(coroutine)
+    except BaseException:
+        coroutine.close()
+        raise
+
+    def cleanup_unstarted(done_task: asyncio.Task[None]) -> None:
+        if control.started:
+            return
+        try:
+            runtime.abandon_professional_research(preparation)
+        except Exception as exc:
+            logger.warning(
+                "未启动专业子任务预留释放失败，异常类型=%s",
+                type(exc).__name__,
+            )
+
+    task.add_done_callback(cleanup_unstarted)
+    return task
+
+
+async def _drain_professional_task(task: asyncio.Task[None]) -> None:
+    """等待已脱离报告主链路的专业任务退出，并吞掉其内部终态异常。"""
+    try:
+        await task
+    except BaseException:
+        return
+
+
+def _detach_professional_task(
+    task: asyncio.Task[None],
+    control: _ProfessionalTaskControl,
+) -> None:
+    """禁止晚到结果发布，取消任务并把无界清理移交后台。"""
+    control.publish_results = False
+    task.cancel()
+    drain_task = asyncio.create_task(_drain_professional_task(task))
+    _register_background_task(drain_task)
+
+
+async def _await_professional_for_job(
+    job_id: str,
+    professional_task: asyncio.Task[None],
+    control: _ProfessionalTaskControl,
+) -> asyncio.Task[None] | None:
+    """只等待固定窗口；超时清理脱离主链路，基础报告继续交付。"""
+    done, _pending = await asyncio.wait(
+        {professional_task},
+        timeout=_PROFESSIONAL_COLLECTION_TIMEOUT_SECONDS,
+    )
+    if not done:
+        logger.warning("专业数据分支超时，job_id=%s", job_id)
+        _detach_professional_task(professional_task, control)
+        job_status[job_id]["events"].append(
+            {
+                "type": "professional_data_degraded",
+                "reason": "provider_unavailable",
+            }
+        )
+        return None
+
+    try:
+        await professional_task
+    except asyncio.CancelledError:
+        current_task = asyncio.current_task()
+        if current_task is not None and current_task.cancelling():
+            raise
+    except Exception as exc:
+        logger.warning(
+            "专业数据子任务异常，job_id=%s，异常类型=%s",
+            job_id,
+            type(exc).__name__,
+        )
+    else:
+        return professional_task
+
+    if control.publish_results:
+        job_status[job_id]["events"].append(
+            {
+                "type": "professional_data_degraded",
+                "reason": "provider_unavailable",
+            }
+        )
+    return professional_task
+
+
+async def process_research(
+    job_id: str,
+    data: ResearchRequest,
+    *,
+    professional_preparation: ProfessionalPreparation | None = None,
+    professional_blocked_reason: str | None = None,
+):
     """异步执行调研任务,把结果写入 job_status / MongoDB。"""
+    professional_task: asyncio.Task[None] | None = None
+    professional_started = False
+    professional_control = _ProfessionalTaskControl()
     try:
         if mongodb:
-            mongodb.create_job(job_id, data.dict())
+            mongodb.create_job(
+                job_id,
+                data.model_dump(exclude={"professional_data"}),
+            )
+
+        if professional_blocked_reason:
+            event_type = (
+                "professional_data_budget_blocked"
+                if professional_blocked_reason == "budget_blocked"
+                else "professional_data_degraded"
+            )
+            job_status[job_id]["events"].append(
+                {"type": event_type, "reason": professional_blocked_reason}
+            )
+        if professional_preparation is not None:
+            professional_task = _schedule_professional_for_job(
+                job_id,
+                professional_preparation,
+                professional_control,
+            )
+            professional_started = True
 
         await asyncio.sleep(0.5)  # 留一点时间让 SSE 客户端先连上来
 
@@ -183,6 +547,13 @@ async def process_research(job_id: str, data: ResearchRequest):
 
         # 取出最终报告
         report_content = final_state.get('report') or (final_state.get('editor') or {}).get('report')
+
+        if professional_task is not None:
+            professional_task = await _await_professional_for_job(
+                job_id,
+                professional_task,
+                professional_control,
+            )
 
         if report_content:
             logger.info(f"调研完成,报告长度: {len(report_content)} 字符")
@@ -215,8 +586,24 @@ async def process_research(job_id: str, data: ResearchRequest):
             "last_update": datetime.now().isoformat()
         })
 
+        if professional_preparation is not None and not professional_started:
+            try:
+                app.state.company_intelligence.abandon_professional_research(
+                    professional_preparation
+                )
+            except Exception as abandon_error:
+                logger.warning(
+                    "专业数据未启动终态写入失败，异常类型=%s",
+                    type(abandon_error).__name__,
+                )
         if mongodb:
             mongodb.update_job(job_id=job_id, status="failed", error=str(e))
+    finally:
+        if professional_task is not None and not professional_task.done():
+            _detach_professional_task(
+                professional_task,
+                professional_control,
+            )
 
 @app.get("/")
 async def ping():

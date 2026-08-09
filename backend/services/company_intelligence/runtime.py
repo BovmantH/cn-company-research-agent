@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from pymongo.database import Database
 
 from .collection import (
+    PreparationKind,
     ProfessionalCollectionService,
     ProfessionalPreparation,
 )
@@ -91,6 +92,24 @@ class CompanyIntelligenceRuntime:
     ) -> ProfessionalEvidence:
         """执行已准入的固定计划；所有请求共享同一个进程内并发上限。"""
         return await self._professional_service().collect(preparation)
+
+    def abandon_professional_research(
+        self,
+        preparation: ProfessionalPreparation,
+    ) -> None:
+        """在 Provider 调用启动前失败时释放全部预留并写入稳定失败终态。"""
+        if (
+            preparation.kind != PreparationKind.READY
+            or preparation.reservation_id is None
+        ):
+            return
+        self.ledger.finalize_operation(
+            preparation.reservation_id,
+            result=None,
+            safe_reason="professional_start_failed",
+            actual_points=0,
+            actual_calls=0,
+        )
 
     async def resolve_company(
         self, *, query: str, idempotency_key: str, client_ip: str

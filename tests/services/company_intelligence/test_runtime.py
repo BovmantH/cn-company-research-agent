@@ -3,6 +3,10 @@ from __future__ import annotations
 import pytest
 
 import backend.services.company_intelligence.runtime as runtime_module
+from backend.services.company_intelligence.collection import (
+    PreparationKind,
+    ProfessionalPreparation,
+)
 from backend.services.company_intelligence.config import ProfessionalDataSettings
 from backend.services.company_intelligence.ledger import InMemoryUsageLedger
 from backend.services.company_intelligence.mongo_ledger import (
@@ -90,3 +94,39 @@ async def test_professional_entrypoints_share_runtime_concurrency_limiter(
     assert result is evidence
     assert len(captured_limiters) == 2
     assert captured_limiters[0] is captured_limiters[1]
+
+
+def test_abandon_professional_research_finalizes_without_usage() -> None:
+    class FinalizingLedgerStub:
+        persistent = True
+
+        def __init__(self) -> None:
+            self.calls = []
+
+        def finalize_operation(self, reservation_id, **kwargs) -> None:
+            self.calls.append((reservation_id, kwargs))
+
+    ledger = FinalizingLedgerStub()
+    runtime = CompanyIntelligenceRuntime(
+        settings=ProfessionalDataSettings.from_env({}),
+        ledger=ledger,
+    )
+
+    runtime.abandon_professional_research(
+        ProfessionalPreparation(
+            kind=PreparationKind.READY,
+            reservation_id="reservation-1",
+        )
+    )
+
+    assert ledger.calls == [
+        (
+            "reservation-1",
+            {
+                "result": None,
+                "safe_reason": "professional_start_failed",
+                "actual_points": 0,
+                "actual_calls": 0,
+            },
+        )
+    ]
