@@ -19,6 +19,7 @@ from backend.graph import Graph
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
+from backend.services.company_intelligence.mongo_ledger import MongoLedgerUnavailable
 from backend.api.company_intelligence import router as company_intelligence_router
 from backend.classes.state import job_status
 
@@ -106,9 +107,19 @@ mongodb = None
 if mongo_uri := os.getenv("MONGODB_URI"):
     try:
         mongodb = MongoDBService(mongo_uri)
-        logger.info("已启用 MongoDB 持久化")
-    except Exception as e:
-        logger.warning(f"MongoDB 初始化失败: {e}。已降级为无持久化模式继续运行。")
+        logger.info("已启用任务与报告 MongoDB 持久化")
+        try:
+            app.state.company_intelligence.configure_mongo_ledger(mongodb.db)
+            logger.info("已启用企业情报 MongoDB 原子用量账本")
+        except MongoLedgerUnavailable:
+            logger.warning(
+                "MongoDB 不支持企业情报所需事务，专业数据能力保持关闭"
+            )
+    except Exception as exc:
+        logger.warning(
+            "MongoDB 初始化失败，已降级为无持久化模式；异常类型=%s",
+            type(exc).__name__,
+        )
 
 class ResearchRequest(BaseModel):
     company: str

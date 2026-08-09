@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Mapping
+
+from pymongo.database import Database
 
 from .config import CapabilityPolicy, CapabilityState, ProfessionalDataSettings
 from .ledger import InMemoryUsageLedger, UsageLedger
+from .mongo_ledger import MongoUsageLedger
 from .provider import CompanyIntelligenceProvider
 from .resolution import CompanyResolutionService, PublicResolution
 
@@ -35,6 +38,13 @@ class CompanyIntelligenceRuntime:
             persistent_ledger=self.ledger.persistent,
             deployment_budget_exhausted=self.deployment_budget_exhausted,
         )
+
+    def configure_mongo_ledger(
+        self, database: Database[dict[str, Any]]
+    ) -> None:
+        """仅在索引和事务探针成功后，用持久账本替换内存账本。"""
+        ledger = MongoUsageLedger(database)
+        self.ledger = ledger
 
     async def resolve_company(
         self, *, query: str, idempotency_key: str, client_ip: str
