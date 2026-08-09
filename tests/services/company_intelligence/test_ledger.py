@@ -1,5 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
+
 from backend.services.company_intelligence.config import DATA_CAPABILITIES
 from backend.services.company_intelligence.ledger import (
     BudgetLimits,
@@ -233,3 +235,37 @@ def test_in_progress_and_failed_operation_states_are_visible_to_replayers() -> N
     failed = ledger.reserve(_request("same", "job-3"), LIMITS)
     assert failed.operation_status == OperationStatus.FAILED
     assert failed.reason == "provider_unavailable"
+
+
+def test_finalize_operation_atomically_sets_terminal_and_usage() -> None:
+    ledger = InMemoryUsageLedger()
+    first = ledger.reserve(_request("finalize", "job-1"), LIMITS)
+    assert first.reservation_id
+    result = {"kind": "not_found", "items": []}
+
+    ledger.finalize_operation(
+        first.reservation_id,
+        result=result,
+        safe_reason=None,
+        actual_points=20,
+        actual_calls=1,
+    )
+    ledger.finalize_operation(
+        first.reservation_id,
+        result=result,
+        safe_reason=None,
+        actual_points=20,
+        actual_calls=1,
+    )
+
+    replay = ledger.reserve(_request("finalize", "job-2"), LIMITS)
+    assert replay.operation_status == OperationStatus.COMPLETED
+    assert replay.result == result
+    with pytest.raises(ValueError, match="settled with different usage"):
+        ledger.finalize_operation(
+            first.reservation_id,
+            result=result,
+            safe_reason=None,
+            actual_points=0,
+            actual_calls=0,
+        )

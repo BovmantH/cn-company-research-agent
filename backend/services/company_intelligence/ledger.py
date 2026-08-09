@@ -34,6 +34,8 @@ class OperationStatus(StrEnum):
 
 @dataclass(frozen=True)
 class BudgetLimits:
+    """每次可计费预留计为一次任务；主体识别与专业采集分别计数。"""
+
     max_points_per_job: int
     max_calls_per_job: int
     daily_point_budget: int
@@ -128,6 +130,18 @@ class UsageLedger(Protocol):
 
     def fail_operation(self, reservation_id: str, safe_reason: str) -> None:
         """把进行中操作转为失败终态；只接受稳定原因码和同值重放。"""
+        ...
+
+    def finalize_operation(
+        self,
+        reservation_id: str,
+        *,
+        result: dict[str, Any] | None,
+        safe_reason: str | None,
+        actual_points: int,
+        actual_calls: int,
+    ) -> None:
+        """原子写入成功或失败终态及实际用量，避免终态与结算分离。"""
         ...
 
 
@@ -304,3 +318,72 @@ class InMemoryUsageLedger:
             item["operation_result"] = None
             item["operation_reason"] = safe_reason
             item["operation_status"] = OperationStatus.FAILED.value
+
+    def finalize_operation(
+        self,
+        reservation_id: str,
+        *,
+        result: dict[str, Any] | None,
+        safe_reason: str | None,
+        actual_points: int,
+        actual_calls: int,
+    ) -> None:
+        """在同一把锁内完成终态转换与不可变结算。"""
+        if (result is None) == (safe_reason is None):
+            raise ValueError("result 和 safe_reason 必须且只能提供一个")
+        if safe_reason is not None and not re.fullmatch(
+            r"[a-z0-9_]{1,80}", safe_reason
+        ):
+            raise ValueError("safe_reason must be a stable reason code")
+        safe_result: dict[str, Any] | None = None
+        if result is not None:
+            encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+            if len(encoded.encode("utf-8")) > 1_000_000:
+                raise ValueError("operation result exceeds size limit")
+            safe_result = json.loads(encoded)
+        if actual_points < 0 or actual_calls < 0:
+            raise ValueError("actual usage must be non-negative")
+
+        desired_status = (
+            OperationStatus.COMPLETED if result is not None else OperationStatus.FAILED
+        )
+        with self._lock:
+            item = self._reservations.get(reservation_id)
+            if item is None:
+                raise KeyError("unknown reservation")
+            original_points = int(item["original_reserved_points"])
+            original_calls = int(item["original_reserved_calls"])
+            if actual_points > original_points:
+                raise ValueError("actual points exceed reservation")
+            if actual_calls > original_calls:
+                raise ValueError("actual calls exceed reservation")
+
+            status = OperationStatus(str(item["operation_status"]))
+            if status != OperationStatus.IN_PROGRESS:
+                same_terminal = (
+                    status == desired_status
+                    and item["operation_result"] == safe_result
+                    and item["operation_reason"] == safe_reason
+                )
+                if not same_terminal:
+                    raise ValueError("operation already finalized differently")
+            if bool(item["settled"]):
+                if (
+                    int(item["actual_points"]) == actual_points
+                    and int(item["actual_calls"]) == actual_calls
+                ):
+                    if status == OperationStatus.IN_PROGRESS:
+                        item["operation_status"] = desired_status.value
+                        item["operation_result"] = safe_result
+                        item["operation_reason"] = safe_reason
+                    return
+                raise ValueError("reservation already settled with different usage")
+
+            item["operation_status"] = desired_status.value
+            item["operation_result"] = safe_result
+            item["operation_reason"] = safe_reason
+            item["reserved_points"] = actual_points
+            item["reserved_calls"] = actual_calls
+            item["actual_points"] = actual_points
+            item["actual_calls"] = actual_calls
+            item["settled"] = True

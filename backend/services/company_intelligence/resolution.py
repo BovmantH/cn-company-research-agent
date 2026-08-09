@@ -165,9 +165,12 @@ class CompanyResolutionService:
             )
 
         if self.provider is None:
-            self.ledger.fail_operation(decision.reservation_id, "provider_unavailable")
-            self.ledger.settle(
-                decision.reservation_id, actual_points=0, actual_calls=0
+            self.ledger.finalize_operation(
+                decision.reservation_id,
+                result=None,
+                safe_reason="provider_unavailable",
+                actual_points=0,
+                actual_calls=0,
             )
             return PublicResolution(
                 kind=ResolveKind.BLOCKED, reason="provider_unavailable"
@@ -209,9 +212,10 @@ class CompanyResolutionService:
         except Exception as exc:
             # 不记录异常正文；上游错误可能含 Authorization 或账户信息。
             logger.warning("QCC 主体解析失败，异常类型=%s", type(exc).__name__)
-            self.ledger.fail_operation(decision.reservation_id, "provider_unavailable")
-            self.ledger.settle(
+            self.ledger.finalize_operation(
                 decision.reservation_id,
+                result=None,
+                safe_reason="provider_unavailable",
                 actual_points=TOOL_COST_CATALOG["identity.resolve"],
                 actual_calls=1,
             )
@@ -219,11 +223,10 @@ class CompanyResolutionService:
                 kind=ResolveKind.BLOCKED, reason="provider_unavailable"
             )
 
-        self.ledger.complete_operation(
-            decision.reservation_id, response.model_dump(mode="json")
-        )
-        self.ledger.settle(
+        self.ledger.finalize_operation(
             decision.reservation_id,
+            result=response.model_dump(mode="json"),
+            safe_reason=None,
             actual_points=TOOL_COST_CATALOG["identity.resolve"],
             actual_calls=1,
         )
