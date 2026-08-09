@@ -1,0 +1,300 @@
+"""专业企业数据的稳定领域模型。"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import StrEnum
+from typing import Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from .config import DATA_CAPABILITIES
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class CollectionStatus(StrEnum):
+    SUCCEEDED_WITH_RECORDS = "succeeded_with_records"
+    SUCCEEDED_EMPTY = "succeeded_empty"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    NOT_REQUESTED = "not_requested"
+    UNAVAILABLE = "unavailable"
+    BUDGET_BLOCKED = "budget_blocked"
+    IDENTITY_UNCONFIRMED = "identity_unconfirmed"
+
+
+class ResolveKind(StrEnum):
+    EXACT = "exact"
+    CANDIDATES = "candidates"
+    NOT_FOUND = "not_found"
+    BLOCKED = "blocked"
+
+
+class CompanyIdentity(StrictModel):
+    canonical_name: str = Field(min_length=1, max_length=200)
+    credit_code: str = Field(min_length=2, max_length=32)
+    registration_status: str | None = Field(default=None, max_length=80)
+    region: str | None = Field(default=None, max_length=120)
+    provider_subject_id: str | None = Field(default=None, max_length=128)
+    match_method: Literal["exact", "user_selected"] = "exact"
+    original_query: str = Field(min_length=1, max_length=200)
+    resolved_at: datetime = Field(default_factory=utc_now)
+    provider: Literal["qcc_mcp"] = "qcc_mcp"
+
+    @field_validator("canonical_name", "original_query", "provider_subject_id")
+    @classmethod
+    def reject_control_characters(cls, value: str | None) -> str | None:
+        if value is not None and any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError("主体字段不得包含控制字符")
+        return value
+
+    @field_validator("credit_code")
+    @classmethod
+    def validate_credit_code(cls, value: str) -> str:
+        normalized = value.upper()
+        allowed = frozenset("0123456789ABCDEFGHJKLMNPQRTUWXY")
+        if len(normalized) != 18 or any(char not in allowed for char in normalized):
+            raise ValueError("统一社会信用代码格式不合法")
+        return normalized
+
+    @field_validator("resolved_at")
+    @classmethod
+    def require_aware_resolved_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("resolved_at 必须包含时区")
+        return value
+
+
+class SourceMetadata(StrictModel):
+    provider: Literal["qcc_mcp"] = "qcc_mcp"
+    server: Literal["qcc-company", "qcc-risk"]
+    capability: str = Field(min_length=1, max_length=80)
+    queried_subject: str = Field(min_length=1, max_length=200)
+    queried_at: datetime = Field(default_factory=utc_now)
+    record_id: str | None = Field(default=None, max_length=256)
+    data_updated_at: datetime | None = None
+    cache_hit: bool = False
+    status: CollectionStatus
+
+    @field_validator("queried_at", "data_updated_at")
+    @classmethod
+    def require_aware_datetime(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("来源时间必须包含时区")
+        return value
+
+
+class RegistrationRecord(StrictModel):
+    record_type: Literal["company_registration"] = "company_registration"
+    legal_representative: str | None = None
+    registered_capital: str | None = None
+    established_on: str | None = None
+    registration_status: str | None = None
+    registered_address: str | None = None
+    business_scope: str | None = None
+    source: SourceMetadata
+
+
+class ShareholderRecord(StrictModel):
+    record_type: Literal["shareholder"] = "shareholder"
+    shareholder_name: str
+    shareholder_type: str | None = None
+    ownership_ratio: str | None = None
+    subscribed_amount: str | None = None
+    subscribed_on: str | None = None
+    source: SourceMetadata
+
+
+class CompanyChangeRecord(StrictModel):
+    record_type: Literal["company_change"] = "company_change"
+    item: str
+    before: str | None = None
+    after: str | None = None
+    changed_on: str | None = None
+    source: SourceMetadata
+
+
+class JudicialCaseRecord(StrictModel):
+    record_type: Literal["judicial_case"] = "judicial_case"
+    case_number: str | None = None
+    cause: str | None = None
+    court: str | None = None
+    filed_on: str | None = None
+    plaintiffs: list[str] = Field(default_factory=list)
+    defendants: list[str] = Field(default_factory=list)
+    third_parties: list[str] = Field(default_factory=list)
+    amount: str | None = None
+    summary: str | None = None
+    source: SourceMetadata
+
+
+class EnforcementRecord(StrictModel):
+    record_type: Literal["enforcement"] = "enforcement"
+    case_number: str | None = None
+    court: str | None = None
+    filed_on: str | None = None
+    amount: str | None = None
+    status_text: str | None = None
+    source: SourceMetadata
+
+
+class DishonestRecord(StrictModel):
+    record_type: Literal["dishonest"] = "dishonest"
+    case_number: str | None = None
+    court: str | None = None
+    conduct: str | None = None
+    performance_status: str | None = None
+    published_on: str | None = None
+    source: SourceMetadata
+
+
+class HighConsumptionRestriction(StrictModel):
+    record_type: Literal["high_consumption"] = "high_consumption"
+    case_number: str | None = None
+    applicant: str | None = None
+    restricted_subject: str | None = None
+    related_legal_representative: str | None = None
+    filed_on: str | None = None
+    source: SourceMetadata
+
+
+class BankruptcyRecord(StrictModel):
+    record_type: Literal["bankruptcy"] = "bankruptcy"
+    case_number: str | None = None
+    applicant: str | None = None
+    respondent: str | None = None
+    court: str | None = None
+    published_on: str | None = None
+    source: SourceMetadata
+
+
+class SeriousViolationRecord(StrictModel):
+    record_type: Literal["serious_violation"] = "serious_violation"
+    reason: str | None = None
+    listed_on: str | None = None
+    authority: str | None = None
+    status_text: str | None = None
+    source: SourceMetadata
+
+
+EvidenceRecord = Annotated[
+    RegistrationRecord
+    | ShareholderRecord
+    | CompanyChangeRecord
+    | JudicialCaseRecord
+    | EnforcementRecord
+    | DishonestRecord
+    | HighConsumptionRestriction
+    | BankruptcyRecord
+    | SeriousViolationRecord,
+    Field(discriminator="record_type"),
+]
+
+
+CAPABILITY_CONTRACTS: dict[str, tuple[str, frozenset[str]]] = {
+    "company.registration": ("qcc-company", frozenset({"company_registration"})),
+    "company.shareholders": ("qcc-company", frozenset({"shareholder"})),
+    "company.changes": ("qcc-company", frozenset({"company_change"})),
+    "risk.case_filings": ("qcc-risk", frozenset({"judicial_case"})),
+    "risk.judicial_documents": ("qcc-risk", frozenset({"judicial_case"})),
+    "risk.enforcement": ("qcc-risk", frozenset({"enforcement"})),
+    "risk.dishonest": ("qcc-risk", frozenset({"dishonest"})),
+    "risk.high_consumption": ("qcc-risk", frozenset({"high_consumption"})),
+    "risk.bankruptcy": ("qcc-risk", frozenset({"bankruptcy"})),
+    "risk.serious_violation": ("qcc-risk", frozenset({"serious_violation"})),
+}
+
+
+class EvidenceCollection(StrictModel):
+    capability: str = Field(min_length=1, max_length=80)
+    status: CollectionStatus
+    records: list[EvidenceRecord] = Field(default_factory=list)
+    reason_code: str | None = Field(default=None, max_length=80)
+    detail: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def enforce_status_semantics(self) -> "EvidenceCollection":
+        contract = CAPABILITY_CONTRACTS.get(self.capability)
+        if contract is None:
+            raise ValueError(f"未知逻辑能力: {self.capability}")
+        if self.status == CollectionStatus.SUCCEEDED_WITH_RECORDS and not self.records:
+            raise ValueError("succeeded_with_records 必须包含至少一条记录")
+        if self.status == CollectionStatus.SUCCEEDED_EMPTY and self.records:
+            raise ValueError("succeeded_empty 不得包含记录")
+        if self.status in {
+            CollectionStatus.FAILED,
+            CollectionStatus.NOT_REQUESTED,
+            CollectionStatus.UNAVAILABLE,
+            CollectionStatus.BUDGET_BLOCKED,
+            CollectionStatus.IDENTITY_UNCONFIRMED,
+        } and self.records:
+            raise ValueError(f"{self.status} 状态不得携带事实记录")
+        expected_server, allowed_record_types = contract
+        for record in self.records:
+            if record.record_type not in allowed_record_types:
+                raise ValueError(
+                    f"{self.capability} 不允许记录类型 {record.record_type}"
+                )
+            if record.source.capability != self.capability:
+                raise ValueError("记录来源 capability 与集合不一致")
+            if record.source.server != expected_server:
+                raise ValueError("记录来源 server 与逻辑能力不一致")
+            if record.source.status != self.status:
+                raise ValueError("记录来源 status 与集合不一致")
+        return self
+
+
+class ProfessionalEvidence(StrictModel):
+    identity: CompanyIdentity
+    collections: dict[str, EvidenceCollection] = Field(default_factory=dict)
+    provider: Literal["qcc_mcp"] = "qcc_mcp"
+    generated_at: datetime = Field(default_factory=utc_now)
+    schema_version: Literal["1"] = "1"
+
+    @model_validator(mode="after")
+    def require_complete_coverage(self) -> "ProfessionalEvidence":
+        expected = set(DATA_CAPABILITIES)
+        if set(self.collections) != expected:
+            missing = sorted(expected - set(self.collections))
+            extra = sorted(set(self.collections) - expected)
+            raise ValueError(f"专业数据覆盖不完整: missing={missing}, extra={extra}")
+        for key, collection in self.collections.items():
+            if key != collection.capability:
+                raise ValueError("collections key 必须与 collection.capability 一致")
+        return self
+
+
+class ResolveResult(StrictModel):
+    kind: ResolveKind
+    identities: list[CompanyIdentity] = Field(default_factory=list, max_length=5)
+    reason_code: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="after")
+    def enforce_resolve_shape(self) -> "ResolveResult":
+        if self.kind == ResolveKind.EXACT and len(self.identities) != 1:
+            raise ValueError("exact 必须且只能返回一个主体")
+        if self.kind == ResolveKind.CANDIDATES and not 1 < len(self.identities) <= 5:
+            raise ValueError("candidates 必须返回 2 至 5 个主体")
+        if self.kind in {ResolveKind.NOT_FOUND, ResolveKind.BLOCKED} and self.identities:
+            raise ValueError(f"{self.kind} 不得返回主体")
+        codes = [identity.credit_code for identity in self.identities]
+        if len(codes) != len(set(codes)):
+            raise ValueError("候选主体的统一社会信用代码不得重复")
+        return self
+
+
+class ProviderCallResult(StrictModel):
+    """Adapter 归一化前的安全结果容器，不允许把异常正文直接传到 API。"""
+
+    capability: str
+    status: CollectionStatus
+    records: list[dict[str, Any]] = Field(default_factory=list)
+    safe_reason_code: str | None = None
+    cache_hit: bool = False
