@@ -5,6 +5,7 @@
 """
 
 from .config import CapabilityPolicy, ProfessionalDataSettings
+from .collection import PreparationKind, ProfessionalPreparation
 from .ledger import InMemoryUsageLedger, UsageLedger
 from .mongo_ledger import MongoLedgerUnavailable, MongoUsageLedger
 from .models import (
@@ -29,6 +30,8 @@ __all__ = [
     "MongoUsageLedger",
     "ProfessionalDataSettings",
     "ProfessionalEvidence",
+    "ProfessionalPreparation",
+    "PreparationKind",
     "ResolutionTokenService",
     "ResolveKind",
     "ResolveResult",
