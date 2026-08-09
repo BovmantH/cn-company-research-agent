@@ -317,6 +317,64 @@ def test_token_is_consumed_once_across_instances(ledger_pair) -> None:
     assert second_ledger.consume_token("token-id", expires_at) is False
 
 
+def test_reserve_with_token_is_atomic_and_replayable_across_instances(
+    ledger_pair,
+) -> None:
+    first_ledger, second_ledger = ledger_pair
+    token_id = "d" * 32
+    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+
+    first = first_ledger.reserve_with_token(
+        _request("professional-token", "job-1"),
+        LIMITS,
+        token_id=token_id,
+        token_expires_at=expires_at,
+    )
+    replay = second_ledger.reserve_with_token(
+        _request("professional-token", "job-2"),
+        LIMITS,
+        token_id=token_id,
+        token_expires_at=expires_at,
+    )
+
+    assert first.allowed is True
+    assert replay.allowed is True
+    assert replay.replayed is True
+    assert replay.reservation_id == first.reservation_id
+    assert first_ledger._consumed_tokens.count_documents({}) == 1
+
+
+def test_same_token_cannot_reserve_two_jobs_across_instances(ledger_pair) -> None:
+    first_ledger, second_ledger = ledger_pair
+    token_id = "e" * 32
+    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    barrier = threading.Barrier(2)
+
+    def reserve(index: int):
+        barrier.wait()
+        ledger = first_ledger if index == 0 else second_ledger
+        return ledger.reserve_with_token(
+            _request(f"token-key-{index}", f"job-{index}"),
+            LIMITS,
+            token_id=token_id,
+            token_expires_at=expires_at,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        decisions = list(executor.map(reserve, range(2)))
+
+    assert sum(decision.allowed for decision in decisions) == 1
+    assert {decision.reason for decision in decisions if not decision.allowed} == {
+        "token_already_used"
+    }
+    counter = first_ledger._usage_counters.find_one(
+        {"_id": "deployment:2026-08-09"}
+    )
+    assert counter["job_count"] == 1
+    assert counter["accounted_points"] == FULL_PLAN_POINTS
+    assert first_ledger._consumed_tokens.count_documents({}) == 1
+
+
 def test_raw_idempotency_key_is_not_persisted(ledger_pair) -> None:
     first_ledger, _ = ledger_pair
     secret_key = "raw-client-idempotency-key"

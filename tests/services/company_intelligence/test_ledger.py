@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 
 import pytest
 
@@ -269,3 +270,79 @@ def test_finalize_operation_atomically_sets_terminal_and_usage() -> None:
             actual_points=0,
             actual_calls=0,
         )
+
+
+def test_reserve_with_token_replays_without_consuming_twice() -> None:
+    ledger = InMemoryUsageLedger()
+    token_id = "a" * 32
+    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+
+    first = ledger.reserve_with_token(
+        _request("professional-token", "job-1"),
+        LIMITS,
+        token_id=token_id,
+        token_expires_at=expires_at,
+    )
+    replay = ledger.reserve_with_token(
+        _request("professional-token", "job-2"),
+        LIMITS,
+        token_id=token_id,
+        token_expires_at=expires_at,
+    )
+
+    assert first.allowed is True
+    assert replay.allowed is True
+    assert replay.replayed is True
+    assert replay.reservation_id == first.reservation_id
+
+
+def test_same_token_cannot_create_two_different_reservations() -> None:
+    ledger = InMemoryUsageLedger()
+    token_id = "b" * 32
+    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    limits = BudgetLimits(
+        max_points_per_job=220,
+        max_calls_per_job=11,
+        daily_point_budget=440,
+        daily_job_limit=2,
+        requester_daily_limit=2,
+    )
+
+    def reserve(index: int):
+        return ledger.reserve_with_token(
+            _request(f"token-key-{index}", f"job-{index}"),
+            limits,
+            token_id=token_id,
+            token_expires_at=expires_at,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        decisions = list(executor.map(reserve, range(2)))
+
+    assert sum(decision.allowed for decision in decisions) == 1
+    assert {decision.reason for decision in decisions if not decision.allowed} == {
+        "token_already_used"
+    }
+
+
+def test_budget_rejection_does_not_consume_token() -> None:
+    ledger = InMemoryUsageLedger()
+    token_id = "c" * 32
+    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    blocked_limits = BudgetLimits(
+        max_points_per_job=1,
+        max_calls_per_job=11,
+        daily_point_budget=440,
+        daily_job_limit=2,
+        requester_daily_limit=2,
+    )
+
+    blocked = ledger.reserve_with_token(
+        _request("blocked-token", "job-1"),
+        blocked_limits,
+        token_id=token_id,
+        token_expires_at=expires_at,
+    )
+
+    assert blocked.reason == "job_point_limit"
+    assert ledger.consume_token(token_id, expires_at) is True

@@ -189,6 +189,32 @@ class MongoUsageLedger:
     def reserve(
         self, request: BudgetRequest, limits: BudgetLimits
     ) -> ReservationDecision:
+        return self._reserve(request, limits)
+
+    def reserve_with_token(
+        self,
+        request: BudgetRequest,
+        limits: BudgetLimits,
+        *,
+        token_id: str,
+        token_expires_at: int,
+    ) -> ReservationDecision:
+        """在同一 Mongo 事务中消费 Token 并预留预算。"""
+        return self._reserve(
+            request,
+            limits,
+            token_id=token_id,
+            token_expires_at=token_expires_at,
+        )
+
+    def _reserve(
+        self,
+        request: BudgetRequest,
+        limits: BudgetLimits,
+        *,
+        token_id: str | None = None,
+        token_expires_at: int | None = None,
+    ) -> ReservationDecision:
         """在事务中串行化日计数，并原子完成幂等检查与预算预留。"""
         quote = quote_reservation(request, limits)
         if isinstance(quote, ReservationDecision):
@@ -200,6 +226,23 @@ class MongoUsageLedger:
             )
 
         now = self._now()
+        if token_id is not None and (
+            token_expires_at is None
+            or not re.fullmatch(r"[0-9a-f]{32}", token_id)
+        ):
+            existing = self._existing_operation(request)
+            return (
+                self._decision_from_existing(existing, request)
+                if existing is not None
+                else ReservationDecision(False, reason="invalid_token")
+            )
+        if token_expires_at is not None and token_expires_at <= int(now.timestamp()):
+            existing = self._existing_operation(request)
+            return (
+                self._decision_from_existing(existing, request)
+                if existing is not None
+                else ReservationDecision(False, reason="token_already_used")
+            )
         day = utc_day(now)
         expires_at = self._counter_expiry(now)
         deployment_counter_id = f"deployment:{day}"
@@ -251,6 +294,19 @@ class MongoUsageLedger:
                 return ReservationDecision(False, reason="daily_point_budget")
             if int(requester["job_count"]) >= limits.requester_daily_limit:
                 return ReservationDecision(False, reason="requester_daily_limit")
+
+            if token_id is not None and token_expires_at is not None:
+                self._consumed_tokens.insert_one(
+                    {
+                        "_id": token_id,
+                        "schema_version": 1,
+                        "consumed_at": now,
+                        "expires_at": datetime.fromtimestamp(
+                            token_expires_at, tz=timezone.utc
+                        ),
+                    },
+                    **session_kwargs,
+                )
 
             self._operations.insert_one(
                 {
@@ -316,9 +372,14 @@ class MongoUsageLedger:
             return self._transaction_runner(reserve_in_transaction)
         except DuplicateKeyError:
             existing = self._existing_operation(request)
-            if existing is None:
-                raise
-            return self._decision_from_existing(existing, request)
+            if existing is not None:
+                return self._decision_from_existing(existing, request)
+            if (
+                token_id is not None
+                and self._consumed_tokens.find_one({"_id": token_id}) is not None
+            ):
+                return ReservationDecision(False, reason="token_already_used")
+            raise
 
     def settle(
         self, reservation_id: str, *, actual_points: int, actual_calls: int

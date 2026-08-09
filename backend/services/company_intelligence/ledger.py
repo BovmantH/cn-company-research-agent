@@ -114,6 +114,17 @@ class UsageLedger(Protocol):
         """原子执行幂等检查、固定计划校验和预算预留。"""
         ...
 
+    def reserve_with_token(
+        self,
+        request: BudgetRequest,
+        limits: BudgetLimits,
+        *,
+        token_id: str,
+        token_expires_at: int,
+    ) -> ReservationDecision:
+        """重放优先；新操作原子完成一次性 Token 消费和预算预留。"""
+        ...
+
     def settle(
         self, reservation_id: str, *, actual_points: int, actual_calls: int
     ) -> None:
@@ -159,6 +170,32 @@ class InMemoryUsageLedger:
 
     def reserve(
         self, request: BudgetRequest, limits: BudgetLimits
+    ) -> ReservationDecision:
+        return self._reserve(request, limits)
+
+    def reserve_with_token(
+        self,
+        request: BudgetRequest,
+        limits: BudgetLimits,
+        *,
+        token_id: str,
+        token_expires_at: int,
+    ) -> ReservationDecision:
+        """在同一把锁内消费 Token 并创建预算预留，避免中间崩溃窗口。"""
+        return self._reserve(
+            request,
+            limits,
+            token_id=token_id,
+            token_expires_at=token_expires_at,
+        )
+
+    def _reserve(
+        self,
+        request: BudgetRequest,
+        limits: BudgetLimits,
+        *,
+        token_id: str | None = None,
+        token_expires_at: int | None = None,
     ) -> ReservationDecision:
         """在同一把锁内校验幂等请求、固定调用计划和预算，并完成预留。"""
         with self._lock:
@@ -210,6 +247,25 @@ class InMemoryUsageLedger:
             )
             if requester_jobs >= limits.requester_daily_limit:
                 return ReservationDecision(False, reason="requester_daily_limit")
+
+            if token_id is not None:
+                if (
+                    token_expires_at is None
+                    or not re.fullmatch(r"[0-9a-f]{32}", token_id)
+                ):
+                    return ReservationDecision(False, reason="invalid_token")
+                current_timestamp = int(self._now_factory().timestamp())
+                self._consumed_tokens = {
+                    key: exp
+                    for key, exp in self._consumed_tokens.items()
+                    if exp > current_timestamp
+                }
+                if (
+                    token_expires_at <= current_timestamp
+                    or token_id in self._consumed_tokens
+                ):
+                    return ReservationDecision(False, reason="token_already_used")
+                self._consumed_tokens[token_id] = token_expires_at
 
             reservation_id = uuid.uuid4().hex
             self._reservations[reservation_id] = {
