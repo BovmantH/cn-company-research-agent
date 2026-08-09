@@ -62,6 +62,46 @@ class ReservationDecision:
     result: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class ReservationQuote:
+    """由服务端固定计划计算出的预算预留，不接受客户端提供价格或调用数。"""
+
+    plan_fingerprint: tuple[str, ...]
+    points: int
+    calls: int
+
+
+def quote_reservation(
+    request: BudgetRequest, limits: BudgetLimits
+) -> ReservationQuote | ReservationDecision:
+    """校验固定调用计划并计算最坏情况用量；拒绝结果可直接返回给调用方。"""
+    if not re.fullmatch(r"[0-9a-f]{64}", request.request_fingerprint):
+        return ReservationDecision(False, reason="invalid_request_fingerprint")
+
+    expected_plan = (
+        ("identity.resolve",)
+        if request.plan == "identity_resolution"
+        else tuple(DATA_CAPABILITIES)
+    )
+    if (
+        tuple(request.capabilities) != expected_plan
+        or len(request.capabilities) != len(set(request.capabilities))
+        or any(name not in TOOL_COST_CATALOG for name in request.capabilities)
+    ):
+        return ReservationDecision(False, reason="invalid_call_plan")
+
+    quote = ReservationQuote(
+        plan_fingerprint=tuple(sorted(request.capabilities)),
+        calls=len(request.capabilities),
+        points=sum(TOOL_COST_CATALOG[name] for name in request.capabilities),
+    )
+    if quote.points > limits.max_points_per_job:
+        return ReservationDecision(False, reason="job_point_limit")
+    if quote.calls > limits.max_calls_per_job:
+        return ReservationDecision(False, reason="job_call_limit")
+    return quote
+
+
 class UsageLedger(Protocol):
     @property
     def persistent(self) -> bool: ...
@@ -132,27 +172,9 @@ class InMemoryUsageLedger:
                     ),
                 )
 
-            if not re.fullmatch(r"[0-9a-f]{64}", request.request_fingerprint):
-                return ReservationDecision(False, reason="invalid_request_fingerprint")
-
-            expected_plan = (
-                ("identity.resolve",)
-                if request.plan == "identity_resolution"
-                else tuple(DATA_CAPABILITIES)
-            )
-            if (
-                tuple(request.capabilities) != expected_plan
-                or len(request.capabilities) != len(set(request.capabilities))
-                or any(name not in TOOL_COST_CATALOG for name in request.capabilities)
-            ):
-                return ReservationDecision(False, reason="invalid_call_plan")
-            calls = len(request.capabilities)
-            points = sum(TOOL_COST_CATALOG[name] for name in request.capabilities)
-
-            if points > limits.max_points_per_job:
-                return ReservationDecision(False, reason="job_point_limit")
-            if calls > limits.max_calls_per_job:
-                return ReservationDecision(False, reason="job_call_limit")
+            quote = quote_reservation(request, limits)
+            if isinstance(quote, ReservationDecision):
+                return quote
 
             day = utc_day(self._now_factory())
 
@@ -163,7 +185,11 @@ class InMemoryUsageLedger:
             ]
             if len(day_items) >= limits.daily_job_limit:
                 return ReservationDecision(False, reason="daily_job_limit")
-            if sum(int(item["reserved_points"]) for item in day_items) + points > limits.daily_point_budget:
+            if (
+                sum(int(item["reserved_points"]) for item in day_items)
+                + quote.points
+                > limits.daily_point_budget
+            ):
                 return ReservationDecision(False, reason="daily_point_budget")
             requester_jobs = sum(
                 1 for item in day_items if item["requester_id"] == request.requester_id
@@ -176,12 +202,12 @@ class InMemoryUsageLedger:
                 "job_id": request.job_id,
                 "requester_id": request.requester_id,
                 "day": day,
-                "plan_fingerprint": plan_fingerprint,
+                "plan_fingerprint": quote.plan_fingerprint,
                 "request_fingerprint": request.request_fingerprint,
-                "reserved_points": points,
-                "reserved_calls": calls,
-                "original_reserved_points": points,
-                "original_reserved_calls": calls,
+                "reserved_points": quote.points,
+                "reserved_calls": quote.calls,
+                "original_reserved_points": quote.points,
+                "original_reserved_calls": quote.calls,
                 "actual_points": None,
                 "actual_calls": None,
                 "settled": False,
