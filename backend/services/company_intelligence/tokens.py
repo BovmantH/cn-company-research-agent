@@ -85,14 +85,14 @@ class ResolutionTokenService:
         signature = _b64encode(hmac.new(self._secret, encoded.encode("ascii"), hashlib.sha256).digest())
         return f"{encoded}.{signature}"
 
-    def consume(
+    def verify(
         self,
         token: str,
         requester_id: str,
         *,
         now: datetime | None = None,
     ) -> ResolutionClaims:
-        """依次校验长度、签名、时效和请求方，并在账本中原子防重放。"""
+        """只读校验长度、签名、时效和请求方，不改变 Token 使用状态。"""
         if not token or len(token) > 4096:
             raise ResolutionTokenError("invalid_token")
         try:
@@ -118,6 +118,17 @@ class ResolutionTokenService:
             raise ResolutionTokenError("invalid_issued_at")
         if not hmac.compare_digest(claims.requester_id, requester_id):
             raise ResolutionTokenError("requester_mismatch")
+        return claims
+
+    def consume(
+        self,
+        token: str,
+        requester_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> ResolutionClaims:
+        """校验 Token 后在账本中原子标记一次性消费。"""
+        claims = self.verify(token, requester_id, now=now)
         if not self._ledger.consume_token(claims.jti, claims.exp):
             raise ResolutionTokenError("token_already_used")
         return claims

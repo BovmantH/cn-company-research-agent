@@ -32,6 +32,21 @@ def test_token_is_bound_to_requester_and_single_use() -> None:
         service.consume(token, requester)
 
 
+def test_verify_is_read_only_and_does_not_consume_token() -> None:
+    ledger = InMemoryUsageLedger()
+    service = ResolutionTokenService("s" * 32, ledger)
+    requester = requester_fingerprint("127.0.0.1", "s" * 32)
+    token = service.issue(_identity(), requester)
+
+    first = service.verify(token, requester)
+    second = service.verify(token, requester)
+
+    assert first == second
+    assert service.consume(token, requester) == first
+    with pytest.raises(ResolutionTokenError, match="token_already_used"):
+        service.consume(token, requester)
+
+
 def test_tampering_is_rejected() -> None:
     service = ResolutionTokenService("s" * 32, InMemoryUsageLedger())
     requester = requester_fingerprint("127.0.0.1", "s" * 32)
