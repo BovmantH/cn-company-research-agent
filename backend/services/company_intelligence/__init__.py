@@ -14,12 +14,14 @@ from .models import (
     ResolveKind,
     ResolveResult,
 )
+from .runtime import CompanyIntelligenceRuntime
 from .tokens import ResolutionTokenService, requester_fingerprint
 
 __all__ = [
     "CapabilityPolicy",
     "CollectionStatus",
     "CompanyIdentity",
+    "CompanyIntelligenceRuntime",
     "EvidenceCollection",
     "InMemoryUsageLedger",
     "ProfessionalDataSettings",
