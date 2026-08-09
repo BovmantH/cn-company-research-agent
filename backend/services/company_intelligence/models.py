@@ -18,6 +18,20 @@ def utc_now() -> datetime:
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    @model_validator(mode="after")
+    def reject_control_characters_in_text(self) -> "StrictModel":
+        """拒绝可能破坏日志、SSE 或确定性报告结构的控制字符。"""
+        for field_name in type(self).model_fields:
+            value = getattr(self, field_name)
+            values = value if isinstance(value, list) else [value]
+            if any(
+                isinstance(item, str)
+                and any(ord(char) < 32 or ord(char) == 127 for char in item)
+                for item in values
+            ):
+                raise ValueError(f"{field_name} 不得包含控制字符")
+        return self
+
 
 class CollectionStatus(StrEnum):
     SUCCEEDED_WITH_RECORDS = "succeeded_with_records"
@@ -93,94 +107,102 @@ class SourceMetadata(StrictModel):
 
 class RegistrationRecord(StrictModel):
     record_type: Literal["company_registration"] = "company_registration"
-    legal_representative: str | None = None
-    registered_capital: str | None = None
-    established_on: str | None = None
-    registration_status: str | None = None
-    registered_address: str | None = None
-    business_scope: str | None = None
+    legal_representative: str | None = Field(default=None, max_length=300)
+    registered_capital: str | None = Field(default=None, max_length=100)
+    established_on: str | None = Field(default=None, max_length=50)
+    registration_status: str | None = Field(default=None, max_length=100)
+    registered_address: str | None = Field(default=None, max_length=1_000)
+    business_scope: str | None = Field(default=None, max_length=20_000)
     source: SourceMetadata
 
 
 class ShareholderRecord(StrictModel):
     record_type: Literal["shareholder"] = "shareholder"
-    shareholder_name: str
-    shareholder_type: str | None = None
-    ownership_ratio: str | None = None
-    subscribed_amount: str | None = None
-    subscribed_on: str | None = None
+    shareholder_name: str = Field(min_length=1, max_length=300)
+    shareholder_type: str | None = Field(default=None, max_length=100)
+    ownership_ratio: str | None = Field(default=None, max_length=100)
+    subscribed_amount: str | None = Field(default=None, max_length=100)
+    subscribed_on: str | None = Field(default=None, max_length=50)
     source: SourceMetadata
 
 
 class CompanyChangeRecord(StrictModel):
     record_type: Literal["company_change"] = "company_change"
-    item: str
-    before: str | None = None
-    after: str | None = None
-    changed_on: str | None = None
+    item: str = Field(min_length=1, max_length=300)
+    before: str | None = Field(default=None, max_length=20_000)
+    after: str | None = Field(default=None, max_length=20_000)
+    changed_on: str | None = Field(default=None, max_length=50)
     source: SourceMetadata
 
 
 class JudicialCaseRecord(StrictModel):
     record_type: Literal["judicial_case"] = "judicial_case"
-    case_number: str | None = None
-    cause: str | None = None
-    court: str | None = None
-    filed_on: str | None = None
-    plaintiffs: list[str] = Field(default_factory=list)
-    defendants: list[str] = Field(default_factory=list)
-    third_parties: list[str] = Field(default_factory=list)
-    amount: str | None = None
-    summary: str | None = None
+    case_number: str | None = Field(default=None, max_length=200)
+    cause: str | None = Field(default=None, max_length=300)
+    court: str | None = Field(default=None, max_length=300)
+    filed_on: str | None = Field(default=None, max_length=50)
+    plaintiffs: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=200
+    )
+    defendants: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=200
+    )
+    third_parties: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=200
+    )
+    amount: str | None = Field(default=None, max_length=100)
+    summary: str | None = Field(default=None, max_length=20_000)
     source: SourceMetadata
 
 
 class EnforcementRecord(StrictModel):
     record_type: Literal["enforcement"] = "enforcement"
-    case_number: str | None = None
-    court: str | None = None
-    filed_on: str | None = None
-    amount: str | None = None
-    status_text: str | None = None
+    case_number: str | None = Field(default=None, max_length=200)
+    court: str | None = Field(default=None, max_length=300)
+    filed_on: str | None = Field(default=None, max_length=50)
+    amount: str | None = Field(default=None, max_length=100)
+    status_text: str | None = Field(default=None, max_length=300)
     source: SourceMetadata
 
 
 class DishonestRecord(StrictModel):
     record_type: Literal["dishonest"] = "dishonest"
-    case_number: str | None = None
-    court: str | None = None
-    conduct: str | None = None
-    performance_status: str | None = None
-    published_on: str | None = None
+    case_number: str | None = Field(default=None, max_length=200)
+    court: str | None = Field(default=None, max_length=300)
+    conduct: str | None = Field(default=None, max_length=20_000)
+    performance_status: str | None = Field(default=None, max_length=300)
+    published_on: str | None = Field(default=None, max_length=50)
     source: SourceMetadata
 
 
 class HighConsumptionRestriction(StrictModel):
     record_type: Literal["high_consumption"] = "high_consumption"
-    case_number: str | None = None
-    applicant: str | None = None
-    restricted_subject: str | None = None
-    related_legal_representative: str | None = None
-    filed_on: str | None = None
+    case_number: str | None = Field(default=None, max_length=200)
+    applicant: str | None = Field(default=None, max_length=300)
+    restricted_subject: str | None = Field(default=None, max_length=300)
+    related_legal_representative: str | None = Field(
+        default=None, max_length=300
+    )
+    filed_on: str | None = Field(default=None, max_length=50)
     source: SourceMetadata
 
 
 class BankruptcyRecord(StrictModel):
     record_type: Literal["bankruptcy"] = "bankruptcy"
-    case_number: str | None = None
-    applicant: str | None = None
-    respondent: str | None = None
-    court: str | None = None
-    published_on: str | None = None
+    case_number: str | None = Field(default=None, max_length=200)
+    applicant: str | None = Field(default=None, max_length=300)
+    respondent: str | None = Field(default=None, max_length=300)
+    court: str | None = Field(default=None, max_length=300)
+    published_on: str | None = Field(default=None, max_length=50)
     source: SourceMetadata
 
 
 class SeriousViolationRecord(StrictModel):
     record_type: Literal["serious_violation"] = "serious_violation"
-    reason: str | None = None
-    listed_on: str | None = None
-    authority: str | None = None
-    status_text: str | None = None
+    reason: str | None = Field(default=None, max_length=20_000)
+    listed_on: str | None = Field(default=None, max_length=50)
+    authority: str | None = Field(default=None, max_length=300)
+    status_text: str | None = Field(default=None, max_length=300)
     source: SourceMetadata
 
 
@@ -215,7 +237,7 @@ CAPABILITY_CONTRACTS: dict[str, tuple[str, frozenset[str]]] = {
 class EvidenceCollection(StrictModel):
     capability: str = Field(min_length=1, max_length=80)
     status: CollectionStatus
-    records: list[EvidenceRecord] = Field(default_factory=list)
+    records: list[EvidenceRecord] = Field(default_factory=list, max_length=1_000)
     source: SourceMetadata | None = None
     reason_code: str | None = Field(
         default=None,

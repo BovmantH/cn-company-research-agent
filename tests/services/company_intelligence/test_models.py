@@ -9,6 +9,7 @@ from backend.services.company_intelligence.models import (
     CollectionStatus,
     CompanyIdentity,
     EvidenceCollection,
+    JudicialCaseRecord,
     ProfessionalEvidence,
     RegistrationRecord,
     ResolveKind,
@@ -287,3 +288,29 @@ def test_collection_source_cannot_impersonate_record_or_another_subject() -> Non
     )
     with pytest.raises(ValidationError, match="统一社会信用代码"):
         ProfessionalEvidence(identity=identity, collections=collections)
+
+
+def test_evidence_text_and_party_lists_have_safe_bounds() -> None:
+    source = _source(
+        "company.registration", CollectionStatus.SUCCEEDED_WITH_RECORDS
+    )
+    with pytest.raises(ValidationError, match="控制字符"):
+        RegistrationRecord(legal_representative="张三\n伪造字段", source=source)
+    with pytest.raises(ValidationError):
+        RegistrationRecord(business_scope="业" * 20_001, source=source)
+
+    case_source = _source(
+        "risk.case_filings", CollectionStatus.SUCCEEDED_WITH_RECORDS
+    )
+    with pytest.raises(ValidationError):
+        JudicialCaseRecord(
+            case_number="（2026）苏01民初1号",
+            plaintiffs=["原告"] * 201,
+            source=case_source,
+        )
+    with pytest.raises(ValidationError):
+        JudicialCaseRecord(
+            case_number="（2026）苏01民初1号",
+            plaintiffs=["原" * 301],
+            source=case_source,
+        )
