@@ -8,6 +8,7 @@ import hmac
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -28,6 +29,7 @@ class ResolutionClaims(BaseModel):
     credit_code: str
     provider_subject_id: str | None = None
     original_query: str
+    match_method: Literal["exact", "user_selected"]
     iat: int
     exp: int
 
@@ -75,6 +77,7 @@ class ResolutionTokenService:
             credit_code=identity.credit_code,
             provider_subject_id=identity.provider_subject_id,
             original_query=identity.original_query,
+            match_method=identity.match_method,
             iat=issued_at,
             exp=issued_at + self._ttl_seconds,
         )

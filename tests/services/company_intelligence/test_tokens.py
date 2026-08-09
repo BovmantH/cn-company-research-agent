@@ -47,6 +47,16 @@ def test_verify_is_read_only_and_does_not_consume_token() -> None:
         service.consume(token, requester)
 
 
+def test_signed_claims_preserve_identity_match_method() -> None:
+    service = ResolutionTokenService("s" * 32, InMemoryUsageLedger())
+    requester = requester_fingerprint("127.0.0.1", "s" * 32)
+    identity = _identity().model_copy(update={"match_method": "user_selected"})
+
+    claims = service.verify(service.issue(identity, requester), requester)
+
+    assert claims.match_method == "user_selected"
+
+
 def test_tampering_is_rejected() -> None:
     service = ResolutionTokenService("s" * 32, InMemoryUsageLedger())
     requester = requester_fingerprint("127.0.0.1", "s" * 32)
