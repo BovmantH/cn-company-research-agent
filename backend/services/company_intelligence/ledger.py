@@ -68,15 +68,27 @@ class UsageLedger(Protocol):
 
     def reserve(
         self, request: BudgetRequest, limits: BudgetLimits
-    ) -> ReservationDecision: ...
+    ) -> ReservationDecision:
+        """原子执行幂等检查、固定计划校验和预算预留。"""
+        ...
 
-    def settle(self, reservation_id: str, *, actual_points: int, actual_calls: int) -> None: ...
+    def settle(
+        self, reservation_id: str, *, actual_points: int, actual_calls: int
+    ) -> None:
+        """以不超过原预留的实际用量不可变结算，并支持同值重放。"""
+        ...
 
-    def consume_token(self, token_id: str, expires_at: int) -> bool: ...
+    def consume_token(self, token_id: str, expires_at: int) -> bool:
+        """原子检查并标记一个尚未过期的一次性 Token。"""
+        ...
 
-    def complete_operation(self, reservation_id: str, result: dict[str, Any]) -> None: ...
+    def complete_operation(self, reservation_id: str, result: dict[str, Any]) -> None:
+        """把进行中操作转为成功终态；完全相同的终态重放必须幂等。"""
+        ...
 
-    def fail_operation(self, reservation_id: str, safe_reason: str) -> None: ...
+    def fail_operation(self, reservation_id: str, safe_reason: str) -> None:
+        """把进行中操作转为失败终态；只接受稳定原因码和同值重放。"""
+        ...
 
 
 class InMemoryUsageLedger:
@@ -94,6 +106,7 @@ class InMemoryUsageLedger:
     def reserve(
         self, request: BudgetRequest, limits: BudgetLimits
     ) -> ReservationDecision:
+        """在同一把锁内校验幂等请求、固定调用计划和预算，并完成预留。"""
         with self._lock:
             plan_fingerprint = tuple(sorted(request.capabilities))
             idempotency_scope = (request.requester_id, request.idempotency_key)
@@ -187,6 +200,7 @@ class InMemoryUsageLedger:
     def settle(
         self, reservation_id: str, *, actual_points: int, actual_calls: int
     ) -> None:
+        """以实际用量不可变结算；同值重放幂等，且实际用量不得超过预留。"""
         with self._lock:
             item = self._reservations.get(reservation_id)
             if item is None:
@@ -211,6 +225,7 @@ class InMemoryUsageLedger:
             item["settled"] = True
 
     def consume_token(self, token_id: str, expires_at: int) -> bool:
+        """原子记录一次性 Token；过期或已经消费时返回 False。"""
         now = int(datetime.now(timezone.utc).timestamp())
         with self._lock:
             self._consumed_tokens = {
@@ -224,6 +239,7 @@ class InMemoryUsageLedger:
     def complete_operation(
         self, reservation_id: str, result: dict[str, Any]
     ) -> None:
+        """把进行中操作置为成功终态；只允许完全相同的结果幂等重放。"""
         # JSON round-trip both verifies persistence compatibility and breaks aliases.
         encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
         if len(encoded.encode("utf-8")) > 1_000_000:
@@ -245,6 +261,7 @@ class InMemoryUsageLedger:
             item["operation_status"] = OperationStatus.COMPLETED.value
 
     def fail_operation(self, reservation_id: str, safe_reason: str) -> None:
+        """把进行中操作置为失败终态，并且只持久化稳定、安全的原因码。"""
         if not re.fullmatch(r"[a-z0-9_]{1,80}", safe_reason):
             raise ValueError("safe_reason must be a stable reason code")
         with self._lock:

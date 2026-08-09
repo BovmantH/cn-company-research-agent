@@ -79,6 +79,7 @@ class ProfessionalDataSettings:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "ProfessionalDataSettings":
+        """读取部署配置；任何非法数值都会在能力判定阶段按关闭处理。"""
         source = os.environ if env is None else env
 
         def get(name: str, default: str = "") -> str:
@@ -150,6 +151,7 @@ class CapabilityPolicy:
         persistent_ledger: bool,
         deployment_budget_exhausted: bool = False,
     ) -> CapabilityState:
+        """仅在密钥、签名、持久账本和全部预算护栏就绪时开放付费能力。"""
         cfg = self.settings
         if not cfg.enabled or not cfg.api_key:
             return CapabilityState(False, reason=CapabilityReason.NOT_CONFIGURED)

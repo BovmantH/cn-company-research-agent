@@ -221,6 +221,7 @@ class EvidenceCollection(StrictModel):
 
     @model_validator(mode="after")
     def enforce_status_semantics(self) -> "EvidenceCollection":
+        """保证状态、记录类型和来源元数据符合该逻辑能力的固定契约。"""
         contract = CAPABILITY_CONTRACTS.get(self.capability)
         if contract is None:
             raise ValueError(f"未知逻辑能力: {self.capability}")
@@ -260,6 +261,7 @@ class ProfessionalEvidence(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_coverage(self) -> "ProfessionalEvidence":
+        """要求每个必需能力都有明确结果，包括失败、空结果和未请求状态。"""
         expected = set(DATA_CAPABILITIES)
         if set(self.collections) != expected:
             missing = sorted(expected - set(self.collections))
@@ -278,6 +280,7 @@ class ResolveResult(StrictModel):
 
     @model_validator(mode="after")
     def enforce_resolve_shape(self) -> "ResolveResult":
+        """限制不同解析结果可携带的主体数量，并拒绝重复候选。"""
         if self.kind == ResolveKind.EXACT and len(self.identities) != 1:
             raise ValueError("exact 必须且只能返回一个主体")
         if self.kind == ResolveKind.CANDIDATES and not 1 < len(self.identities) <= 5:

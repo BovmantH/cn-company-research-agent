@@ -42,6 +42,7 @@ def _b64decode(value: str) -> bytes:
 
 
 def requester_fingerprint(client_ip: str, secret: str) -> str:
+    """用部署密钥匿名化请求方，避免账本保存原始客户端 IP。"""
     normalized = client_ip.strip().lower()
     return hmac.new(
         secret.encode("utf-8"), normalized.encode("utf-8"), hashlib.sha256
@@ -65,6 +66,7 @@ class ResolutionTokenService:
         *,
         now: datetime | None = None,
     ) -> str:
+        """签发与请求方绑定的短期主体凭证，避免前端伪造权威主体字段。"""
         issued_at = int((now or datetime.now(timezone.utc)).timestamp())
         claims = ResolutionClaims(
             jti=uuid.uuid4().hex,
@@ -90,6 +92,7 @@ class ResolutionTokenService:
         *,
         now: datetime | None = None,
     ) -> ResolutionClaims:
+        """依次校验长度、签名、时效和请求方，并在账本中原子防重放。"""
         if not token or len(token) > 4096:
             raise ResolutionTokenError("invalid_token")
         try:

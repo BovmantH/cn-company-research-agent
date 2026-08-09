@@ -9,6 +9,8 @@ from .models import CompanyIdentity, ProviderCallResult, ResolveKind, ResolveRes
 
 
 class CompanyIntelligenceProvider(Protocol):
+    """隔离外部企业数据服务，业务层只依赖归一化后的安全领域对象。"""
+
     @property
     def ready(self) -> bool: ...
 
@@ -53,6 +55,7 @@ class FakeCompanyIntelligenceProvider:
         return self._capabilities
 
     async def initialize(self) -> None:
+        """模拟能力探测；只有完整实现必需能力时才进入就绪状态。"""
         self._ready = set(REQUIRED_CAPABILITIES).issubset(self._capabilities)
 
     async def resolve(self, query: str) -> ResolveResult:
