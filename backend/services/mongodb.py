@@ -7,6 +7,7 @@ from pymongo import MongoClient
 
 class MongoDBService:
     def __init__(self, uri: str):
+        """连接并探测 MongoDB；URI 未指定数据库时回退到历史默认库。"""
         # Use certifi for SSL certificate verification with updated options
         self.client = MongoClient(
             uri,
@@ -14,7 +15,8 @@ class MongoDBService:
             retryWrites=True,
             w='majority'
         )
-        self.db = self.client.get_database('tavily_research')
+        self.client.admin.command("ping")
+        self.db = self.client.get_default_database("tavily_research")
         self.jobs = self.db.jobs
         self.reports = self.db.reports
 
@@ -63,4 +65,4 @@ class MongoDBService:
 
     def get_report(self, job_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve a report by job ID."""
-        return self.reports.find_one({"job_id": job_id}) 
+        return self.reports.find_one({"job_id": job_id})
