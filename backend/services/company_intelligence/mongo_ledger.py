@@ -333,6 +333,8 @@ class MongoUsageLedger:
                     "operation_status": OperationStatus.IN_PROGRESS.value,
                     "operation_result_json": None,
                     "operation_reason": None,
+                    "execution_claimed": False,
+                    "execution_claimed_at": None,
                     "created_at": now,
                     "finalized_at": None,
                     "expires_at": None,
@@ -380,6 +382,27 @@ class MongoUsageLedger:
             ):
                 return ReservationDecision(False, reason="token_already_used")
             raise
+
+    def claim_operation(self, reservation_id: str) -> bool:
+        """用条件单文档更新跨进程领取一次进行中的付费操作。"""
+        updated = self._operations.update_one(
+            {
+                "_id": reservation_id,
+                "operation_status": OperationStatus.IN_PROGRESS.value,
+                "execution_claimed": False,
+            },
+            {
+                "$set": {
+                    "execution_claimed": True,
+                    "execution_claimed_at": self._now(),
+                }
+            },
+        )
+        if updated.modified_count == 1:
+            return True
+        if self._operations.find_one({"_id": reservation_id}) is None:
+            raise KeyError("unknown reservation")
+        return False
 
     def settle(
         self, reservation_id: str, *, actual_points: int, actual_calls: int

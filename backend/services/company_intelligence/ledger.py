@@ -125,6 +125,10 @@ class UsageLedger(Protocol):
         """重放优先；新操作原子完成一次性 Token 消费和预算预留。"""
         ...
 
+    def claim_operation(self, reservation_id: str) -> bool:
+        """让一个执行者原子领取进行中的操作；重复领取返回 False。"""
+        ...
+
     def settle(
         self, reservation_id: str, *, actual_points: int, actual_calls: int
     ) -> None:
@@ -284,6 +288,7 @@ class InMemoryUsageLedger:
                 "operation_status": OperationStatus.IN_PROGRESS.value,
                 "operation_result": None,
                 "operation_reason": None,
+                "execution_claimed": False,
             }
             self._idempotency[idempotency_scope] = reservation_id
             return ReservationDecision(
@@ -292,6 +297,20 @@ class InMemoryUsageLedger:
                 job_id=request.job_id,
                 operation_status=OperationStatus.IN_PROGRESS,
             )
+
+    def claim_operation(self, reservation_id: str) -> bool:
+        """在锁内把未领取的进行中操作置为已领取，禁止重复付费执行。"""
+        with self._lock:
+            item = self._reservations.get(reservation_id)
+            if item is None:
+                raise KeyError("unknown reservation")
+            if (
+                item["operation_status"] != OperationStatus.IN_PROGRESS.value
+                or bool(item["execution_claimed"])
+            ):
+                return False
+            item["execution_claimed"] = True
+            return True
 
     def settle(
         self, reservation_id: str, *, actual_points: int, actual_calls: int

@@ -346,3 +346,15 @@ def test_budget_rejection_does_not_consume_token() -> None:
 
     assert blocked.reason == "job_point_limit"
     assert ledger.consume_token(token_id, expires_at) is True
+
+
+def test_operation_can_be_claimed_by_only_one_executor() -> None:
+    ledger = InMemoryUsageLedger()
+    reservation = ledger.reserve(_request("claim", "job-1"), LIMITS)
+    assert reservation.reservation_id
+
+    assert ledger.claim_operation(reservation.reservation_id) is True
+    assert ledger.claim_operation(reservation.reservation_id) is False
+
+    with pytest.raises(KeyError, match="unknown reservation"):
+        ledger.claim_operation("missing")

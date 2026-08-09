@@ -375,6 +375,27 @@ def test_same_token_cannot_reserve_two_jobs_across_instances(ledger_pair) -> Non
     assert first_ledger._consumed_tokens.count_documents({}) == 1
 
 
+def test_operation_claim_is_atomic_across_instances(ledger_pair) -> None:
+    first_ledger, second_ledger = ledger_pair
+    reservation = first_ledger.reserve(_request("claim", "job-1"), LIMITS)
+    assert reservation.reservation_id
+    barrier = threading.Barrier(2)
+
+    def claim(ledger: MongoUsageLedger) -> bool:
+        barrier.wait()
+        return ledger.claim_operation(reservation.reservation_id)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(claim, ledger_pair))
+
+    assert sum(outcomes) == 1
+    stored = first_ledger._operations.find_one(
+        {"_id": reservation.reservation_id}
+    )
+    assert stored["execution_claimed"] is True
+    assert stored["execution_claimed_at"] == NOW
+
+
 def test_raw_idempotency_key_is_not_persisted(ledger_pair) -> None:
     first_ledger, _ = ledger_pair
     secret_key = "raw-client-idempotency-key"
