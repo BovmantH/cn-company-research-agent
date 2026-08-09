@@ -68,7 +68,7 @@ app.state.company_intelligence = CompanyIntelligenceRuntime.from_env()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(app.state.company_intelligence.settings.allowed_origins),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -125,14 +125,6 @@ class PDFGenerationRequest(BaseModel):
     report_content: str
     company_name: str | None = None
 
-@app.options("/research")
-async def preflight():
-    response = JSONResponse(content=None, status_code=200)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
-
 @app.post("/research")
 async def research(data: ResearchRequest):
     try:
@@ -140,15 +132,11 @@ async def research(data: ResearchRequest):
         job_id = str(uuid.uuid4())
         asyncio.create_task(process_research(job_id, data))
 
-        response = JSONResponse(content={
+        return JSONResponse(content={
             "status": "accepted",
             "job_id": job_id,
             "message": "调研任务已启动,请连接 /research/{job_id}/stream 获取实时进度。"
         })
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response
 
     except Exception as e:
         logger.error(f"启动调研任务失败: {str(e)}", exc_info=True)
