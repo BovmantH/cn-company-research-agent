@@ -6,6 +6,7 @@
 
 from .config import CapabilityPolicy, ProfessionalDataSettings
 from .ledger import InMemoryUsageLedger, UsageLedger
+from .mongo_ledger import MongoLedgerUnavailable, MongoUsageLedger
 from .models import (
     CollectionStatus,
     CompanyIdentity,
@@ -24,6 +25,8 @@ __all__ = [
     "CompanyIntelligenceRuntime",
     "EvidenceCollection",
     "InMemoryUsageLedger",
+    "MongoLedgerUnavailable",
+    "MongoUsageLedger",
     "ProfessionalDataSettings",
     "ProfessionalEvidence",
     "ResolutionTokenService",
