@@ -19,6 +19,7 @@ from backend.graph import Graph
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
+from backend.api.company_intelligence import router as company_intelligence_router
 from backend.classes.state import job_status
 
 # Load environment variables from .env file at startup
@@ -65,6 +66,7 @@ logger.addHandler(console_handler)
 
 app = FastAPI(title="公司调研助手 API")
 app.state.company_intelligence = CompanyIntelligenceRuntime.from_env()
+app.include_router(company_intelligence_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -74,13 +76,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 pdf_service = PDFService({"pdf_output_dir": "pdfs"})
-
-
-@app.get("/capabilities")
-async def get_capabilities(request: Request):
-    """返回可安全公开的部署能力，不泄露密钥、余额或上游错误。"""
-    runtime: CompanyIntelligenceRuntime = request.app.state.company_intelligence
-    return {"professional_company_data": runtime.capability_state().as_dict()}
 
 
 # Pydantic / 请求体解析失败时,FastAPI 默认抛 422 + 英文 detail。
