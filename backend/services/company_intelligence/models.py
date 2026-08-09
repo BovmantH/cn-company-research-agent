@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -216,8 +216,12 @@ class EvidenceCollection(StrictModel):
     capability: str = Field(min_length=1, max_length=80)
     status: CollectionStatus
     records: list[EvidenceRecord] = Field(default_factory=list)
-    reason_code: str | None = Field(default=None, max_length=80)
-    detail: str | None = Field(default=None, max_length=500)
+    source: SourceMetadata | None = None
+    reason_code: str | None = Field(
+        default=None,
+        max_length=80,
+        pattern=r"^[a-z][a-z0-9_]{0,79}$",
+    )
 
     @model_validator(mode="after")
     def enforce_status_semantics(self) -> "EvidenceCollection":
@@ -229,6 +233,8 @@ class EvidenceCollection(StrictModel):
             raise ValueError("succeeded_with_records 必须包含至少一条记录")
         if self.status == CollectionStatus.SUCCEEDED_EMPTY and self.records:
             raise ValueError("succeeded_empty 不得包含记录")
+        if self.status == CollectionStatus.PARTIAL and not self.records:
+            raise ValueError("partial 必须包含至少一条已验证记录")
         if self.status in {
             CollectionStatus.FAILED,
             CollectionStatus.NOT_REQUESTED,
@@ -238,6 +244,33 @@ class EvidenceCollection(StrictModel):
         } and self.records:
             raise ValueError(f"{self.status} 状态不得携带事实记录")
         expected_server, allowed_record_types = contract
+        provider_statuses = {
+            CollectionStatus.SUCCEEDED_WITH_RECORDS,
+            CollectionStatus.SUCCEEDED_EMPTY,
+            CollectionStatus.PARTIAL,
+            CollectionStatus.FAILED,
+        }
+        if self.status in provider_statuses and self.source is None:
+            raise ValueError("Provider 调用结果必须包含集合级来源元数据")
+        non_success_statuses = set(CollectionStatus) - {
+            CollectionStatus.SUCCEEDED_WITH_RECORDS,
+            CollectionStatus.SUCCEEDED_EMPTY,
+        }
+        if self.status in non_success_statuses and not self.reason_code:
+            raise ValueError(f"{self.status} 必须包含稳定原因码")
+        if self.status not in non_success_statuses and self.reason_code is not None:
+            raise ValueError("成功状态不得包含失败原因码")
+        if self.status not in provider_statuses and self.source is not None:
+            raise ValueError("未调用 Provider 的状态不得包含来源元数据")
+        if self.source is not None:
+            if self.source.capability != self.capability:
+                raise ValueError("集合来源 capability 与集合不一致")
+            if self.source.server != expected_server:
+                raise ValueError("集合来源 server 与逻辑能力不一致")
+            if self.source.status != self.status:
+                raise ValueError("集合来源 status 与集合不一致")
+            if self.source.record_id is not None:
+                raise ValueError("集合级来源不得包含记录 ID")
         for record in self.records:
             if record.record_type not in allowed_record_types:
                 raise ValueError(
@@ -249,9 +282,13 @@ class EvidenceCollection(StrictModel):
                 raise ValueError("记录来源 server 与逻辑能力不一致")
             if record.source.status != self.status:
                 raise ValueError("记录来源 status 与集合不一致")
+            if self.source is not None and (
+                record.source.queried_subject != self.source.queried_subject
+                or record.source.queried_at != self.source.queried_at
+                or record.source.cache_hit != self.source.cache_hit
+            ):
+                raise ValueError("记录来源与集合级来源元数据不一致")
         return self
-
-
 class ProfessionalEvidence(StrictModel):
     identity: CompanyIdentity
     collections: dict[str, EvidenceCollection] = Field(default_factory=dict)
@@ -270,6 +307,11 @@ class ProfessionalEvidence(StrictModel):
         for key, collection in self.collections.items():
             if key != collection.capability:
                 raise ValueError("collections key 必须与 collection.capability 一致")
+            if (
+                collection.source is not None
+                and collection.source.queried_subject != self.identity.credit_code
+            ):
+                raise ValueError("集合查询主体必须是已确认企业的统一社会信用代码")
         return self
 
 
@@ -291,13 +333,3 @@ class ResolveResult(StrictModel):
         if len(codes) != len(set(codes)):
             raise ValueError("候选主体的统一社会信用代码不得重复")
         return self
-
-
-class ProviderCallResult(StrictModel):
-    """Adapter 归一化前的安全结果容器，不允许把异常正文直接传到 API。"""
-
-    capability: str
-    status: CollectionStatus
-    records: list[dict[str, Any]] = Field(default_factory=list)
-    safe_reason_code: str | None = None
-    cache_hit: bool = False

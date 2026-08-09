@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import Protocol
 
 from .config import REQUIRED_CAPABILITIES
-from .models import CompanyIdentity, ProviderCallResult, ResolveKind, ResolveResult
+from .models import (
+    CollectionStatus,
+    CompanyIdentity,
+    EvidenceCollection,
+    ResolveKind,
+    ResolveResult,
+)
 
 
 class CompanyIntelligenceProvider(Protocol):
@@ -23,7 +29,7 @@ class CompanyIntelligenceProvider(Protocol):
 
     async def call(
         self, capability: str, identity: CompanyIdentity
-    ) -> ProviderCallResult: ...
+    ) -> EvidenceCollection: ...
 
 
 class FakeCompanyIntelligenceProvider:
@@ -33,7 +39,7 @@ class FakeCompanyIntelligenceProvider:
         self,
         *,
         resolutions: dict[str, ResolveResult] | None = None,
-        calls: dict[str, ProviderCallResult] | None = None,
+        calls: dict[str, EvidenceCollection] | None = None,
         capabilities: frozenset[str] | None = None,
     ) -> None:
         self._resolutions = resolutions or {}
@@ -64,10 +70,25 @@ class FakeCompanyIntelligenceProvider:
 
     async def call(
         self, capability: str, identity: CompanyIdentity
-    ) -> ProviderCallResult:
+    ) -> EvidenceCollection:
         if capability not in self._capabilities or capability == "identity.resolve":
             raise ValueError(f"capability not allowed: {capability}")
         self.call_log.append((capability, identity.credit_code))
         if capability not in self._calls:
             raise KeyError(f"fake result not configured: {capability}")
-        return self._calls[capability]
+        result = self._calls[capability]
+        if result.capability != capability:
+            raise ValueError("provider result capability mismatch")
+        if result.status not in {
+            CollectionStatus.SUCCEEDED_WITH_RECORDS,
+            CollectionStatus.SUCCEEDED_EMPTY,
+            CollectionStatus.PARTIAL,
+            CollectionStatus.FAILED,
+        }:
+            raise ValueError("provider returned orchestrator-only status")
+        if (
+            result.source is None
+            or result.source.queried_subject != identity.credit_code
+        ):
+            raise ValueError("provider result subject mismatch")
+        return result
