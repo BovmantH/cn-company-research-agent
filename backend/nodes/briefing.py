@@ -129,7 +129,11 @@ class Briefing:
             
             if not content:
                 logger.error(f"Empty response from LLM for {category} briefing")
-                yield {"type": "error", "error": "Empty response from LLM", "category": category}
+                yield {
+                    "type": "briefing_degraded",
+                    "reason": "empty_response",
+                    "category": category,
+                }
                 yield {'content': ''}
                 return
 
@@ -151,8 +155,14 @@ class Briefing:
             yield event
             yield {'content': content.strip()}
         except Exception as e:
-            logger.error(f"Error generating {category} briefing: {e}")
-            raise RuntimeError(f"Fatal API error - {category} briefing generation failed: {str(e)}") from e
+            logger.error(
+                "Error generating %s briefing, exception_type=%s",
+                category,
+                type(e).__name__,
+            )
+            raise RuntimeError(
+                f"Fatal API error - {category} briefing generation failed"
+            ) from None
 
     async def create_briefings(self, state: ResearchState) -> ResearchState:
         """Create briefings for all categories in parallel."""

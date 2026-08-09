@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import time
 import uuid
 from collections.abc import Coroutine
 from dataclasses import dataclass
@@ -29,7 +30,12 @@ from backend.services.company_intelligence.collection import (
 )
 from backend.services.company_intelligence.requester import resolve_client_ip
 from backend.api.company_intelligence import router as company_intelligence_router
-from backend.classes.state import job_status
+from backend.classes.state import (
+    JOB_TERMINAL_TTL_SECONDS,
+    JobEventLog,
+    job_status,
+    prune_expired_jobs,
+)
 
 # Load environment variables from .env file at startup
 env_path = Path(__file__).parent / '.env'
@@ -231,6 +237,7 @@ def _schedule_research(
 async def research(data: ResearchRequest, request: Request):
     """受理基础调研；专业分支只在显式请求且原子准入成功后启动。"""
     try:
+        prune_expired_jobs()
         logger.info(f"收到调研请求: {data.company}")
         job_id = str(uuid.uuid4())
         preparation: ProfessionalPreparation | None = None
@@ -495,6 +502,8 @@ async def process_research(
     professional_started = False
     professional_control = _ProfessionalTaskControl()
     try:
+        # 在 Graph 节点启动前建立事件日志，保证最早的流式事件也能入队。
+        job_status[job_id]
         if mongodb:
             mongodb.create_job(
                 job_id,
@@ -544,6 +553,9 @@ async def process_research(
                 "current_step": node_name,
                 "last_update": datetime.now().isoformat()
             })
+            job_status[job_id]["events"].append(
+                {"type": "progress", "step": node_name}
+            )
 
         # 取出最终报告
         report_content = final_state.get('report') or (final_state.get('editor') or {}).get('report')
@@ -558,33 +570,57 @@ async def process_research(
         if report_content:
             logger.info(f"调研完成,报告长度: {len(report_content)} 字符")
 
-            job_status[job_id].update({
-                "status": "completed",
-                "report": report_content,
-                "company": data.company,
-                "last_update": datetime.now().isoformat()
-            })
-
             if mongodb:
                 mongodb.update_job(job_id=job_id, status="completed")
                 mongodb.store_report(job_id=job_id, report_data={"report": report_content})
+
+            job_status[job_id].update({
+                "report": report_content,
+                "company": data.company,
+                "last_update": datetime.now().isoformat(),
+                "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
+            })
+            job_status[job_id]["events"].append(
+                {"type": "complete", "report": report_content}
+            )
+            job_status[job_id]["status"] = "completed"
 
             logger.info(f"{data.company} 调研流程已成功结束")
         else:
             logger.error(f"调研流程结束但未生成报告。state keys: {list(final_state.keys())}")
             job_status[job_id].update({
-                "status": "failed",
                 "error": "未生成报告内容",
-                "last_update": datetime.now().isoformat()
+                "last_update": datetime.now().isoformat(),
+                "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
             })
+            job_status[job_id]["events"].append(
+                {
+                    "type": "error",
+                    "error": "未生成报告内容",
+                    "reason": "report_missing",
+                }
+            )
+            job_status[job_id]["status"] = "failed"
 
     except Exception as e:
-        logger.error(f"调研失败: {str(e)}", exc_info=True)
+        logger.error(
+            "调研失败，job_id=%s，异常类型=%s",
+            job_id,
+            type(e).__name__,
+        )
         job_status[job_id].update({
-            "status": "failed",
-            "error": str(e),
-            "last_update": datetime.now().isoformat()
+            "error": "调研任务执行失败",
+            "last_update": datetime.now().isoformat(),
+            "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
         })
+        job_status[job_id]["events"].append(
+            {
+                "type": "error",
+                "error": "调研任务执行失败",
+                "reason": "research_failed",
+            }
+        )
+        job_status[job_id]["status"] = "failed"
 
         if professional_preparation is not None and not professional_started:
             try:
@@ -597,7 +633,11 @@ async def process_research(
                     type(abandon_error).__name__,
                 )
         if mongodb:
-            mongodb.update_job(job_id=job_id, status="failed", error=str(e))
+            mongodb.update_job(
+                job_id=job_id,
+                status="failed",
+                error="调研任务执行失败",
+            )
     finally:
         if professional_task is not None and not professional_task.done():
             _detach_professional_task(
@@ -626,8 +666,31 @@ async def get_research(job_id: str):
     return job
 
 @app.get("/research/{job_id}/stream")
-async def stream_research(job_id: str):
-    """通过 SSE 推送调研进度。"""
+async def stream_research(job_id: str, request: Request):
+    """按每个连接自己的 Last-Event-ID 推送和重放任务事件。"""
+    prune_expired_jobs()
+    raw_last_event_id = request.headers.get("last-event-id", "0")
+    try:
+        initial_event_id = int(raw_last_event_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
+    if initial_event_id < 0:
+        raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
+    existing = job_status.get(job_id)
+    if existing is not None:
+        existing_events = existing.get("events")
+        if (
+            isinstance(existing_events, JobEventLog)
+            and existing_events.history_expired(initial_event_id)
+        ):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": "event_history_expired",
+                    "status": existing.get("status", "pending"),
+                },
+            )
+
     async def event_generator():
         try:
             # 等待 job 入库(最多 5s)
@@ -636,45 +699,71 @@ async def stream_research(job_id: str):
                     break
                 await asyncio.sleep(0.1)
 
-            last_step = None
+            last_event_id = initial_event_id
 
-            # 持续推送状态更新
+            # 每个连接只推进自己的游标，不修改共享事件日志。
             while job_id in job_status:
                 result = job_status[job_id]
                 status = result.get("status")
-                current_step = result.get("current_step")
                 events = result.get("events", [])
 
-                # step 切换时推一条 progress 事件
-                if status == "processing" and current_step and current_step != last_step:
-                    data = json.dumps({"type": "progress", "step": current_step}, ensure_ascii=False)
-                    yield f"data: {data}\n\n"
-                    last_step = current_step
+                if not isinstance(events, JobEventLog):
+                    normalized_events = JobEventLog()
+                    normalized_events.extend(events)
+                    result["events"] = normalized_events
+                    events = normalized_events
 
-                # 把队列里的事件按 FIFO 顺序推完
-                while events:
-                    event = events.pop(0)
-                    data = json.dumps(event, ensure_ascii=False)
-                    yield f"data: {data}\n\n"
-
-                if status == "completed" and (report := result.get("report")):
-                    data = json.dumps({"type": "complete", "report": report}, ensure_ascii=False)
+                if events.history_expired(last_event_id):
+                    data = json.dumps(
+                        {
+                            "type": "stream_reset_required",
+                            "reason": "event_history_expired",
+                            "version": 1,
+                        },
+                        ensure_ascii=False,
+                    )
                     yield f"data: {data}\n\n"
                     break
-                elif status == "failed":
-                    data = json.dumps({"type": "error", "error": result.get("error", "未知错误")}, ensure_ascii=False)
-                    yield f"data: {data}\n\n"
+
+                pending_events = events.after(last_event_id)
+                for event in pending_events:
+                    data = json.dumps(event, ensure_ascii=False)
+                    event_id = int(event["event_id"])
+                    yield f"id: {event_id}\ndata: {data}\n\n"
+                    last_event_id = event_id
+
+                if status in {"completed", "failed"}:
                     break
 
                 await asyncio.sleep(0.1)  # 加快轮询,前端反馈更跟手
         except Exception as e:
-            data = json.dumps({"type": "error", "error": str(e)}, ensure_ascii=False)
+            logger.warning(
+                "SSE 推送失败，job_id=%s，异常类型=%s",
+                job_id,
+                type(e).__name__,
+            )
+            data = json.dumps(
+                {
+                    "type": "stream_error",
+                    "reason": "stream_failed",
+                    "version": 1,
+                },
+                ensure_ascii=False,
+            )
             yield f"data: {data}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @app.get("/research/{job_id}/report")
 async def get_research_report(job_id: str):
+    prune_expired_jobs()
     if not mongodb:
         if job_id in job_status:
             result = job_status[job_id]

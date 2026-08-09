@@ -88,7 +88,10 @@ class Editor:
                 else:
                     logger.info(f"Successfully compiled report with {len(compiled_report)} characters")
             except Exception as e:
-                logger.error(f"Error during report compilation: {e}")
+                logger.error(
+                    "Error during report compilation, exception_type=%s",
+                    type(e).__name__,
+                )
         
         state.setdefault('messages', []).append(AIMessage(content="\n".join(msg)))
         return state
@@ -137,7 +140,10 @@ class Editor:
             
             return final_report
         except Exception as e:
-            logger.error(f"Error in edit_report: {e}")
+            logger.error(
+                "Error in edit_report, exception_type=%s",
+                type(e).__name__,
+            )
             return ""
     
     async def compile_content(self, state: ResearchState, briefings: Dict[str, str]) -> str:
@@ -175,7 +181,10 @@ class Editor:
             
             return initial_report
         except Exception as e:
-            logger.error(f"Error in initial compilation: {e}")
+            logger.error(
+                "Error in initial compilation, exception_type=%s",
+                type(e).__name__,
+            )
             return combined_content or ""
         
     async def content_sweep(self, content: str):
@@ -213,8 +222,15 @@ class Editor:
             
             yield accumulated_text.strip()
         except Exception as e:
-            logger.error(f"Error in formatting: {e}")
-            yield {"type": "error", "error": str(e), "step": "Editor"}
+            logger.error(
+                "Error in formatting, exception_type=%s",
+                type(e).__name__,
+            )
+            yield {
+                "type": "report_degraded",
+                "reason": "formatting_failed",
+                "step": "Editor",
+            }
             yield content or ""
 
     async def run(self, state: ResearchState) -> ResearchState:

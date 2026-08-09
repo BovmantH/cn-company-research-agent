@@ -313,11 +313,16 @@ async def test_professional_failure_does_not_block_base_report(
 
     assert state["status"] == "completed"
     assert state["report"] == "基础 Web 报告"
-    assert [event["type"] for event in state["events"]] == [
+    professional_events = [
+        event
+        for event in state["events"]
+        if event["type"].startswith("professional_data_")
+    ]
+    assert [event["type"] for event in professional_events] == [
         "professional_data_started",
         "professional_data_degraded",
     ]
-    assert state["events"][1]["reason"] == "provider_unavailable"
+    assert professional_events[1]["reason"] == "provider_unavailable"
     assert "upstream-secret" not in caplog.text
 
 
@@ -348,12 +353,14 @@ async def test_budget_blocked_event_still_completes_base_report(
         application.job_status.pop(job_id, None)
 
     assert state["status"] == "completed"
-    assert state["events"] == [
-        {
-            "type": "professional_data_budget_blocked",
-            "reason": "budget_blocked",
-        }
-    ]
+    budget_event = next(
+        event
+        for event in state["events"]
+        if event["type"] == "professional_data_budget_blocked"
+    )
+    assert budget_event["reason"] == "budget_blocked"
+    assert budget_event["version"] == 1
+    assert budget_event["event_id"] == 1
 
 
 @pytest.mark.asyncio
@@ -417,10 +424,12 @@ async def test_hanging_professional_branch_times_out_without_blocking_report(
     assert state["report"] == "基础 Web 报告"
     await asyncio.wait_for(runtime.cancel_seen.wait(), timeout=1)
     assert runtime.cancel_seen.is_set()
-    assert state["events"][-1] == {
-        "type": "professional_data_degraded",
-        "reason": "provider_unavailable",
-    }
+    degraded_event = next(
+        event
+        for event in state["events"]
+        if event["type"] == "professional_data_degraded"
+    )
+    assert degraded_event["reason"] == "provider_unavailable"
     assert "professional_evidence" not in state
     runtime.release.set()
     await asyncio.wait_for(runtime.finished.wait(), timeout=1)

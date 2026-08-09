@@ -100,13 +100,15 @@ class GroundingNode:
                         "step": "Initial Site Scrape"
                     }
             except Exception as e:
-                error_str = str(e)
-                logger.error(f"Website crawl error: {error_str}", exc_info=True)
-                error_msg = f"⚠️ Error crawling website content: {error_str}"
+                logger.error(
+                    "Website crawl error, exception_type=%s",
+                    type(e).__name__,
+                )
+                error_msg = "⚠️ Website content crawl unavailable"
                 msg += f"\n{error_msg}"
                 yield {
                     "type": "crawl_error",
-                    "error": error_str,
+                    "reason": "crawl_failed",
                     "message": error_msg,
                     "step": "Initial Site Scrape",
                     "continue_research": True

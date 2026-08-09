@@ -84,18 +84,8 @@ class BaseResearcher:
                     "category": self.analyst_type
                 }
                 
-                # Update job status if job_id provided
-                if job_id:
-                    try:
-                        logger.info(f"job_id={job_id}, job_id in job_status={job_id in job_status}")
-                        if job_id in job_status:
-                            job_status[job_id]["events"].append(event)
-
-                        else:
-                            logger.warning(f"job_id {job_id} not found in job_status. Available keys: {list(job_status.keys())[:3]}")
-                    except Exception as e:
-                        logger.error(f"Error appending event: {e}")
-                
+                # 累计 query 每个 token 都变长，只向调用链 yield，不写重放日志，
+                # 避免 append-only SSE 形成 O(n²) 内存；完成的 query 仍会持久事件化。
                 yield event
                 
                 # Parse completed queries on newline
@@ -146,8 +136,11 @@ class BaseResearcher:
             yield {"type": "queries_complete", "queries": queries, "count": len(queries)}
             
         except Exception as e:
-            logger.error(f"Error generating queries for {company}: {e}")
-            raise RuntimeError(f"Fatal API error - query generation failed: {str(e)}") from e
+            logger.error(
+                "Error generating queries, exception_type=%s",
+                type(e).__name__,
+            )
+            raise RuntimeError("Fatal API error - query generation failed") from None
 
     def _get_search_params(self) -> Dict[str, Any]:
         """Get search parameters based on analyst type.
@@ -199,7 +192,10 @@ class BaseResearcher:
         """通过 SearchProvider 并行执行所有查询并 yield 进度事件。"""
         if not queries:
             logger.error("No valid queries to search")
-            yield {"type": "error", "error": "No valid queries to search"}
+            yield {
+                "type": "research_degraded",
+                "reason": "no_valid_queries",
+            }
             return
 
         # Yield start event
@@ -216,16 +212,26 @@ class BaseResearcher:
         try:
             results = await asyncio.gather(*search_tasks, return_exceptions=True)
         except Exception as e:
-            logger.error(f"Error during parallel search execution: {e}")
-            yield {"type": "error", "error": str(e)}
+            logger.error(
+                "Error during parallel search execution, exception_type=%s",
+                type(e).__name__,
+            )
+            yield {"type": "research_degraded", "reason": "search_failed"}
             return
 
         # Process and merge results
         merged_docs: Dict[str, Dict[str, Any]] = {}
         for query, result in zip(queries, results):
             if isinstance(result, Exception):
-                logger.error(f"Search failed for query '{query}': {result}")
-                yield {"type": "query_error", "query": query, "error": str(result)}
+                logger.error(
+                    "Search failed for query, exception_type=%s",
+                    type(result).__name__,
+                )
+                yield {
+                    "type": "query_error",
+                    "query": query,
+                    "reason": "search_failed",
+                }
                 continue
 
             # provider 直接返回 list[SearchResult]
