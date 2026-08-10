@@ -26,9 +26,7 @@ def test_normalizes_exact_identity_from_qcc_result_envelope() -> None:
 
     assert result.kind == ResolveKind.EXACT
     assert result.reason_code is None
-    assert result.identities[0].model_dump(
-        exclude={"resolved_at"}, mode="json"
-    ) == {
+    assert result.identities[0].model_dump(exclude={"resolved_at"}, mode="json") == {
         "canonical_name": "示例科技0有限公司",
         "credit_code": "91320594MA1N00000X",
         "registration_status": "存续",
@@ -77,22 +75,9 @@ def test_explicit_empty_list_is_not_found() -> None:
         {**_identity(), "data": [_identity(1)]},
         {"Result": [], "data": [_identity()]},
         {"Result": _identity() | {"Records": [_identity(1)]}},
-        {
-            "Result": [
-                _identity() | {"CompanyName": "冲突名称有限公司"}
-            ]
-        },
-        {
-            "Result": [
-                _identity() | {"RegStatus": "注销", "Status": "存续"}
-            ]
-        },
-        {
-            "Result": [
-                _identity()
-                | {"UnifiedSocialCreditCode": "91110000MA0000000A"}
-            ]
-        },
+        {"Result": [_identity() | {"CompanyName": "冲突名称有限公司"}]},
+        {"Result": [_identity() | {"RegStatus": "注销", "Status": "存续"}]},
+        {"Result": [_identity() | {"UnifiedSocialCreditCode": "91110000MA0000000A"}]},
         {"Result": "not-json-records"},
         {"Result": ["not-an-object"]},
     ],
@@ -108,7 +93,9 @@ def test_ambiguous_or_invalid_response_fails_closed(
     assert "secret" not in result.reason_code
 
 
-def test_direct_identity_object_is_supported_without_treating_company_status_as_error() -> None:
+def test_direct_identity_object_is_supported_without_treating_company_status_as_error() -> (
+    None
+):
     result = normalize_identity_response("示例科技", _identity())
 
     assert result.kind == ResolveKind.EXACT

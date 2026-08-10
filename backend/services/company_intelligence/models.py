@@ -65,7 +65,9 @@ class CompanyIdentity(StrictModel):
     @field_validator("canonical_name", "original_query", "provider_subject_id")
     @classmethod
     def reject_control_characters(cls, value: str | None) -> str | None:
-        if value is not None and any(ord(char) < 32 or ord(char) == 127 for char in value):
+        if value is not None and any(
+            ord(char) < 32 or ord(char) == 127 for char in value
+        ):
             raise ValueError("主体字段不得包含控制字符")
         return value
 
@@ -180,9 +182,7 @@ class HighConsumptionRestriction(StrictModel):
     case_number: str | None = Field(default=None, max_length=200)
     applicant: str | None = Field(default=None, max_length=300)
     restricted_subject: str | None = Field(default=None, max_length=300)
-    related_legal_representative: str | None = Field(
-        default=None, max_length=300
-    )
+    related_legal_representative: str | None = Field(default=None, max_length=300)
     filed_on: str | None = Field(default=None, max_length=50)
     source: SourceMetadata
 
@@ -257,13 +257,17 @@ class EvidenceCollection(StrictModel):
             raise ValueError("succeeded_empty 不得包含记录")
         if self.status == CollectionStatus.PARTIAL and not self.records:
             raise ValueError("partial 必须包含至少一条已验证记录")
-        if self.status in {
-            CollectionStatus.FAILED,
-            CollectionStatus.NOT_REQUESTED,
-            CollectionStatus.UNAVAILABLE,
-            CollectionStatus.BUDGET_BLOCKED,
-            CollectionStatus.IDENTITY_UNCONFIRMED,
-        } and self.records:
+        if (
+            self.status
+            in {
+                CollectionStatus.FAILED,
+                CollectionStatus.NOT_REQUESTED,
+                CollectionStatus.UNAVAILABLE,
+                CollectionStatus.BUDGET_BLOCKED,
+                CollectionStatus.IDENTITY_UNCONFIRMED,
+            }
+            and self.records
+        ):
             raise ValueError(f"{self.status} 状态不得携带事实记录")
         expected_server, allowed_record_types = contract
         provider_statuses = {
@@ -311,6 +315,8 @@ class EvidenceCollection(StrictModel):
             ):
                 raise ValueError("记录来源与集合级来源元数据不一致")
         return self
+
+
 class ProfessionalEvidence(StrictModel):
     identity: CompanyIdentity
     collections: dict[str, EvidenceCollection] = Field(default_factory=dict)
@@ -349,7 +355,10 @@ class ResolveResult(StrictModel):
             raise ValueError("exact 必须且只能返回一个主体")
         if self.kind == ResolveKind.CANDIDATES and not 1 < len(self.identities) <= 5:
             raise ValueError("candidates 必须返回 2 至 5 个主体")
-        if self.kind in {ResolveKind.NOT_FOUND, ResolveKind.BLOCKED} and self.identities:
+        if (
+            self.kind in {ResolveKind.NOT_FOUND, ResolveKind.BLOCKED}
+            and self.identities
+        ):
             raise ValueError(f"{self.kind} 不得返回主体")
         codes = [identity.credit_code for identity in self.identities]
         if len(codes) != len(set(codes)):

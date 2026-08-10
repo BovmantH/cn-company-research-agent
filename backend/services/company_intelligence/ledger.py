@@ -234,15 +234,12 @@ class InMemoryUsageLedger:
             day = utc_day(self._now_factory())
 
             day_items = [
-                item
-                for item in self._reservations.values()
-                if item["day"] == day
+                item for item in self._reservations.values() if item["day"] == day
             ]
             if len(day_items) >= limits.daily_job_limit:
                 return ReservationDecision(False, reason="daily_job_limit")
             if (
-                sum(int(item["reserved_points"]) for item in day_items)
-                + quote.points
+                sum(int(item["reserved_points"]) for item in day_items) + quote.points
                 > limits.daily_point_budget
             ):
                 return ReservationDecision(False, reason="daily_point_budget")
@@ -253,9 +250,8 @@ class InMemoryUsageLedger:
                 return ReservationDecision(False, reason="requester_daily_limit")
 
             if token_id is not None:
-                if (
-                    token_expires_at is None
-                    or not re.fullmatch(r"[0-9a-f]{32}", token_id)
+                if token_expires_at is None or not re.fullmatch(
+                    r"[0-9a-f]{32}", token_id
                 ):
                     return ReservationDecision(False, reason="invalid_token")
                 current_timestamp = int(self._now_factory().timestamp())
@@ -304,9 +300,8 @@ class InMemoryUsageLedger:
             item = self._reservations.get(reservation_id)
             if item is None:
                 raise KeyError("unknown reservation")
-            if (
-                item["operation_status"] != OperationStatus.IN_PROGRESS.value
-                or bool(item["execution_claimed"])
+            if item["operation_status"] != OperationStatus.IN_PROGRESS.value or bool(
+                item["execution_claimed"]
             ):
                 return False
             item["execution_claimed"] = True
@@ -351,9 +346,7 @@ class InMemoryUsageLedger:
             self._consumed_tokens[token_id] = expires_at
             return True
 
-    def complete_operation(
-        self, reservation_id: str, result: dict[str, Any]
-    ) -> None:
+    def complete_operation(self, reservation_id: str, result: dict[str, Any]) -> None:
         """把进行中操作置为成功终态；只允许完全相同的结果幂等重放。"""
         # JSON round-trip both verifies persistence compatibility and breaks aliases.
         encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))

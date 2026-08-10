@@ -112,9 +112,9 @@ class CompanyResolutionService:
                 "original_query": original_query,
             }
         )
-        token = ResolutionTokenService(
-            self.settings.signing_secret, self.ledger
-        ).issue(normalized, requester_id)
+        token = ResolutionTokenService(self.settings.signing_secret, self.ledger).issue(
+            normalized, requester_id
+        )
         return PublicCompanyIdentity(
             company_name=normalized.canonical_name,
             credit_code=normalized.credit_code,
@@ -131,9 +131,7 @@ class CompanyResolutionService:
         if blocked_reason:
             return PublicResolution(kind=ResolveKind.BLOCKED, reason=blocked_reason)
 
-        requester_id = requester_fingerprint(
-            client_ip, self.settings.signing_secret
-        )
+        requester_id = requester_fingerprint(client_ip, self.settings.signing_secret)
         normalized_query = " ".join(query.strip().split())
         decision = self.ledger.reserve(
             BudgetRequest(
@@ -152,12 +150,17 @@ class CompanyResolutionService:
                 raise IdempotencyConflict
             return PublicResolution(kind=ResolveKind.BLOCKED, reason="budget_blocked")
         if not decision.reservation_id:
-            return PublicResolution(kind=ResolveKind.BLOCKED, reason="provider_unavailable")
+            return PublicResolution(
+                kind=ResolveKind.BLOCKED, reason="provider_unavailable"
+            )
 
         if decision.replayed:
             if decision.operation_status == OperationStatus.IN_PROGRESS:
                 raise ResolutionInProgress
-            if decision.operation_status == OperationStatus.COMPLETED and decision.result:
+            if (
+                decision.operation_status == OperationStatus.COMPLETED
+                and decision.result
+            ):
                 return PublicResolution.model_validate(decision.result)
             return PublicResolution(
                 kind=ResolveKind.BLOCKED,

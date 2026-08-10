@@ -101,9 +101,7 @@ def _client_factory(
 @pytest.mark.asyncio
 async def test_initialize_binds_all_required_tools_without_calling_them() -> None:
     servers, calls = _servers(include_extra=True)
-    pool = QccMcpClientPool(
-        _settings(), client_factory=_client_factory(servers)
-    )
+    pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
 
     await pool.initialize()
 
@@ -117,9 +115,7 @@ async def test_initialize_binds_all_required_tools_without_calling_them() -> Non
 @pytest.mark.asyncio
 async def test_missing_required_tool_fails_closed() -> None:
     servers, _ = _servers(omitted_capability="risk.enforcement")
-    pool = QccMcpClientPool(
-        _settings(), client_factory=_client_factory(servers)
-    )
+    pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
 
     with pytest.raises(QccMcpUnavailable, match="必需工具"):
         await pool.initialize()
@@ -200,9 +196,7 @@ async def test_concurrent_initialize_opens_each_client_once() -> None:
 @pytest.mark.asyncio
 async def test_closed_pool_cannot_be_reinitialized() -> None:
     servers, _ = _servers()
-    pool = QccMcpClientPool(
-        _settings(), client_factory=_client_factory(servers)
-    )
+    pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
     await pool.initialize()
     await pool.aclose()
 
@@ -249,9 +243,7 @@ async def test_tool_discovery_has_page_limit() -> None:
 
         async def list_tools(self, *, cursor=None):
             self.pages += 1
-            return SimpleNamespace(
-                tools=[], next_cursor=f"page-{self.pages}"
-            )
+            return SimpleNamespace(tools=[], next_cursor=f"page-{self.pages}")
 
     client = EndlessClient()
 
@@ -264,9 +256,7 @@ async def test_tool_discovery_has_page_limit() -> None:
 @pytest.mark.asyncio
 async def test_wrong_search_key_schema_fails_closed() -> None:
     servers, _ = _servers(wrong_schema_capability="company.registration")
-    pool = QccMcpClientPool(
-        _settings(), client_factory=_client_factory(servers)
-    )
+    pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
 
     with pytest.raises(QccMcpUnavailable, match="Schema"):
         await pool.initialize()
@@ -282,12 +272,8 @@ async def test_disabled_or_missing_key_never_creates_client() -> None:
         created += 1
         raise AssertionError("client factory must not be called")
 
-    disabled = QccMcpClientPool(
-        _settings(enabled=False), client_factory=fail_if_called
-    )
-    missing_key = QccMcpClientPool(
-        _settings(api_key=""), client_factory=fail_if_called
-    )
+    disabled = QccMcpClientPool(_settings(enabled=False), client_factory=fail_if_called)
+    missing_key = QccMcpClientPool(_settings(api_key=""), client_factory=fail_if_called)
 
     await disabled.initialize()
     await missing_key.initialize()
@@ -300,9 +286,7 @@ async def test_disabled_or_missing_key_never_creates_client() -> None:
 @pytest.mark.asyncio
 async def test_call_routes_only_whitelisted_capability() -> None:
     servers, calls = _servers(include_extra=True)
-    pool = QccMcpClientPool(
-        _settings(), client_factory=_client_factory(servers)
-    )
+    pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
     await pool.initialize()
 
     payload = await pool.call("risk.enforcement", "91320594MA1N00000X")
@@ -324,9 +308,7 @@ async def test_call_routes_only_whitelisted_capability() -> None:
 @pytest.mark.asyncio
 async def test_call_rejects_control_characters_before_provider() -> None:
     servers, calls = _servers()
-    pool = QccMcpClientPool(
-        _settings(), client_factory=_client_factory(servers)
-    )
+    pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
     await pool.initialize()
 
     with pytest.raises(ValueError, match="search_key"):
@@ -338,9 +320,7 @@ async def test_call_rejects_control_characters_before_provider() -> None:
 @pytest.mark.asyncio
 async def test_call_exception_does_not_expose_upstream_secret() -> None:
     servers, _ = _servers(failing_capability="identity.resolve")
-    pool = QccMcpClientPool(
-        _settings(), client_factory=_client_factory(servers)
-    )
+    pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
     await pool.initialize()
 
     with pytest.raises(QccMcpCallFailed) as raised:

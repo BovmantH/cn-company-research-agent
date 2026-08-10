@@ -69,9 +69,7 @@ def _post(client: TestClient, query: str, key: str = "resolve-key-001"):
 
 
 def test_missing_idempotency_key_is_rejected() -> None:
-    response = TestClient(app).post(
-        "/companies/resolve", json={"query": "示例科技"}
-    )
+    response = TestClient(app).post("/companies/resolve", json={"query": "示例科技"})
     assert response.status_code == 422
 
 
@@ -103,9 +101,7 @@ def test_disabled_capability_never_calls_provider() -> None:
 def test_exact_resolution_returns_minimal_identity_and_signed_token() -> None:
     provider = FakeCompanyIntelligenceProvider(
         resolutions={
-            "示例科技": ResolveResult(
-                kind=ResolveKind.EXACT, identities=[_identity()]
-            )
+            "示例科技": ResolveResult(kind=ResolveKind.EXACT, identities=[_identity()])
         }
     )
     original = app.state.company_intelligence
@@ -129,9 +125,7 @@ def test_exact_resolution_returns_minimal_identity_and_signed_token() -> None:
 def test_same_key_and_query_replays_without_second_provider_call() -> None:
     provider = FakeCompanyIntelligenceProvider(
         resolutions={
-            "示例科技": ResolveResult(
-                kind=ResolveKind.EXACT, identities=[_identity()]
-            )
+            "示例科技": ResolveResult(kind=ResolveKind.EXACT, identities=[_identity()])
         }
     )
     original = app.state.company_intelligence
@@ -151,9 +145,7 @@ def test_same_key_and_query_replays_without_second_provider_call() -> None:
 def test_same_key_with_different_query_returns_conflict() -> None:
     provider = FakeCompanyIntelligenceProvider(
         resolutions={
-            "示例科技": ResolveResult(
-                kind=ResolveKind.EXACT, identities=[_identity()]
-            )
+            "示例科技": ResolveResult(kind=ResolveKind.EXACT, identities=[_identity()])
         }
     )
     original = app.state.company_intelligence

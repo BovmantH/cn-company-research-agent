@@ -78,7 +78,9 @@ class ProfessionalDataSettings:
     allow_unsafe_memory_ledger: bool
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> "ProfessionalDataSettings":
+    def from_env(
+        cls, env: Mapping[str, str] | None = None
+    ) -> "ProfessionalDataSettings":
         """读取部署配置；任何非法数值都会在能力判定阶段按关闭处理。"""
         source = os.environ if env is None else env
 
@@ -116,9 +118,7 @@ class ProfessionalDataSettings:
                 if value.strip()
             ),
             signing_secret=get("APP_SIGNING_SECRET").strip(),
-            allow_unsafe_memory_ledger=_as_bool(
-                get("QCC_ALLOW_UNSAFE_MEMORY_LEDGER")
-            ),
+            allow_unsafe_memory_ledger=_as_bool(get("QCC_ALLOW_UNSAFE_MEMORY_LEDGER")),
         )
 
 
@@ -156,7 +156,9 @@ class CapabilityPolicy:
         if not cfg.enabled or not cfg.api_key:
             return CapabilityState(False, reason=CapabilityReason.NOT_CONFIGURED)
         if not cfg.signing_secret or len(cfg.signing_secret.encode("utf-8")) < 32:
-            return CapabilityState(False, reason=CapabilityReason.SIGNING_SECRET_MISSING)
+            return CapabilityState(
+                False, reason=CapabilityReason.SIGNING_SECRET_MISSING
+            )
         if not persistent_ledger and not cfg.allow_unsafe_memory_ledger:
             return CapabilityState(False, reason=CapabilityReason.LEDGER_UNAVAILABLE)
         if (

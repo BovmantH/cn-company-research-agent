@@ -102,9 +102,7 @@ def test_renderer_uses_fixed_capability_order_and_distinct_statuses() -> None:
                         before="旧地址",
                         after="新地址",
                         changed_on="2026-01-01",
-                        source=_source(
-                            "company.changes", CollectionStatus.PARTIAL
-                        ),
+                        source=_source("company.changes", CollectionStatus.PARTIAL),
                     )
                 ],
                 source=_source("company.changes", CollectionStatus.PARTIAL),
@@ -327,9 +325,7 @@ def test_renderer_truncates_large_fields_and_record_sets_within_byte_budget() ->
     records = [
         JudicialCaseRecord(
             case_number=(
-                "AAAA-窗口外记录"
-                if number == 59
-                else f"（2026）苏01民初{number}号"
+                "AAAA-窗口外记录" if number == 59 else f"（2026）苏01民初{number}号"
             ),
             summary="摘要" * 10_000,
             source=record_source,

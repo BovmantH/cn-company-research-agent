@@ -42,19 +42,19 @@ from backend.classes.state import (
 )
 
 # Load environment variables from .env file at startup
-env_path = Path(__file__).parent / '.env'
+env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=True)
 
 # 启动校验: LLMFactory 依赖至少一个 LLM provider key,缺失则直接退出,
 # 避免在第一次请求时才发现 key 没配,把错误推到用户面前。
 _LLM_KEY_CANDIDATES = (
-    ("DEEPSEEK_API_KEY",   "DeepSeek 原厂",       "https://api-docs.deepseek.com/"),
-    ("DASHSCOPE_API_KEY",  "阿里百炼(Qwen)",     "https://help.aliyun.com/zh/dashscope/"),
-    ("MOONSHOT_API_KEY",   "Moonshot(Kimi)",     "https://platform.moonshot.cn/"),
-    ("XIAOMI_API_KEY",     "小米 MiMo",          "https://api.xiaomimimo.com/"),
-    ("OPENROUTER_API_KEY", "OpenRouter 聚合",     "https://openrouter.ai/"),
-    ("OPENAI_API_KEY",     "OpenAI 原生(降级)", "https://platform.openai.com/"),
+    ("DEEPSEEK_API_KEY", "DeepSeek 原厂", "https://api-docs.deepseek.com/"),
+    ("DASHSCOPE_API_KEY", "阿里百炼(Qwen)", "https://help.aliyun.com/zh/dashscope/"),
+    ("MOONSHOT_API_KEY", "Moonshot(Kimi)", "https://platform.moonshot.cn/"),
+    ("XIAOMI_API_KEY", "小米 MiMo", "https://api.xiaomimimo.com/"),
+    ("OPENROUTER_API_KEY", "OpenRouter 聚合", "https://openrouter.ai/"),
+    ("OPENAI_API_KEY", "OpenAI 原生(降级)", "https://platform.openai.com/"),
 )
 if not any(os.getenv(name) for name, _, _ in _LLM_KEY_CANDIDATES):
     # 把 stderr 切到 UTF-8,避免 Windows GBK 控制台把中文打成 mojibake
@@ -65,8 +65,7 @@ if not any(os.getenv(name) for name, _, _ in _LLM_KEY_CANDIDATES):
             pass
 
     candidates = "\n".join(
-        f"  - {name:<22}({label},见 {url})"
-        for name, label, url in _LLM_KEY_CANDIDATES
+        f"  - {name:<22}({label},见 {url})" for name, label, url in _LLM_KEY_CANDIDATES
     )
     print(
         "\n[启动失败] 未检测到 LLM provider 凭证。\n"
@@ -124,6 +123,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": f"请求参数有误: {summary}", "errors": errors},
     )
 
+
 mongodb = None
 if mongo_uri := os.getenv("MONGODB_URI"):
     try:
@@ -133,14 +133,13 @@ if mongo_uri := os.getenv("MONGODB_URI"):
             app.state.company_intelligence.configure_mongo_ledger(mongodb.db)
             logger.info("已启用企业情报 MongoDB 原子用量账本")
         except MongoLedgerUnavailable:
-            logger.warning(
-                "MongoDB 不支持企业情报所需事务，专业数据能力保持关闭"
-            )
+            logger.warning("MongoDB 不支持企业情报所需事务，专业数据能力保持关闭")
     except Exception as exc:
         logger.warning(
             "MongoDB 初始化失败，已降级为无持久化模式；异常类型=%s",
             type(exc).__name__,
         )
+
 
 class ProfessionalDataRequest(BaseModel):
     """用户显式开启专业增强时，只接受服务端签发的一次性主体 Token。"""
@@ -164,9 +163,11 @@ class ResearchRequest(BaseModel):
     hq_location: str | None = None
     professional_data: ProfessionalDataRequest | None = None
 
+
 class PDFGenerationRequest(BaseModel):
     report_content: str
     company_name: str | None = None
+
 
 def _research_accepted_response(
     job_id: str,
@@ -176,9 +177,7 @@ def _research_accepted_response(
     response: dict[str, object] = {
         "status": "accepted",
         "job_id": job_id,
-        "message": (
-            f"调研任务已启动,请连接 /research/{job_id}/stream 获取实时进度。"
-        ),
+        "message": (f"调研任务已启动,请连接 /research/{job_id}/stream 获取实时进度。"),
     }
     if professional_data is not None:
         response["professional_data"] = professional_data
@@ -288,10 +287,7 @@ async def research(data: ResearchRequest, request: Request):
                 }
                 preparation = None
             else:
-                if (
-                    preparation.identity is None
-                    or preparation.reservation_id is None
-                ):
+                if preparation.identity is None or preparation.reservation_id is None:
                     runtime.abandon_professional_research(preparation)
                     blocked_reason = "provider_unavailable"
                     professional_response = {
@@ -390,9 +386,7 @@ async def _collect_professional_for_job(
     if not control.publish_results:
         return
     job_status[job_id]["professional_evidence"] = evidence.model_dump(mode="json")
-    job_status[job_id]["events"].append(
-        {"type": "professional_data_completed"}
-    )
+    job_status[job_id]["events"].append({"type": "professional_data_completed"})
 
 
 @dataclass
@@ -500,6 +494,7 @@ def _append_professional_evidence(
     serialized_evidence: object,
 ) -> tuple[str, bool]:
     """追加专业附录，并保证最终 complete 事件留在持久化大小边界内。"""
+
     def complete_event_size(report: str) -> int:
         probe = {
             "type": "complete",
@@ -600,7 +595,7 @@ async def process_research(
             url=data.company_url,
             industry=data.industry,
             hq_location=data.hq_location,
-            job_id=job_id
+            job_id=job_id,
         )
 
         final_state = {}
@@ -608,21 +603,23 @@ async def process_research(
         # 流式跑 graph,顺便更新进度
         async for state in graph.run(thread={}):
             final_state.update(state)
-            node_name = list(state.keys())[0] if state else 'unknown'
+            node_name = list(state.keys())[0] if state else "unknown"
             logger.debug(f"节点已完成: {node_name}")
 
             # 把当前 step 写入 job 状态
-            job_status[job_id].update({
-                "status": "processing",
-                "current_step": node_name,
-                "last_update": datetime.now().isoformat()
-            })
-            job_status[job_id]["events"].append(
-                {"type": "progress", "step": node_name}
+            job_status[job_id].update(
+                {
+                    "status": "processing",
+                    "current_step": node_name,
+                    "last_update": datetime.now().isoformat(),
+                }
             )
+            job_status[job_id]["events"].append({"type": "progress", "step": node_name})
 
         # 取出最终报告
-        report_content = final_state.get('report') or (final_state.get('editor') or {}).get('report')
+        report_content = final_state.get("report") or (
+            final_state.get("editor") or {}
+        ).get("report")
 
         if professional_task is not None:
             professional_task = await _await_professional_for_job(
@@ -663,14 +660,18 @@ async def process_research(
 
             if mongodb:
                 mongodb.update_job(job_id=job_id, status="completed")
-                mongodb.store_report(job_id=job_id, report_data={"report": report_content})
+                mongodb.store_report(
+                    job_id=job_id, report_data={"report": report_content}
+                )
 
-            job_status[job_id].update({
-                "report": report_content,
-                "company": data.company,
-                "last_update": datetime.now().isoformat(),
-                "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
-            })
+            job_status[job_id].update(
+                {
+                    "report": report_content,
+                    "company": data.company,
+                    "last_update": datetime.now().isoformat(),
+                    "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
+                }
+            )
             job_status[job_id]["events"].append(
                 {"type": "complete", "report": report_content}
             )
@@ -678,12 +679,16 @@ async def process_research(
 
             logger.info(f"{data.company} 调研流程已成功结束")
         else:
-            logger.error(f"调研流程结束但未生成报告。state keys: {list(final_state.keys())}")
-            job_status[job_id].update({
-                "error": "未生成报告内容",
-                "last_update": datetime.now().isoformat(),
-                "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
-            })
+            logger.error(
+                f"调研流程结束但未生成报告。state keys: {list(final_state.keys())}"
+            )
+            job_status[job_id].update(
+                {
+                    "error": "未生成报告内容",
+                    "last_update": datetime.now().isoformat(),
+                    "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
+                }
+            )
             job_status[job_id]["events"].append(
                 {
                     "type": "error",
@@ -699,11 +704,13 @@ async def process_research(
             job_id,
             type(e).__name__,
         )
-        job_status[job_id].update({
-            "error": "调研任务执行失败",
-            "last_update": datetime.now().isoformat(),
-            "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
-        })
+        job_status[job_id].update(
+            {
+                "error": "调研任务执行失败",
+                "last_update": datetime.now().isoformat(),
+                "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
+            }
+        )
         job_status[job_id]["events"].append(
             {
                 "type": "error",
@@ -736,25 +743,31 @@ async def process_research(
                 professional_control,
             )
 
+
 @app.get("/")
 async def ping():
     return {"status": "ok", "message": "服务正常"}
+
 
 @app.get("/research/pdf/{filename}")
 async def get_pdf(filename: str):
     pdf_path = os.path.join("pdfs", filename)
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF 文件不存在")
-    return FileResponse(pdf_path, media_type='application/pdf', filename=filename)
+    return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
+
 
 @app.get("/research/{job_id}")
 async def get_research(job_id: str):
     if not mongodb:
-        raise HTTPException(status_code=501, detail="未配置数据库持久化,无法查询历史任务")
+        raise HTTPException(
+            status_code=501, detail="未配置数据库持久化,无法查询历史任务"
+        )
     job = mongodb.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="未找到对应的调研任务")
     return job
+
 
 @app.get("/research/{job_id}/stream")
 async def stream_research(job_id: str, request: Request):
@@ -767,6 +780,7 @@ async def stream_research(job_id: str, request: Request):
         raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
     if initial_event_id < 0:
         raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
+
     async def event_generator():
         try:
             # 等待 job 入库(最多 5s)
@@ -837,6 +851,7 @@ async def stream_research(job_id: str, request: Request):
         },
     )
 
+
 @app.get("/research/{job_id}/report")
 async def get_research_report(job_id: str):
     prune_expired_jobs()
@@ -848,7 +863,10 @@ async def get_research_report(job_id: str):
             # 任务存在但报告还没生成完
             return JSONResponse(
                 status_code=202,
-                content={"status": result.get("status", "pending"), "message": "报告尚未生成完成"}
+                content={
+                    "status": result.get("status", "pending"),
+                    "message": "报告尚未生成完成",
+                },
             )
         raise HTTPException(status_code=404, detail="未找到对应的调研任务")
 
@@ -858,29 +876,34 @@ async def get_research_report(job_id: str):
         if job := mongodb.get_job(job_id):
             return JSONResponse(
                 status_code=202,
-                content={"status": job.get("status", "pending"), "message": "报告尚未生成完成"}
+                content={
+                    "status": job.get("status", "pending"),
+                    "message": "报告尚未生成完成",
+                },
             )
         raise HTTPException(status_code=404, detail="未找到对应的调研任务")
     return report
+
 
 @app.post("/generate-pdf")
 async def generate_pdf(data: PDFGenerationRequest):
     """根据 markdown 报告内容生成 PDF 并以流的方式返回。"""
     try:
-        success, result = pdf_service.generate_pdf_stream(data.report_content, data.company_name)
+        success, result = pdf_service.generate_pdf_stream(
+            data.report_content, data.company_name
+        )
         if success:
             pdf_buffer, filename = result
             return StreamingResponse(
                 pdf_buffer,
-                media_type='application/pdf',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{filename}"'
-                }
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
         else:
             raise HTTPException(status_code=500, detail=f"PDF 生成失败: {result}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF 生成失败: {str(e)}")
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

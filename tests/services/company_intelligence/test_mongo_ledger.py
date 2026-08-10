@@ -175,17 +175,15 @@ def test_requester_limit_is_shared_across_instances(ledger_pair) -> None:
     assert blocked.reason == "requester_daily_limit"
 
 
-def test_settlement_is_persistent_immutable_and_releases_difference(ledger_pair) -> None:
+def test_settlement_is_persistent_immutable_and_releases_difference(
+    ledger_pair,
+) -> None:
     first_ledger, second_ledger = ledger_pair
     reservation = first_ledger.reserve(_request("settle", "job-1"), LIMITS)
     assert reservation.reservation_id
 
-    first_ledger.settle(
-        reservation.reservation_id, actual_points=20, actual_calls=1
-    )
-    second_ledger.settle(
-        reservation.reservation_id, actual_points=20, actual_calls=1
-    )
+    first_ledger.settle(reservation.reservation_id, actual_points=20, actual_calls=1)
+    second_ledger.settle(reservation.reservation_id, actual_points=20, actual_calls=1)
     with pytest.raises(ValueError, match="already settled"):
         second_ledger.settle(
             reservation.reservation_id, actual_points=0, actual_calls=0
@@ -223,9 +221,7 @@ def test_terminal_result_and_failure_replay_across_instances(ledger_pair) -> Non
     assert replay.operation_status == OperationStatus.COMPLETED
     assert replay.result == {"kind": "not_found", "items": []}
 
-    failed = first_ledger.reserve(
-        _request("failed", "job-3", "requester-b"), LIMITS
-    )
+    failed = first_ledger.reserve(_request("failed", "job-3", "requester-b"), LIMITS)
     assert failed.reservation_id
     first_ledger.fail_operation(failed.reservation_id, "provider_unavailable")
     failed_replay = second_ledger.reserve(
@@ -245,13 +241,9 @@ def test_terminal_transitions_are_immutable_but_same_retry_is_idempotent(
     first_ledger.complete_operation(completed.reservation_id, result)
     second_ledger.complete_operation(completed.reservation_id, result)
     with pytest.raises(ValueError, match="different result"):
-        second_ledger.complete_operation(
-            completed.reservation_id, {"kind": "blocked"}
-        )
+        second_ledger.complete_operation(completed.reservation_id, {"kind": "blocked"})
     with pytest.raises(ValueError, match="not in progress"):
-        second_ledger.fail_operation(
-            completed.reservation_id, "provider_unavailable"
-        )
+        second_ledger.fail_operation(completed.reservation_id, "provider_unavailable")
 
 
 def test_finalize_atomically_persists_terminal_and_actual_usage(
@@ -299,9 +291,7 @@ def test_only_requester_counter_expires_after_48_hours(ledger_pair) -> None:
     first_ledger, _ = ledger_pair
     assert first_ledger.reserve(_request("retention", "job-1"), LIMITS).allowed
 
-    deployment = first_ledger._usage_counters.find_one(
-        {"_id": "deployment:2026-08-09"}
-    )
+    deployment = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
     requester = first_ledger._usage_counters.find_one(
         {"_id": "requester:2026-08-09:requester-a"}
     )
@@ -367,9 +357,7 @@ def test_same_token_cannot_reserve_two_jobs_across_instances(ledger_pair) -> Non
     assert {decision.reason for decision in decisions if not decision.allowed} == {
         "token_already_used"
     }
-    counter = first_ledger._usage_counters.find_one(
-        {"_id": "deployment:2026-08-09"}
-    )
+    counter = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
     assert counter["job_count"] == 1
     assert counter["accounted_points"] == FULL_PLAN_POINTS
     assert first_ledger._consumed_tokens.count_documents({}) == 1
@@ -389,9 +377,7 @@ def test_operation_claim_is_atomic_across_instances(ledger_pair) -> None:
         outcomes = list(executor.map(claim, ledger_pair))
 
     assert sum(outcomes) == 1
-    stored = first_ledger._operations.find_one(
-        {"_id": reservation.reservation_id}
-    )
+    stored = first_ledger._operations.find_one({"_id": reservation.reservation_id})
     assert stored["execution_claimed"] is True
     assert stored["execution_claimed_at"] == NOW
 

@@ -131,9 +131,7 @@ class ProfessionalCollectionService:
                 reason_code=blocked_reason,
             )
 
-        requester_id = requester_fingerprint(
-            client_ip, self.settings.signing_secret
-        )
+        requester_id = requester_fingerprint(client_ip, self.settings.signing_secret)
         token_service = ResolutionTokenService(
             self.settings.signing_secret, self.ledger
         )
@@ -251,9 +249,7 @@ class ProfessionalCollectionService:
         attempted: list[str],
     ) -> None:
         """按已进入供应商调用的能力结算失败终态，不暴露原始异常。"""
-        actual_points = sum(
-            TOOL_COST_CATALOG[capability] for capability in attempted
-        )
+        actual_points = sum(TOOL_COST_CATALOG[capability] for capability in attempted)
         try:
             self.ledger.finalize_operation(
                 reservation_id,

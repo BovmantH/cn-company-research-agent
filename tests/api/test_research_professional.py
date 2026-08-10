@@ -215,9 +215,7 @@ def test_disabled_professional_object_has_no_provider_side_effect(
     monkeypatch,
 ) -> None:
     scheduled = _capture_scheduled_research(monkeypatch)
-    runtime = RuntimeStub(
-        ProfessionalPreparation(kind=PreparationKind.BLOCKED)
-    )
+    runtime = RuntimeStub(ProfessionalPreparation(kind=PreparationKind.BLOCKED))
     original_runtime = application.app.state.company_intelligence
     application.app.state.company_intelligence = runtime
     try:
@@ -354,9 +352,7 @@ async def test_professional_evidence_is_appended_before_persist_and_complete(
             status=CollectionStatus.SUCCEEDED_EMPTY,
             source=SourceMetadata(
                 server=(
-                    "qcc-company"
-                    if capability.startswith("company.")
-                    else "qcc-risk"
+                    "qcc-company" if capability.startswith("company.") else "qcc-risk"
                 ),
                 capability=capability,
                 queried_subject=identity.credit_code,
@@ -627,7 +623,9 @@ async def test_cancel_before_first_task_step_releases_reservation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_professional_child_before_first_step_releases_reservation() -> None:
+async def test_cancel_professional_child_before_first_step_releases_reservation() -> (
+    None
+):
     preparation = ProfessionalPreparation(
         kind=PreparationKind.READY,
         job_id="job-child-cancel-before-start",

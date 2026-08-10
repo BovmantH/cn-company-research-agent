@@ -117,14 +117,18 @@ NEWS_BRIEFING_PROMPT = """你正在为 {company} 撰写一份聚焦但完整的�
 5. 严禁使用 ### 之外的标题,只用项目符号(原 ### 类目标题保留)
 6. 直接输出简报正文,不要解释或寒暄。"""
 
-BRIEFING_ANALYSIS_INSTRUCTION = """请分析以下文档,提取关键信息。直接输出简报正文,不要解释或寒暄:"""
+BRIEFING_ANALYSIS_INSTRUCTION = (
+    """请分析以下文档,提取关键信息。直接输出简报正文,不要解释或寒暄:"""
+)
 
 
 # ============================================================================
 # EDITOR PROMPTS — 报告编排与清扫
 # ============================================================================
 
-EDITOR_SYSTEM_MESSAGE = "你是一名资深报告编辑,负责把多份调研简报合并为一份完整的公司报告。"
+EDITOR_SYSTEM_MESSAGE = (
+    "你是一名资深报告编辑,负责把多份调研简报合并为一份完整的公司报告。"
+)
 
 COMPILE_CONTENT_PROMPT = """你正在为 {company} 整合一份完整的调研报告。
 
@@ -156,7 +160,9 @@ COMPILE_CONTENT_PROMPT = """你正在为 {company} 整合一份完整的调研�
 
 以干净的 markdown 输出报告,不要任何解释或寒暄。"""
 
-CONTENT_SWEEP_SYSTEM_MESSAGE = "你是一名资深 markdown 编辑,负责保证文档结构一致、表述精炼。"
+CONTENT_SWEEP_SYSTEM_MESSAGE = (
+    "你是一名资深 markdown 编辑,负责保证文档结构一致、表述精炼。"
+)
 
 CONTENT_SWEEP_PROMPT = """你是一名资深简报编辑。下面是一份关于 {company} 的报告:
 

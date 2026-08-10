@@ -52,7 +52,9 @@ def requester_fingerprint(client_ip: str, secret: str) -> str:
 
 
 class ResolutionTokenService:
-    def __init__(self, secret: str, ledger: UsageLedger, *, ttl_seconds: int = 600) -> None:
+    def __init__(
+        self, secret: str, ledger: UsageLedger, *, ttl_seconds: int = 600
+    ) -> None:
         if len(secret.encode("utf-8")) < 32:
             raise ValueError("APP_SIGNING_SECRET 至少需要 32 字节")
         if ttl_seconds <= 0:
@@ -82,10 +84,15 @@ class ResolutionTokenService:
             exp=issued_at + self._ttl_seconds,
         )
         payload = json.dumps(
-            claims.model_dump(), ensure_ascii=False, separators=(",", ":"), sort_keys=True
+            claims.model_dump(),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
         ).encode("utf-8")
         encoded = _b64encode(payload)
-        signature = _b64encode(hmac.new(self._secret, encoded.encode("ascii"), hashlib.sha256).digest())
+        signature = _b64encode(
+            hmac.new(self._secret, encoded.encode("ascii"), hashlib.sha256).digest()
+        )
         return f"{encoded}.{signature}"
 
     def verify(

@@ -114,8 +114,7 @@ def get_search_provider() -> SearchProvider:
 
     if name not in _PROVIDERS:
         raise ValueError(
-            f"未知的 SEARCH_PROVIDER: {name!r}。"
-            f"当前已注册: {sorted(_PROVIDERS.keys())}"
+            f"未知的 SEARCH_PROVIDER: {name!r}。当前已注册: {sorted(_PROVIDERS.keys())}"
         )
 
     # 按 "module:Class" 形式延迟 import

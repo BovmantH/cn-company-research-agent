@@ -199,8 +199,7 @@ def _render_record(record: EvidenceRecord, number: int) -> list[str]:
         lines.append(f"- **{label}：** {_format_value(getattr(record, field_name))}")
     if record.source.data_updated_at:
         lines.append(
-            "- **数据更新时间：** "
-            f"{_format_time(record.source.data_updated_at)}"
+            f"- **数据更新时间：** {_format_time(record.source.data_updated_at)}"
         )
     return lines
 
@@ -237,8 +236,7 @@ def _render_collection(collection: EvidenceCollection) -> list[str]:
             (
                 f"- **来源：** 企查查官方 MCP（{service_name}）",
                 f"- **查询时间：** {_format_time(collection.source.queried_at)}",
-                "- **缓存命中：** "
-                f"{'是' if collection.source.cache_hit else '否'}",
+                f"- **缓存命中：** {'是' if collection.source.cache_hit else '否'}",
             )
         )
     # Provider 最多可返回 1000 条大记录。先固定展示窗口，再对窗口内的
@@ -259,7 +257,7 @@ def _render_collection(collection: EvidenceCollection) -> list[str]:
             )
         if _encoded_lines_size(candidate) > _MAX_COLLECTION_BYTES:
             break
-        lines = candidate[: -1] if next_count < total_records else candidate
+        lines = candidate[:-1] if next_count < total_records else candidate
         rendered_count = next_count
     if rendered_count < total_records:
         lines.append(

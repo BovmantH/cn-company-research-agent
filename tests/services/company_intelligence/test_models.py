@@ -65,9 +65,7 @@ def test_succeeded_empty_cannot_carry_records() -> None:
             capability="company.registration",
             status=CollectionStatus.SUCCEEDED_EMPTY,
             records=[_registration()],
-            source=_source(
-                "company.registration", CollectionStatus.SUCCEEDED_EMPTY
-            ),
+            source=_source("company.registration", CollectionStatus.SUCCEEDED_EMPTY),
         )
 
 
@@ -105,9 +103,7 @@ def test_collection_rejects_cross_capability_record() -> None:
             capability="risk.enforcement",
             status=CollectionStatus.SUCCEEDED_WITH_RECORDS,
             records=[_registration()],
-            source=_source(
-                "risk.enforcement", CollectionStatus.SUCCEEDED_WITH_RECORDS
-            ),
+            source=_source("risk.enforcement", CollectionStatus.SUCCEEDED_WITH_RECORDS),
         )
 
 
@@ -232,7 +228,9 @@ def test_professional_evidence_rejects_key_capability_mismatch() -> None:
         ProfessionalEvidence(identity=identity, collections=collections)
 
 
-def test_non_success_status_requires_safe_reason_and_forbids_source_without_call() -> None:
+def test_non_success_status_requires_safe_reason_and_forbids_source_without_call() -> (
+    None
+):
     with pytest.raises(ValidationError, match="稳定原因码"):
         EvidenceCollection(
             capability="company.registration",
@@ -243,9 +241,7 @@ def test_non_success_status_requires_safe_reason_and_forbids_source_without_call
             capability="company.registration",
             status=CollectionStatus.UNAVAILABLE,
             reason_code="provider_unavailable",
-            source=_source(
-                "company.registration", CollectionStatus.UNAVAILABLE
-            ),
+            source=_source("company.registration", CollectionStatus.UNAVAILABLE),
         )
     with pytest.raises(ValidationError):
         EvidenceCollection(
@@ -282,26 +278,20 @@ def test_collection_source_cannot_impersonate_record_or_another_subject() -> Non
     collections["company.registration"] = EvidenceCollection(
         capability="company.registration",
         status=CollectionStatus.SUCCEEDED_EMPTY,
-        source=_source(
-            "company.registration", CollectionStatus.SUCCEEDED_EMPTY
-        ),
+        source=_source("company.registration", CollectionStatus.SUCCEEDED_EMPTY),
     )
     with pytest.raises(ValidationError, match="统一社会信用代码"):
         ProfessionalEvidence(identity=identity, collections=collections)
 
 
 def test_evidence_text_and_party_lists_have_safe_bounds() -> None:
-    source = _source(
-        "company.registration", CollectionStatus.SUCCEEDED_WITH_RECORDS
-    )
+    source = _source("company.registration", CollectionStatus.SUCCEEDED_WITH_RECORDS)
     with pytest.raises(ValidationError, match="控制字符"):
         RegistrationRecord(legal_representative="张三\n伪造字段", source=source)
     with pytest.raises(ValidationError):
         RegistrationRecord(business_scope="业" * 20_001, source=source)
 
-    case_source = _source(
-        "risk.case_filings", CollectionStatus.SUCCEEDED_WITH_RECORDS
-    )
+    case_source = _source("risk.case_filings", CollectionStatus.SUCCEEDED_WITH_RECORDS)
     with pytest.raises(ValidationError):
         JudicialCaseRecord(
             case_number="（2026）苏01民初1号",

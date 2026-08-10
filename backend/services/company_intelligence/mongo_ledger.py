@@ -139,9 +139,7 @@ class MongoUsageLedger:
         return self._operations.find_one(
             {
                 "requester_id": request.requester_id,
-                "idempotency_key_hash": self._idempotency_hash(
-                    request.idempotency_key
-                ),
+                "idempotency_key_hash": self._idempotency_hash(request.idempotency_key),
             },
             **self._session_kwargs(session),
         )
@@ -175,9 +173,7 @@ class MongoUsageLedger:
             ),
         )
 
-    def _ensure_counter(
-        self, counter_id: str, document: dict[str, Any]
-    ) -> None:
+    def _ensure_counter(self, counter_id: str, document: dict[str, Any]) -> None:
         try:
             self._usage_counters.update_one(
                 {"_id": counter_id}, {"$setOnInsert": document}, upsert=True
@@ -227,8 +223,7 @@ class MongoUsageLedger:
 
         now = self._now()
         if token_id is not None and (
-            token_expires_at is None
-            or not re.fullmatch(r"[0-9a-f]{32}", token_id)
+            token_expires_at is None or not re.fullmatch(r"[0-9a-f]{32}", token_id)
         ):
             existing = self._existing_operation(request)
             return (
@@ -414,9 +409,7 @@ class MongoUsageLedger:
 
         def settle_in_transaction(session: Any) -> None:
             session_kwargs = self._session_kwargs(session)
-            item = self._operations.find_one(
-                {"_id": reservation_id}, **session_kwargs
-            )
+            item = self._operations.find_one({"_id": reservation_id}, **session_kwargs)
             if item is None:
                 raise KeyError("unknown reservation")
             original_points = int(item["original_reserved_points"])
@@ -442,9 +435,7 @@ class MongoUsageLedger:
                 "settled_at": now,
             }
             if item["operation_status"] != OperationStatus.IN_PROGRESS.value:
-                operation_update["expires_at"] = (
-                    now + FINALIZED_OPERATION_RETENTION
-                )
+                operation_update["expires_at"] = now + FINALIZED_OPERATION_RETENTION
             updated = self._operations.update_one(
                 {"_id": reservation_id, "settled": False},
                 {"$set": operation_update},
@@ -479,9 +470,7 @@ class MongoUsageLedger:
                     "_id": token_id,
                     "schema_version": 1,
                     "consumed_at": now,
-                    "expires_at": datetime.fromtimestamp(
-                        expires_at, tz=timezone.utc
-                    ),
+                    "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc),
                 }
             )
         except DuplicateKeyError:
@@ -500,9 +489,7 @@ class MongoUsageLedger:
             raise ValueError("operation result exceeds size limit")
         return encoded
 
-    def complete_operation(
-        self, reservation_id: str, result: dict[str, Any]
-    ) -> None:
+    def complete_operation(self, reservation_id: str, result: dict[str, Any]) -> None:
         """原子进入成功终态；同一规范 JSON 结果可安全重放。"""
         encoded = self._encode_result(result)
         now = self._now()
@@ -594,9 +581,7 @@ class MongoUsageLedger:
 
         def finalize_in_transaction(session: Any) -> None:
             session_kwargs = self._session_kwargs(session)
-            item = self._operations.find_one(
-                {"_id": reservation_id}, **session_kwargs
-            )
+            item = self._operations.find_one({"_id": reservation_id}, **session_kwargs)
             if item is None:
                 raise KeyError("unknown reservation")
             original_points = int(item["original_reserved_points"])
@@ -619,9 +604,7 @@ class MongoUsageLedger:
                     int(item["actual_points"]) != actual_points
                     or int(item["actual_calls"]) != actual_calls
                 ):
-                    raise ValueError(
-                        "reservation already settled with different usage"
-                    )
+                    raise ValueError("reservation already settled with different usage")
                 if same_terminal:
                     return
 
@@ -661,9 +644,7 @@ class MongoUsageLedger:
                 {"_id": f"deployment:{item['day']}"},
                 {
                     "$inc": {
-                        "accounted_points": -(
-                            original_points - actual_points
-                        ),
+                        "accounted_points": -(original_points - actual_points),
                         "accounted_calls": -(original_calls - actual_calls),
                     },
                     "$set": {"updated_at": now},
@@ -671,8 +652,6 @@ class MongoUsageLedger:
                 **session_kwargs,
             )
             if counter_update.matched_count != 1:
-                raise MongoLedgerUnavailable(
-                    "MongoDB 用量计数器在终态结算期间丢失"
-                )
+                raise MongoLedgerUnavailable("MongoDB 用量计数器在终态结算期间丢失")
 
         self._transaction_runner(finalize_in_transaction)

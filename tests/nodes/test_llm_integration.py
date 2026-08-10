@@ -148,10 +148,7 @@ async def test_researcher_chain_astream_yields_chunks(
     from backend.nodes.researchers.base import BaseResearcher
 
     r = BaseResearcher()
-    chain = (
-        ChatPromptTemplate.from_messages([("user", "research {company}")])
-        | r.llm
-    )
+    chain = ChatPromptTemplate.from_messages([("user", "research {company}")]) | r.llm
 
     chunks = []
     async for chunk in chain.astream({"company": "宁德时代"}):

@@ -45,9 +45,7 @@ class FakeCompanyIntelligenceProvider:
         self._resolutions = resolutions or {}
         self._calls = calls or {}
         self._capabilities = (
-            frozenset(REQUIRED_CAPABILITIES)
-            if capabilities is None
-            else capabilities
+            frozenset(REQUIRED_CAPABILITIES) if capabilities is None else capabilities
         )
         self._ready = False
         self.call_log: list[tuple[str, str]] = []

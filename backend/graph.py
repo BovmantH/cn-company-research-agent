@@ -20,8 +20,11 @@ from .nodes.researchers import (
 
 logger = logging.getLogger(__name__)
 
+
 class Graph:
-    def __init__(self, company=None, url=None, hq_location=None, industry=None, job_id=None):
+    def __init__(
+        self, company=None, url=None, hq_location=None, industry=None, job_id=None
+    ):
         # Initialize InputState
         self.input_state = InputState(
             company=company,
@@ -31,7 +34,7 @@ class Graph:
             job_id=job_id,
             messages=[
                 SystemMessage(content="Expert researcher starting investigation")
-            ]
+            ],
         )
 
         # Initialize nodes
@@ -54,7 +57,7 @@ class Graph:
     def _build_workflow(self):
         """Configure the state graph workflow"""
         self.workflow = StateGraph(InputState)
-        
+
         # Add nodes with their respective processing functions
         self.workflow.add_node("grounding", self.ground.run)
         self.workflow.add_node("financial_analyst", self.financial_analyst.run)
@@ -70,12 +73,12 @@ class Graph:
         # Configure workflow edges
         self.workflow.set_entry_point("grounding")
         self.workflow.set_finish_point("editor")
-        
+
         research_nodes = [
-            "financial_analyst", 
+            "financial_analyst",
             "news_scanner",
-            "industry_analyst", 
-            "company_analyst"
+            "industry_analyst",
+            "company_analyst",
         ]
 
         # Connect grounding to all research nodes
@@ -92,13 +95,10 @@ class Graph:
     async def run(self, thread: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
         """Execute the research workflow"""
         compiled_graph = self.workflow.compile()
-        
-        async for state in compiled_graph.astream(
-            self.input_state,
-            thread
-        ):
+
+        async for state in compiled_graph.astream(self.input_state, thread):
             yield state
-    
+
     def compile(self):
         graph = self.workflow.compile()
         return graph

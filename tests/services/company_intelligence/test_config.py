@@ -61,9 +61,7 @@ def test_enabled_only_when_every_gate_passes() -> None:
 
 
 def test_invalid_numeric_configuration_fails_closed() -> None:
-    settings = ProfessionalDataSettings.from_env(
-        _env(QCC_MAX_CALLS_PER_JOB="eleven")
-    )
+    settings = ProfessionalDataSettings.from_env(_env(QCC_MAX_CALLS_PER_JOB="eleven"))
     state = CapabilityPolicy(settings).evaluate(
         provider_ready=True, persistent_ledger=True
     )

@@ -24,38 +24,28 @@ class QccToolBinding:
     tool: str
 
 
-CAPABILITY_BINDINGS: Mapping[str, QccToolBinding] = MappingProxyType({
-    "identity.resolve": QccToolBinding("qcc-company", "get_company_by_query"),
-    "company.registration": QccToolBinding(
-        "qcc-company", "get_company_registration_info"
-    ),
-    "company.shareholders": QccToolBinding(
-        "qcc-company", "get_shareholder_info"
-    ),
-    "company.changes": QccToolBinding("qcc-company", "get_change_records"),
-    "risk.case_filings": QccToolBinding("qcc-risk", "get_case_filing_info"),
-    "risk.judicial_documents": QccToolBinding(
-        "qcc-risk", "get_judicial_documents"
-    ),
-    "risk.enforcement": QccToolBinding(
-        "qcc-risk", "get_judgment_debtor_info"
-    ),
-    "risk.dishonest": QccToolBinding("qcc-risk", "get_dishonest_info"),
-    "risk.high_consumption": QccToolBinding(
-        "qcc-risk", "get_high_consumption_restriction"
-    ),
-    "risk.bankruptcy": QccToolBinding(
-        "qcc-risk", "get_bankruptcy_reorganization"
-    ),
-    "risk.serious_violation": QccToolBinding(
-        "qcc-risk", "get_serious_violation"
-    ),
-})
+CAPABILITY_BINDINGS: Mapping[str, QccToolBinding] = MappingProxyType(
+    {
+        "identity.resolve": QccToolBinding("qcc-company", "get_company_by_query"),
+        "company.registration": QccToolBinding(
+            "qcc-company", "get_company_registration_info"
+        ),
+        "company.shareholders": QccToolBinding("qcc-company", "get_shareholder_info"),
+        "company.changes": QccToolBinding("qcc-company", "get_change_records"),
+        "risk.case_filings": QccToolBinding("qcc-risk", "get_case_filing_info"),
+        "risk.judicial_documents": QccToolBinding("qcc-risk", "get_judicial_documents"),
+        "risk.enforcement": QccToolBinding("qcc-risk", "get_judgment_debtor_info"),
+        "risk.dishonest": QccToolBinding("qcc-risk", "get_dishonest_info"),
+        "risk.high_consumption": QccToolBinding(
+            "qcc-risk", "get_high_consumption_restriction"
+        ),
+        "risk.bankruptcy": QccToolBinding("qcc-risk", "get_bankruptcy_reorganization"),
+        "risk.serious_violation": QccToolBinding("qcc-risk", "get_serious_violation"),
+    }
+)
 
 
-ClientFactory = Callable[
-    [str, str, str], AbstractAsyncContextManager[Any]
-]
+ClientFactory = Callable[[str, str, str], AbstractAsyncContextManager[Any]]
 
 _TRUSTED_QCC_HOSTS = frozenset({"agent.qcc.com"})
 _MAX_TOOL_PAGES = 100
@@ -71,9 +61,7 @@ class QccMcpCallFailed(RuntimeError):
 
 
 @asynccontextmanager
-async def _remote_client(
-    _server_name: str, url: str, api_key: str
-):
+async def _remote_client(_server_name: str, url: str, api_key: str):
     """创建带服务端 Bearer 鉴权的 Streamable HTTP MCP Client。"""
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx2.AsyncClient(
@@ -142,9 +130,7 @@ class QccMcpClientPool:
                     context = self._client_factory(
                         server_name, url, self._settings.api_key
                     )
-                    clients[server_name] = await stack.enter_async_context(
-                        context
-                    )
+                    clients[server_name] = await stack.enter_async_context(context)
 
                 discovered = {
                     server_name: await self._discover_tools(client)
@@ -206,14 +192,10 @@ class QccMcpClientPool:
             result = await client.list_tools(cursor=cursor)
             for tool in result.tools:
                 if tool.name in tools:
-                    raise QccMcpUnavailable(
-                        f"MCP 工具发现返回重复工具: {tool.name}"
-                    )
+                    raise QccMcpUnavailable(f"MCP 工具发现返回重复工具: {tool.name}")
                 tools[tool.name] = tool
                 if len(tools) > _MAX_DISCOVERED_TOOLS:
-                    raise QccMcpUnavailable(
-                        "MCP 工具发现超过安全数量限制"
-                    )
+                    raise QccMcpUnavailable("MCP 工具发现超过安全数量限制")
             cursor = result.next_cursor
             if cursor is None:
                 return tools
@@ -268,9 +250,7 @@ class QccMcpClientPool:
                 text = getattr(content, "text", None)
                 if isinstance(text, str):
                     if len(text.encode("utf-8")) > 2_000_000:
-                        raise QccMcpCallFailed(
-                            "MCP 工具响应超过安全大小限制"
-                        )
+                        raise QccMcpCallFailed("MCP 工具响应超过安全大小限制")
                     try:
                         payload = json.loads(text)
                     except json.JSONDecodeError:

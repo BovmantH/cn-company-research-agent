@@ -76,9 +76,7 @@ async def test_professional_entrypoints_share_runtime_concurrency_limiter(
         "ProfessionalCollectionService",
         CollectionServiceStub,
     )
-    settings = ProfessionalDataSettings.from_env(
-        {"QCC_MAX_CONCURRENCY": "2"}
-    )
+    settings = ProfessionalDataSettings.from_env({"QCC_MAX_CONCURRENCY": "2"})
     runtime = CompanyIntelligenceRuntime(
         settings=settings,
         ledger=InMemoryUsageLedger(),

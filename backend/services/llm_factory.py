@@ -151,7 +151,12 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
 
 # 默认探测顺序:中国用户优先 → OpenRouter 聚合 → OpenAI 兜底
 DEFAULT_VENDOR_PRIORITY: list[str] = [
-    "deepseek", "qwen", "kimi", "mimo", "openrouter", "openai",
+    "deepseek",
+    "qwen",
+    "kimi",
+    "mimo",
+    "openrouter",
+    "openai",
 ]
 
 VALID_ROLES = frozenset({"researcher", "briefing", "editor"})
@@ -198,7 +203,8 @@ def _get_priority_list() -> list[str]:
         if v not in VENDOR_REGISTRY:
             logger.warning(
                 "LLM_VENDOR_PRIORITY 含未知 vendor %r,已忽略。可选值: %s",
-                v, sorted(VENDOR_REGISTRY.keys()),
+                v,
+                sorted(VENDOR_REGISTRY.keys()),
             )
             continue
         out.append(v)
@@ -280,7 +286,10 @@ def _resolve_model(role: str, vendor: str, override: str | None) -> str:
                 "LLM_MODEL_%s=%r 带 vendor/ 前缀,但选中 vendor=%s 非 OpenRouter,"
                 "已自动剥离为 %r。如确实想走 OpenRouter,请设 LLM_VENDOR=openrouter "
                 "或仅保留 OPENROUTER_API_KEY。",
-                role.upper(), raw, vendor, stripped,
+                role.upper(),
+                raw,
+                vendor,
+                stripped,
             )
         return stripped
     return raw
@@ -307,9 +316,7 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel:
             key 缺失。
     """
     if role not in VALID_ROLES:
-        raise ValueError(
-            f"未知的 LLM role: {role!r}。可选值: {sorted(VALID_ROLES)}"
-        )
+        raise ValueError(f"未知的 LLM role: {role!r}。可选值: {sorted(VALID_ROLES)}")
 
     vendor, api_key = _resolve_vendor()
     base_url = _resolve_base_url(vendor)
@@ -329,15 +336,17 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel:
         try:
             kwargs["max_tokens"] = int(max_tokens_env)
         except ValueError:
-            logger.warning(
-                "LLM_MAX_TOKENS=%r 不是合法整数,已忽略", max_tokens_env
-            )
+            logger.warning("LLM_MAX_TOKENS=%r 不是合法整数,已忽略", max_tokens_env)
 
     kwargs.update(overrides)
 
     logger.debug(
         "构造 LLM: role=%s, vendor=%s, model=%s, base_url=%s, streaming=%s",
-        role, vendor, kwargs["model"], kwargs["base_url"], kwargs["streaming"],
+        role,
+        vendor,
+        kwargs["model"],
+        kwargs["base_url"],
+        kwargs["streaming"],
     )
 
     return ChatOpenAI(**kwargs)

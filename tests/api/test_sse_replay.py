@@ -117,9 +117,7 @@ def test_concurrent_event_append_keeps_unique_monotonic_ids() -> None:
     with ThreadPoolExecutor(max_workers=8) as executor:
         list(
             executor.map(
-                lambda number: events.append(
-                    {"type": "progress", "step": str(number)}
-                ),
+                lambda number: events.append({"type": "progress", "step": str(number)}),
                 range(100),
             )
         )
@@ -167,9 +165,7 @@ def test_non_terminal_degradation_does_not_hide_later_completion() -> None:
         "events": events,
     }
     try:
-        response = TestClient(application.app).get(
-            f"/research/{job_id}/stream"
-        )
+        response = TestClient(application.app).get(f"/research/{job_id}/stream")
     finally:
         job_status.pop(job_id, None)
 

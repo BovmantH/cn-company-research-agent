@@ -54,9 +54,7 @@ class CompanyIntelligenceRuntime:
             deployment_budget_exhausted=self.deployment_budget_exhausted,
         )
 
-    def configure_mongo_ledger(
-        self, database: Database[dict[str, Any]]
-    ) -> None:
+    def configure_mongo_ledger(self, database: Database[dict[str, Any]]) -> None:
         """仅在索引和事务探针成功后，用持久账本替换内存账本。"""
         ledger = MongoUsageLedger(database)
         self.ledger = ledger

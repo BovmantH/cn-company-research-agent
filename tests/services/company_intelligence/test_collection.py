@@ -110,7 +110,9 @@ async def test_prepare_collect_and_completed_replay_use_fixed_plan_once() -> Non
     ledger = InMemoryUsageLedger()
     settings = _settings()
     provider = FakeCompanyIntelligenceProvider(
-        calls={capability: _empty_result(capability) for capability in DATA_CAPABILITIES}
+        calls={
+            capability: _empty_result(capability) for capability in DATA_CAPABILITIES
+        }
     )
     service = _service(ledger, provider, settings=settings)
     token = _token(ledger, settings)
@@ -150,9 +152,7 @@ def test_invalid_token_or_disabled_capability_never_reserves_budget() -> None:
         client_ip="127.0.0.1",
     )
     disabled_settings = _settings(QCC_MCP_ENABLED="false")
-    disabled = _service(
-        ledger, provider, settings=disabled_settings
-    ).prepare(
+    disabled = _service(ledger, provider, settings=disabled_settings).prepare(
         job_id="job-2",
         resolution_token="still-not-inspected",
         client_ip="127.0.0.1",
@@ -177,7 +177,9 @@ async def test_single_provider_failure_degrades_only_that_capability(caplog) -> 
     ledger = InMemoryUsageLedger()
     settings = _settings()
     provider = PartlyFailingProvider(
-        calls={capability: _empty_result(capability) for capability in DATA_CAPABILITIES}
+        calls={
+            capability: _empty_result(capability) for capability in DATA_CAPABILITIES
+        }
     )
     service = _service(ledger, provider, settings=settings)
     prepared = service.prepare(
@@ -190,10 +192,12 @@ async def test_single_provider_failure_degrades_only_that_capability(caplog) -> 
 
     assert evidence.collections["risk.enforcement"].status == CollectionStatus.FAILED
     assert (
-        evidence.collections["risk.enforcement"].reason_code
-        == "provider_call_failed"
+        evidence.collections["risk.enforcement"].reason_code == "provider_call_failed"
     )
-    assert evidence.collections["company.registration"].status == CollectionStatus.SUCCEEDED_EMPTY
+    assert (
+        evidence.collections["company.registration"].status
+        == CollectionStatus.SUCCEEDED_EMPTY
+    )
     assert "upstream-secret" not in caplog.text
 
 
@@ -276,7 +280,9 @@ async def test_ready_preparation_cannot_execute_twice() -> None:
     ledger = InMemoryUsageLedger()
     settings = _settings()
     provider = FakeCompanyIntelligenceProvider(
-        calls={capability: _empty_result(capability) for capability in DATA_CAPABILITIES}
+        calls={
+            capability: _empty_result(capability) for capability in DATA_CAPABILITIES
+        }
     )
     service = _service(ledger, provider, settings=settings)
     prepared = service.prepare(
@@ -328,8 +334,7 @@ async def test_cancellation_waits_for_siblings_before_finalizing() -> None:
     assert reservation["operation_status"] == "failed"
     assert reservation["actual_calls"] == len(provider.call_log)
     assert reservation["actual_points"] == sum(
-        TOOL_COST_CATALOG[capability]
-        for capability, _ in provider.call_log
+        TOOL_COST_CATALOG[capability] for capability, _ in provider.call_log
     )
 
 
@@ -346,9 +351,9 @@ async def test_provider_becoming_unavailable_releases_full_reservation() -> None
 
     evidence = await service.collect(prepared)
 
-    assert {
-        collection.status for collection in evidence.collections.values()
-    } == {CollectionStatus.UNAVAILABLE}
+    assert {collection.status for collection in evidence.collections.values()} == {
+        CollectionStatus.UNAVAILABLE
+    }
     reservation = ledger._reservations[prepared.reservation_id]
     assert reservation["actual_calls"] == 0
     assert reservation["actual_points"] == 0

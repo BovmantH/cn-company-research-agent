@@ -14,6 +14,7 @@ from ...prompts import QUERY_FORMAT_GUIDELINES
 
 logger = logging.getLogger(__name__)
 
+
 class BaseResearcher:
     def __init__(self):
         # 检索通过统一 SearchProvider 调用,默认 Tavily;
@@ -26,7 +27,7 @@ class BaseResearcher:
 
     @property
     def analyst_type(self) -> str:
-        if not hasattr(self, '_analyst_type'):
+        if not hasattr(self, "_analyst_type"):
             raise ValueError("Analyst type not set by subclass")
         return self._analyst_type
 
@@ -41,58 +42,74 @@ class BaseResearcher:
         hq_location = state.get("hq_location", "Unknown")
         current_year = datetime.now().year
         job_id = state.get("job_id")
-        
-        logger.info(f"=== GENERATE_QUERIES START: job_id={job_id}, analyst={self.analyst_type} ===")
+
+        logger.info(
+            f"=== GENERATE_QUERIES START: job_id={job_id}, analyst={self.analyst_type} ==="
+        )
         if not job_id:
             logger.warning(f"⚠️ NO JOB_ID in state! Keys: {list(state.keys())}")
-        
+
         try:
-            logger.info(f"Generating queries for {company} as {self.analyst_type}, job_id={job_id}")
-            
+            logger.info(
+                f"Generating queries for {company} as {self.analyst_type}, job_id={job_id}"
+            )
+
             # Create prompt template using LangChain
-            query_prompt = ChatPromptTemplate.from_messages([
-                ("system", "You are researching {company}, a company in the {industry} industry, headquartered in {hq_location}."),
-                ("user", """Researching {company} in {year}, as of {date}.
+            query_prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        "You are researching {company}, a company in the {industry} industry, headquartered in {hq_location}.",
+                    ),
+                    (
+                        "user",
+                        """Researching {company} in {year}, as of {date}.
 {task_prompt}
-{format_guidelines}""")
-            ])
-            
+{format_guidelines}""",
+                    ),
+                ]
+            )
+
             # Create LCEL chain
             chain = query_prompt | self.llm
-            
+
             queries = []
             current_query = ""
             current_query_number = 1
 
             # Stream queries using LangChain's astream
-            async for chunk in chain.astream({
-                "company": company,
-                "industry": industry,
-                "hq_location": hq_location,
-                "year": current_year,
-                "date": datetime.now().strftime("%B %d, %Y"),
-                "task_prompt": prompt,
-                "format_guidelines": QUERY_FORMAT_GUIDELINES.format(company=company)
-            }):
+            async for chunk in chain.astream(
+                {
+                    "company": company,
+                    "industry": industry,
+                    "hq_location": hq_location,
+                    "year": current_year,
+                    "date": datetime.now().strftime("%B %d, %Y"),
+                    "task_prompt": prompt,
+                    "format_guidelines": QUERY_FORMAT_GUIDELINES.format(
+                        company=company
+                    ),
+                }
+            ):
                 current_query += chunk.content
-                
+
                 # Yield query generation progress
                 event = {
                     "type": "query_generating",
                     "query": current_query,
                     "query_number": current_query_number,
-                    "category": self.analyst_type
+                    "category": self.analyst_type,
                 }
-                
+
                 # 累计 query 每个 token 都变长，只向调用链 yield，不写重放日志，
                 # 避免 append-only SSE 形成 O(n²) 内存；完成的 query 仍会持久事件化。
                 yield event
-                
+
                 # Parse completed queries on newline
-                if '\n' in current_query:
-                    parts = current_query.split('\n')
+                if "\n" in current_query:
+                    parts = current_query.split("\n")
                     current_query = parts[-1]
-                    
+
                     for query in parts[:-1]:
                         query = query.strip()
                         if query:
@@ -101,19 +118,23 @@ class BaseResearcher:
                                 "type": "query_generated",
                                 "query": query,
                                 "query_number": len(queries),
-                                "category": self.analyst_type
+                                "category": self.analyst_type,
                             }
-                            
+
                             # Update job status if job_id provided
                             if job_id:
                                 try:
                                     if job_id in job_status:
                                         job_status[job_id]["events"].append(event)
                                     else:
-                                        logger.warning(f"job_id {job_id} not found in job_status for query_generated")
+                                        logger.warning(
+                                            f"job_id {job_id} not found in job_status for query_generated"
+                                        )
                                 except Exception as e:
-                                    logger.error(f"Error appending query_generated event: {e}")
-                            
+                                    logger.error(
+                                        f"Error appending query_generated event: {e}"
+                                    )
+
                             yield event
                             current_query_number += 1
 
@@ -124,17 +145,21 @@ class BaseResearcher:
                     "type": "query_generated",
                     "query": current_query.strip(),
                     "query_number": len(queries),
-                    "category": self.analyst_type
+                    "category": self.analyst_type,
                 }
-            
+
             if not queries:
                 raise ValueError(f"No queries generated for {company}")
 
             queries = queries[:4]  # Limit to 4 queries
             logger.info(f"Final queries for {self.analyst_type}: {queries}")
-            
-            yield {"type": "queries_complete", "queries": queries, "count": len(queries)}
-            
+
+            yield {
+                "type": "queries_complete",
+                "queries": queries,
+                "count": len(queries),
+            }
+
         except Exception as e:
             logger.error(
                 "Error generating queries, exception_type=%s",
@@ -154,20 +179,19 @@ class BaseResearcher:
         params = {
             "search_depth": "basic",
             "include_raw_content": False,
-            "max_results": 5
+            "max_results": 5,
         }
 
-        topic_map = {
-            "news_analyzer": "news",
-            "financial_analyzer": "finance"
-        }
+        topic_map = {"news_analyzer": "news", "financial_analyzer": "finance"}
 
         if topic := topic_map.get(self.analyst_type):
             params["topic"] = topic
 
         return params
 
-    def _process_search_result(self, result: SearchResult, query: str) -> Dict[str, Any]:
+    def _process_search_result(
+        self, result: SearchResult, query: str
+    ) -> Dict[str, Any]:
         """把单条 ``SearchResult`` 标准化为下游节点期望的 dict 形态。"""
         if not result.content or not result.url:
             return {}
@@ -202,7 +226,7 @@ class BaseResearcher:
         yield {
             "type": "search_started",
             "message": f"Searching {len(queries)} queries",
-            "total_queries": len(queries)
+            "total_queries": len(queries),
         }
 
         # Execute all searches in parallel through the provider abstraction
@@ -245,5 +269,5 @@ class BaseResearcher:
             "message": f"Found {len(merged_docs)} documents",
             "total_documents": len(merged_docs),
             "queries_processed": len(queries),
-            "merged_docs": merged_docs
+            "merged_docs": merged_docs,
         }

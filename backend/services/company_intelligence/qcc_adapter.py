@@ -82,10 +82,13 @@ def _extract_identity_records(payload: dict[str, Any]) -> list[dict[str, Any]]:
         response_code = _first_value(payload, ("Code", "code"))
         if response_code is not _MISSING and not _is_success_status(response_code):
             raise QccResponseInvalid("上游返回失败状态")
-        if _first_value(
-            payload,
-            ("CompanyName", "Name"),
-        ) is not _MISSING:
+        if (
+            _first_value(
+                payload,
+                ("CompanyName", "Name"),
+            )
+            is not _MISSING
+        ):
             return [payload]
         raise QccResponseInvalid("缺少明确的结果字段")
 
@@ -163,9 +166,7 @@ def _normalize_identity(query: str, record: dict[str, Any]) -> CompanyIdentity:
     )
 
 
-def normalize_identity_response(
-    query: str, payload: dict[str, Any]
-) -> ResolveResult:
+def normalize_identity_response(query: str, payload: dict[str, Any]) -> ResolveResult:
     """将实体识别响应映射为 exact/candidates/not_found/blocked。"""
     try:
         records = _extract_identity_records(payload)

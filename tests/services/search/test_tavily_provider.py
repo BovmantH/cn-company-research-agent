@@ -301,6 +301,7 @@ def test_factory_explicit_tavily(fake_tavily_client: MagicMock) -> None:
     try:
         provider = get_search_provider()
         from backend.services.search.tavily_provider import TavilyProvider
+
         assert isinstance(provider, TavilyProvider)
     finally:
         os.environ.pop("SEARCH_PROVIDER", None)

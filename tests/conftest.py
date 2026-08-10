@@ -36,7 +36,16 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "MINIMAX_API_KEY",
     ]
     # 单 vendor 维度 base_url 覆盖,全部清掉
-    for vendor in ("DEEPSEEK", "QWEN", "KIMI", "GLM", "MIMO", "MINIMAX", "OPENROUTER", "OPENAI"):
+    for vendor in (
+        "DEEPSEEK",
+        "QWEN",
+        "KIMI",
+        "GLM",
+        "MIMO",
+        "MINIMAX",
+        "OPENROUTER",
+        "OPENAI",
+    ):
         names.append(f"LLM_BASE_URL_{vendor}")
     for name in names:
         monkeypatch.delenv(name, raising=False)

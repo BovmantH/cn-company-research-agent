@@ -74,7 +74,9 @@ class TestResult:
     detail: str = ""
 
 
-def _make_client(vendor: str, *, streaming: bool, max_tokens: Optional[int] = None) -> tuple[ChatOpenAI, str]:
+def _make_client(
+    vendor: str, *, streaming: bool, max_tokens: Optional[int] = None
+) -> tuple[ChatOpenAI, str]:
     """构造一个 ChatOpenAI(根据 vendor 来源不同,从 registry 或 candidate 取配置)。
 
     若设置了 ``LLM_BASE_URL_<VENDOR>`` 环境变量,则覆盖默认 base_url
@@ -109,8 +111,11 @@ def _make_client(vendor: str, *, streaming: bool, max_tokens: Optional[int] = No
         base_url = base_url_override
 
     kwargs: dict = dict(
-        model=model, base_url=base_url, api_key=api_key,
-        temperature=0, streaming=streaming,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        temperature=0,
+        streaming=streaming,
     )
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
@@ -126,7 +131,9 @@ def test_basic_invoke(vendor: str) -> TestResult:
         text = text.strip()
         if not text:
             return TestResult("basic_invoke", False, "返回内容为空")
-        return TestResult("basic_invoke", True, f"返回长度 {len(text)},片段:{text[:40]!r}")
+        return TestResult(
+            "basic_invoke", True, f"返回长度 {len(text)},片段:{text[:40]!r}"
+        )
     except Exception as e:  # noqa: BLE001
         return TestResult("basic_invoke", False, f"{type(e).__name__}: {e}")
 
@@ -149,7 +156,8 @@ def test_streaming(vendor: str) -> TestResult:
         if chunks == 0:
             return TestResult("streaming", False, "未收到任何 chunk")
         return TestResult(
-            "streaming", True,
+            "streaming",
+            True,
             f"chunks={chunks},合计长度 {len(text)},片段:{text[:40]!r}",
         )
     except Exception as e:  # noqa: BLE001
@@ -160,18 +168,22 @@ def test_max_tokens(vendor: str) -> TestResult:
     """G-3: max_tokens=32 应限制输出长度。被静默忽略 → 不通过。"""
     try:
         client, _ = _make_client(vendor, streaming=False, max_tokens=32)
-        resp = client.invoke([
-            HumanMessage(content="详细介绍上海这座城市,至少 500 字。"),
-        ])
+        resp = client.invoke(
+            [
+                HumanMessage(content="详细介绍上海这座城市,至少 500 字。"),
+            ]
+        )
         text = resp.content if isinstance(resp.content, str) else str(resp.content)
         # 32 token 中文 ≈ 30~60 字符,给 200 字符容差(留出 think 标签等开销)
         if len(text) > 200:
             return TestResult(
-                "max_tokens", False,
+                "max_tokens",
+                False,
                 f"max_tokens=32 被忽略,实际返回 {len(text)} 字符",
             )
         return TestResult(
-            "max_tokens", True,
+            "max_tokens",
+            True,
             f"返回 {len(text)} 字符,片段:{text[:40]!r}",
         )
     except Exception as e:  # noqa: BLE001
@@ -181,9 +193,10 @@ def test_max_tokens(vendor: str) -> TestResult:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--vendor", required=True,
+        "--vendor",
+        required=True,
         help="待测试的 vendor 名:已在 registry 内的(deepseek/qwen/kimi/openrouter/openai)"
-             "或候选 vendor(glm/mimo/minimax)",
+        "或候选 vendor(glm/mimo/minimax)",
     )
     args = parser.parse_args()
     vendor = args.vendor.strip().lower()

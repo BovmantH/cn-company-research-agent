@@ -57,9 +57,7 @@ def _runtime(request: Request) -> CompanyIntelligenceRuntime:
 @router.get("/capabilities")
 async def get_capabilities(request: Request):
     """返回可安全公开的部署能力，不泄露密钥、余额或上游错误。"""
-    return {
-        "professional_company_data": _runtime(request).capability_state().as_dict()
-    }
+    return {"professional_company_data": _runtime(request).capability_state().as_dict()}
 
 
 @router.post("/companies/resolve", response_model=PublicResolution)
@@ -85,7 +83,5 @@ async def resolve_company(
     except IdempotencyConflict as exc:
         raise HTTPException(status_code=409, detail="idempotency_conflict") from exc
     except ResolutionInProgress:
-        response = PublicResolution(
-            kind="blocked", reason="resolution_in_progress"
-        )
+        response = PublicResolution(kind="blocked", reason="resolution_in_progress")
         return JSONResponse(status_code=202, content=response.model_dump(mode="json"))
