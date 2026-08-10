@@ -42,8 +42,10 @@ describe('App professional fallback', () => {
 
   it('主体解析失败后无损转为基础请求并关闭专业开关', async () => {
     const researchBodies: unknown[] = [];
+    const requestedUrls: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      requestedUrls.push(url);
       if (url.endsWith('/capabilities')) {
         return new Response(JSON.stringify({
           professional_company_data: {
@@ -107,6 +109,8 @@ describe('App professional fallback', () => {
     expect(JSON.stringify(researchBodies)).not.toContain('resolution_token');
     expect(JSON.stringify(researchBodies)).not.toContain('Authorization');
     expect(JSON.stringify(researchBodies)).not.toContain('upstream-secret');
+    expect(requestedUrls).toContain('/capabilities');
+    expect(requestedUrls).toContain('/research');
     expect(renderer.root.findByType(ResearchForm).props.professionalDataRequested).toBe(false);
     renderer.unmount();
   });

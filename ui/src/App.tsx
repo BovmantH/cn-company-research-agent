@@ -27,7 +27,7 @@ import {
   type PreparedResearch,
 } from './research/useProfessionalResearchFlow';
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 function App() {
   const professionalFlow = useProfessionalResearchFlow(API_URL);

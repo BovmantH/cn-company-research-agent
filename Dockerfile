@@ -45,4 +45,4 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 # 启动命令
-CMD ["python", "-m", "uvicorn", "application:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "python -m uvicorn application:app --host 0.0.0.0 --port ${PORT:-8000}"]

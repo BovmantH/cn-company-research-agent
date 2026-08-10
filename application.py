@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.api.company_intelligence import router as company_intelligence_router
@@ -797,7 +798,7 @@ async def process_research(
             )
 
 
-@app.get("/")
+@app.get("/health")
 async def ping():
     return {"status": "ok", "message": "服务正常"}
 
@@ -971,6 +972,21 @@ async def generate_pdf(data: PDFGenerationRequest):
     except Exception as exc:
         logger.warning("PDF 生成失败，异常类型=%s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="PDF 生成失败") from None
+
+
+def mount_frontend(target_app: FastAPI, frontend_dir: Path) -> bool:
+    """构建产物存在时在 API 路由之后挂载同源前端站点。"""
+    if not (frontend_dir / "index.html").is_file():
+        return False
+    target_app.mount(
+        "/",
+        StaticFiles(directory=frontend_dir, html=True),
+        name="frontend",
+    )
+    return True
+
+
+mount_frontend(app, Path(__file__).parent / "ui" / "dist")
 
 
 if __name__ == "__main__":
