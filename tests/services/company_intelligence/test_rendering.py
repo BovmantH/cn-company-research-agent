@@ -21,6 +21,7 @@ from backend.services.company_intelligence.models import (
 )
 from backend.services.company_intelligence.rendering import (
     MAX_PROFESSIONAL_APPENDIX_BYTES,
+    render_professional_coverage_markdown,
     render_professional_evidence_markdown,
 )
 
@@ -162,6 +163,15 @@ def test_renderer_uses_fixed_capability_order_and_distinct_statuses() -> None:
         assert status_text in rendered
     assert "不构成法律、征信、投资或信贷意见" in rendered
     assert "https://zxgk.court.gov.cn/" in rendered
+
+
+def test_coverage_renderer_never_echoes_unknown_reason() -> None:
+    rendered = render_professional_coverage_markdown(
+        "Authorization: Bearer upstream-secret"
+    )
+
+    assert "本次专业数据未完成采集" in rendered
+    assert "upstream-secret" not in rendered
 
 
 def test_renderer_outputs_every_record_type_without_llm_rewriting() -> None:

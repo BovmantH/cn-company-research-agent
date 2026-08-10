@@ -54,6 +54,26 @@ _REASON_TEXT = {
     "not_requested": "本次未请求该项数据",
 }
 
+_PROFESSIONAL_DISCLAIMER = (
+    "> 本章节由已校验的结构化数据确定性生成，未经过大语言模型改写；"
+    "内容仅供调研参考，不构成法律、征信、投资或信贷意见；"
+    "司法执行状态请以[中国执行信息公开网](https://zxgk.court.gov.cn/)"
+    "的人工核验结果为准。"
+)
+
+_COVERAGE_REASON_TEXT = {
+    "budget_blocked": "专业数据预算已阻止本次采集",
+    "deployment_budget_exhausted": "当前部署的专业数据额度已用完",
+    "identity_not_found": "未找到可确认的企业主体",
+    "identity_unconfirmed": "企业主体尚未完成确认",
+    "ledger_unavailable": "专业数据用量账本暂时不可用",
+    "not_configured": "当前部署尚未配置专业数据能力",
+    "budget_not_configured": "当前部署尚未配置专业数据预算",
+    "signing_secret_missing": "当前部署尚未配置主体确认签名密钥",
+    "resolution_in_progress": "企业主体解析仍在进行，本报告仅包含基础调研",
+    "provider_unavailable": "专业数据源暂时不可用",
+}
+
 MAX_PROFESSIONAL_APPENDIX_BYTES = 2 * 1024 * 1024
 _MAX_COLLECTION_BYTES = 128 * 1024
 _MAX_RECORDS_PER_CAPABILITY = 50
@@ -274,12 +294,7 @@ def render_professional_evidence_markdown(
     lines = [
         "## 工商与司法专业数据",
         "",
-        (
-            "> 本章节由已校验的结构化数据确定性生成，未经过大语言模型改写；"
-            "内容仅供调研参考，不构成法律、征信、投资或信贷意见；"
-            "司法执行状态请以[中国执行信息公开网](https://zxgk.court.gov.cn/)"
-            "的人工核验结果为准。"
-        ),
+        _PROFESSIONAL_DISCLAIMER,
         "",
         f"- **规范主体：** {_format_value(identity.canonical_name)}",
         f"- **统一社会信用代码：** {_format_value(identity.credit_code)}",
@@ -293,3 +308,18 @@ def render_professional_evidence_markdown(
     if len(rendered.encode("utf-8")) > MAX_PROFESSIONAL_APPENDIX_BYTES:
         raise ValueError("专业数据附录超过固定字节预算")
     return rendered
+
+
+def render_professional_coverage_markdown(reason_code: str) -> str:
+    """为未产生 Evidence 的专业分支生成确定性覆盖状态。"""
+    reason_text = _COVERAGE_REASON_TEXT.get(reason_code, "本次专业数据未完成采集")
+    return "\n".join(
+        (
+            "## 工商与司法专业数据",
+            "",
+            _PROFESSIONAL_DISCLAIMER,
+            "",
+            f"- **覆盖状态：** {reason_text}",
+            "- **数据状态：** 未生成专业证据；基础 Web 报告不受影响",
+        )
+    )

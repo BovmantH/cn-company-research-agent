@@ -35,6 +35,7 @@ from backend.services.company_intelligence.collection import (
 from backend.services.company_intelligence.models import ProfessionalEvidence
 from backend.services.company_intelligence.mongo_ledger import MongoLedgerUnavailable
 from backend.services.company_intelligence.rendering import (
+    render_professional_coverage_markdown,
     render_professional_evidence_markdown,
 )
 from backend.services.company_intelligence.requester import resolve_client_ip
@@ -375,6 +376,7 @@ async def _collect_professional_for_job(
             type(exc).__name__,
         )
         if control.publish_results:
+            job_status[job_id]["professional_degraded_reason"] = "provider_unavailable"
             job_status[job_id]["events"].append(
                 {
                     "type": "professional_data_degraded",
@@ -456,6 +458,7 @@ async def _await_professional_for_job(
     if not done:
         logger.warning("专业数据分支超时，job_id=%s", job_id)
         _detach_professional_task(professional_task, control)
+        job_status[job_id]["professional_degraded_reason"] = "provider_unavailable"
         job_status[job_id]["events"].append(
             {
                 "type": "professional_data_degraded",
@@ -480,6 +483,7 @@ async def _await_professional_for_job(
         return professional_task
 
     if control.publish_results:
+        job_status[job_id]["professional_degraded_reason"] = "provider_unavailable"
         job_status[job_id]["events"].append(
             {
                 "type": "professional_data_degraded",
@@ -489,43 +493,55 @@ async def _await_professional_for_job(
     return professional_task
 
 
+def _complete_event_size(report: str) -> int:
+    probe = {
+        "type": "complete",
+        "report": report,
+        "version": 1,
+        "event_id": 9_999_999_999,
+    }
+    return len(
+        json.dumps(
+            probe,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+
+
+def _append_professional_section(
+    report_content: str,
+    section: str,
+) -> tuple[str, bool]:
+    """追加确定性专业章节；超限时原样返回基础报告。"""
+    base_report = report_content.rstrip()
+    candidate = f"{base_report}\n\n{section}"
+    if _complete_event_size(candidate) <= FINAL_REPORT_EVENT_MAX_BYTES:
+        return candidate, True
+    return report_content, False
+
+
 def _append_professional_evidence(
     report_content: str,
     serialized_evidence: object,
 ) -> tuple[str, bool]:
     """在不改写基础报告的前提下追加专业附录。"""
 
-    def complete_event_size(report: str) -> int:
-        probe = {
-            "type": "complete",
-            "report": report,
-            "version": 1,
-            "event_id": 9_999_999_999,
-        }
-        return len(
-            json.dumps(
-                probe,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        )
-
     evidence = ProfessionalEvidence.model_validate(serialized_evidence)
     appendix = render_professional_evidence_markdown(evidence)
-    base_report = report_content.rstrip()
-    candidate = f"{base_report}\n\n{appendix}"
-
-    if complete_event_size(candidate) <= FINAL_REPORT_EVENT_MAX_BYTES:
+    candidate, appended = _append_professional_section(report_content, appendix)
+    if appended:
         return candidate, False
 
     size_notice = (
         "## 工商与司法专业数据\n\n"
         "> 专业数据已采集，但因最终报告大小限制未展开；基础 Web 报告不受影响。"
     )
-    candidate = f"{base_report}\n\n{size_notice}"
-    if complete_event_size(candidate) <= FINAL_REPORT_EVENT_MAX_BYTES:
-        return candidate, True
-    return report_content, True
+    candidate, _notice_appended = _append_professional_section(
+        report_content,
+        size_notice,
+    )
+    return candidate, True
 
 
 async def process_research(
@@ -608,6 +624,9 @@ async def process_research(
             )
 
         serialized_evidence = job_status[job_id].get("professional_evidence")
+        professional_coverage_reason = professional_blocked_reason or job_status[
+            job_id
+        ].get("professional_degraded_reason")
         if report_content and serialized_evidence is not None:
             try:
                 report_content, appendix_omitted = _append_professional_evidence(
@@ -631,6 +650,28 @@ async def process_research(
                     {
                         "type": "professional_data_degraded",
                         "reason": "provider_unavailable",
+                    }
+                )
+                serialized_evidence = None
+                professional_coverage_reason = "provider_unavailable"
+
+        if (
+            report_content
+            and serialized_evidence is None
+            and isinstance(professional_coverage_reason, str)
+        ):
+            coverage = render_professional_coverage_markdown(
+                professional_coverage_reason
+            )
+            report_content, coverage_appended = _append_professional_section(
+                report_content,
+                coverage,
+            )
+            if not coverage_appended:
+                job_status[job_id]["events"].append(
+                    {
+                        "type": "professional_data_degraded",
+                        "reason": "report_size_limit",
                     }
                 )
 

@@ -319,7 +319,8 @@ async def test_professional_failure_does_not_block_base_report(
         application.job_status.pop(job_id, None)
 
     assert state["status"] == "completed"
-    assert state["report"] == "基础 Web 报告"
+    assert state["report"].startswith("基础 Web 报告\n\n## 工商与司法专业数据")
+    assert "专业数据源暂时不可用" in state["report"]
     professional_events = [
         event
         for event in state["events"]
@@ -474,6 +475,8 @@ async def test_budget_blocked_event_still_completes_base_report(
         application.job_status.pop(job_id, None)
 
     assert state["status"] == "completed"
+    assert state["report"].startswith("基础 Web 报告\n\n## 工商与司法专业数据")
+    assert "专业数据预算已阻止本次采集" in state["report"]
     budget_event = next(
         event
         for event in state["events"]
@@ -542,7 +545,8 @@ async def test_hanging_professional_branch_times_out_without_blocking_report(
         application.job_status.pop(job_id, None)
 
     assert state["status"] == "completed"
-    assert state["report"] == "基础 Web 报告"
+    assert state["report"].startswith("基础 Web 报告\n\n## 工商与司法专业数据")
+    assert "专业数据源暂时不可用" in state["report"]
     await asyncio.wait_for(runtime.cancel_seen.wait(), timeout=1)
     assert runtime.cancel_seen.is_set()
     degraded_event = next(

@@ -18,6 +18,7 @@ from .models import (
 from .mongo_ledger import MongoLedgerUnavailable, MongoUsageLedger
 from .rendering import (
     MAX_PROFESSIONAL_APPENDIX_BYTES,
+    render_professional_coverage_markdown,
     render_professional_evidence_markdown,
 )
 from .runtime import CompanyIntelligenceRuntime
@@ -42,5 +43,6 @@ __all__ = [
     "ResolveResult",
     "UsageLedger",
     "requester_fingerprint",
+    "render_professional_coverage_markdown",
     "render_professional_evidence_markdown",
 ]
