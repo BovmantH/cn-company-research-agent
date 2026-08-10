@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Building2, Factory, Globe, Loader2, Search } from 'lucide-react';
 import LocationInput from './LocationInput';
 import ExamplePopup from './ExamplePopup';
-import type { ExampleCompany } from './ExamplePopup';
+import type { ExampleCompany } from './exampleCompanies';
 import ProfessionalDataOption from './ProfessionalDataOption';
 import type { CapabilityLoadState } from '../api/companyIntelligence';
 import type { ResearchFormValues } from '../research/model';

@@ -9,14 +9,29 @@ interface LocationInputProps {
 
 declare global {
   interface Window {
-    google: any;
+    google: typeof google;
     initGoogleMapsCallback: () => void;
   }
 }
 
+type PlaceSelectionEvent = Event & {
+  place?: { formattedAddress?: string };
+};
+
+type ModernAutocompleteElement = HTMLElement & {
+  addEventListener(
+    type: 'gmp-placeselect',
+    listener: (event: PlaceSelectionEvent) => void,
+  ): void;
+};
+
+type AutocompleteHandle =
+  | google.maps.places.Autocomplete
+  | ModernAutocompleteElement;
+
 const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteElementRef = useRef<any>(null);
+  const autocompleteElementRef = useRef<AutocompleteHandle | null>(null);
   const [isApiLoaded, setIsApiLoaded] = useState(false);
   const onChangeRef = useRef(onChange);
   const isInitializedRef = useRef(false);
@@ -100,7 +115,9 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
       // 优先使用新版组件，并兼容旧版自动补全 API
       if (window.google.maps.places.PlaceAutocompleteElement) {
         // 创建并配置新版 PlaceAutocompleteElement
-        const autocompleteElement = document.createElement('gmp-place-autocomplete');
+        const autocompleteElement = document.createElement(
+          'gmp-place-autocomplete',
+        ) as ModernAutocompleteElement;
         autocompleteElement.setAttribute('type', 'cities');
 
         // 用自动补全组件替换输入框
@@ -114,7 +131,7 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
           autocompleteElement.style.height = '100%';
 
           // 监听地点选择
-          autocompleteElement.addEventListener('gmp-placeselect', (event: any) => {
+          autocompleteElement.addEventListener('gmp-placeselect', (event) => {
             const place = event.place;
             if (place?.formattedAddress) {
               onChangeRef.current(place.formattedAddress);
@@ -200,6 +217,8 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
       console.error('初始化 Google 地图自动补全失败：', error);
     }
 
+    const inputElement = inputRef.current;
+
     // 清理自动补全资源
     return () => {
       if (autocompleteElementRef.current) {
@@ -209,8 +228,8 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
         } else if (autocompleteElementRef.current.remove) {
           // 清理新版自动补全组件
           autocompleteElementRef.current.remove();
-          if (inputRef.current) {
-            inputRef.current.style.display = '';
+          if (inputElement) {
+            inputElement.style.display = '';
           }
         }
         autocompleteElementRef.current = null;

@@ -85,10 +85,10 @@ const ResearchReport = ({
             rehypePlugins={[rehypeRaw]}
             remarkPlugins={[remarkGfm]}
             components={{
-              div: ({node, ...props}) => (
+              div: ({node: _node, ...props}) => (
                 <div className="space-y-4 text-gray-800" {...props} />
               ),
-              h1: ({node, children, ...props}) => {
+              h1: ({node: _node, children, ...props}) => {
                 const text = String(children);
                 // 第 5 组提示中文化后，LLM 输出的一级标题已改为
                 // "# {company} 调研报告",这里同步改为中文判断;
@@ -109,25 +109,25 @@ const ResearchReport = ({
                   </div>
                 );
               },
-              h2: ({node, ...props}) => (
+              h2: ({node: _node, ...props}) => (
                 <h2 className="text-3xl font-bold text-gray-900 first:mt-2 mt-8 mb-4" {...props} />
               ),
-              h3: ({node, ...props}) => (
+              h3: ({node: _node, ...props}) => (
                 <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3" {...props} />
               ),
-              p: ({node, children, ...props}) => {
+              p: ({node: _node, children, ...props}) => {
                 const text = String(children);
                 // 把以中/英文冒号结尾的短句当 h3 渲染(LLM 偶尔会忘记 ### 前缀)
                 const isSubsectionHeader = (
                   text.includes('\n') === false &&
                   text.length < 50 &&
-                  (text.endsWith(':') || text.endsWith(':') || /^[A-Z][A-Za-z\s\/]+$/.test(text))
+                  (text.endsWith(':') || text.endsWith('：') || /^[A-Z][A-Za-z\s/]+$/.test(text))
                 );
 
                 if (isSubsectionHeader) {
                   return (
                     <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3">
-                      {(text.endsWith(':') || text.endsWith(':')) ? text.slice(0, -1) : text}
+                      {(text.endsWith(':') || text.endsWith('：')) ? text.slice(0, -1) : text}
                     </h3>
                   );
                 }
@@ -169,13 +169,13 @@ const ResearchReport = ({
                 
                 return <p className="text-gray-800 my-2" {...props}>{children}</p>;
               },
-              ul: ({node, ...props}) => (
+              ul: ({node: _node, ...props}) => (
                 <ul className="text-gray-800 space-y-1 list-disc pl-6" {...props} />
               ),
-              li: ({node, ...props}) => (
+              li: ({node: _node, ...props}) => (
                 <li className="text-gray-800" {...props} />
               ),
-              a: ({node, href, ...props}) => (
+              a: ({node: _node, href, ...props}) => (
                 <a 
                   href={href}
                   className="text-[#468BFF] hover:text-[#8FBCFA] underline decoration-[#468BFF] hover:decoration-[#8FBCFA] cursor-pointer transition-colors" 
