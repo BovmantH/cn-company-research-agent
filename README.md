@@ -39,7 +39,7 @@
 |---|---|---|
 | 语言 | 英文 prompt + 英文 UI + 英文报告 | **中文** prompt + UI + 报告 |
 | Prompt 质量 | 英文(中文公司用英文 prompt 时模型偏向英文资料) | **人工重写而非机翻**,占位符与下游解析依赖的标题(`### 核心产品/服务` 等)同步迁移,对国产模型更友好 |
-| LLM provider | OpenAI(GPT 系列)+ Google(Gemini 系列)硬编码 | 统一 `LLMFactory.get_llm(role)`,**OpenCode Zen 免费优先 + 六家国产原厂 + OpenRouter / OpenAI 兼容兜底**；所有 Key 仅由部署者在服务端配置 |
+| LLM provider | OpenAI(GPT 系列)+ Google(Gemini 系列)硬编码 | 统一 `llm_factory.get_llm(role)`,**OpenCode Zen 免费优先 + 六家国产原厂 + OpenRouter / OpenAI 兼容兜底**；所有 Key 仅由部署者在服务端配置 |
 | 模型成本控制 | 无 | **`LLM_MAX_TOKENS` 兜底**避免 OpenRouter 按模型最大窗口预扣余额导致小余额账号 402 |
 | 检索层 | 直接调 Tavily 客户端,5 个文件分散调用 | **`SearchProvider` 抽象接口**,Tavily 收拢为默认 provider,新增 provider 无需改节点代码 |
 | 启动校验 | 缺 key 运行时报错 | **启动期校验**,中文报错并立即退出 |
@@ -61,7 +61,7 @@ flowchart TB
         API --> Graph
         Graph --> Pipeline["10 节点 DAG<br/>见下方流水线"]
     end
-    Pipeline --> LLM["LLMFactory.get_llm(role)<br/>(backend/services/llm_factory.py)"]
+    Pipeline --> LLM["llm_factory.get_llm(role)<br/>(backend/services/llm_factory.py)"]
     Pipeline --> Search["SearchProvider<br/>(backend/services/search/)"]
     LLM -.Zen 免费优先<br/>服务端选择与受控回退.-> Vendors
     Search --> Tavily[Tavily Search API]
@@ -119,7 +119,7 @@ flowchart LR
 
 ### 内容生成架构(三段式 LLM)
 
-不同节点对模型能力需求不同,本项目通过 `LLMFactory.get_llm(role)` 按角色绑定模型:
+不同节点对模型能力需求不同,本项目通过 `llm_factory.get_llm(role)` 按角色绑定模型:
 
 | Role | OpenCode / OpenRouter 默认 slug | 原厂直连默认 | 用在哪 |
 |---|---|---|---|
