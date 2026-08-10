@@ -10,9 +10,9 @@ from enum import StrEnum
 
 from .config import (
     DATA_CAPABILITIES,
+    TOOL_COST_CATALOG,
     CapabilityPolicy,
     ProfessionalDataSettings,
-    TOOL_COST_CATALOG,
 )
 from .ledger import (
     BudgetLimits,
@@ -35,7 +35,6 @@ from .tokens import (
     ResolutionTokenService,
     requester_fingerprint,
 )
-
 
 logger = logging.getLogger(__name__)
 

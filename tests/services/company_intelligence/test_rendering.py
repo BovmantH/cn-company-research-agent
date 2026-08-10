@@ -24,7 +24,6 @@ from backend.services.company_intelligence.rendering import (
     render_professional_evidence_markdown,
 )
 
-
 IDENTITY = CompanyIdentity(
     canonical_name="示例科技有限公司",
     credit_code="91320594MA1N00000X",

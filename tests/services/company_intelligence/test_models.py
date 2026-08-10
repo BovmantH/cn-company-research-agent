@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
+from backend.services.company_intelligence.config import DATA_CAPABILITIES
 from backend.services.company_intelligence.models import (
     CollectionStatus,
     CompanyIdentity,
@@ -16,7 +17,6 @@ from backend.services.company_intelligence.models import (
     ResolveResult,
     SourceMetadata,
 )
-from backend.services.company_intelligence.config import DATA_CAPABILITIES
 
 
 def _registration() -> RegistrationRecord:

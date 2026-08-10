@@ -1,7 +1,7 @@
 from backend.services.company_intelligence.config import (
+    FIXED_PLAN_WORST_CASE_POINTS,
     CapabilityPolicy,
     CapabilityReason,
-    FIXED_PLAN_WORST_CASE_POINTS,
     ProfessionalDataSettings,
 )
 

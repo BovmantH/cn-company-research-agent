@@ -6,18 +6,16 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from backend.services.search import (
     CrawledPage,
-    SearchResult,
     SearchProvider,
+    SearchResult,
     get_search_provider,
 )
-
 
 # === fixture: 把 TavilyProvider 内部的 AsyncTavilyClient 换成 mock ===
 

@@ -43,7 +43,6 @@ from langchain_openai import ChatOpenAI  # noqa: E402
 
 from backend.services.llm_factory import VENDOR_REGISTRY  # noqa: E402
 
-
 # 待 smoke test 通过后再合入 VENDOR_REGISTRY 的候选 vendor。
 # 已在 registry 中的 vendor 走 registry 的配置。
 # 这里的 base_url 是各家"官方"OpenAI 兼容端点;实际跑测试时可通过

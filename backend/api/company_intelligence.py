@@ -17,7 +17,6 @@ from backend.services.company_intelligence.resolution import (
 )
 from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
 
-
 router = APIRouter(tags=["company-intelligence"])
 
 

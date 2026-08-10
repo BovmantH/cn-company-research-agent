@@ -24,7 +24,6 @@ from backend.services.company_intelligence.mongo_ledger import (
     MongoUsageLedger,
 )
 
-
 T = TypeVar("T")
 pytestmark = pytest.mark.filterwarnings(
     "ignore:datetime.datetime.utcnow.*:DeprecationWarning"

@@ -2,19 +2,19 @@ import logging
 from typing import Dict
 
 from langchain_core.messages import AIMessage
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 from ..classes import ResearchState
 from ..classes.state import job_status
+from ..prompts import (
+    COMPILE_CONTENT_PROMPT,
+    CONTENT_SWEEP_PROMPT,
+    CONTENT_SWEEP_SYSTEM_MESSAGE,
+    EDITOR_SYSTEM_MESSAGE,
+)
 from ..services.llm_factory import get_llm
 from ..utils.references import format_references_section
-from ..prompts import (
-    EDITOR_SYSTEM_MESSAGE,
-    COMPILE_CONTENT_PROMPT,
-    CONTENT_SWEEP_SYSTEM_MESSAGE,
-    CONTENT_SWEEP_PROMPT,
-)
 
 logger = logging.getLogger(__name__)
 

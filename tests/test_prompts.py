@@ -37,7 +37,6 @@ from backend.prompts import (
     QUERY_FORMAT_GUIDELINES,
 )
 
-
 # === 占位符抽取工具 ===
 
 
@@ -252,4 +251,4 @@ def test_negative_instruction_preserved(prompt: str) -> None:
         "暂无数据",
     ]
     matched = [w for w in candidates if w in prompt]
-    assert matched, f"prompt 中找不到「未找到信息/暂无数据」类的否定指令"
+    assert matched, "prompt 中找不到「未找到信息/暂无数据」类的否定指令"

@@ -4,10 +4,9 @@
 只处理可审计的结构化企业事实、预算和 Provider 调用。
 """
 
-from .config import CapabilityPolicy, ProfessionalDataSettings
 from .collection import PreparationKind, ProfessionalPreparation
+from .config import CapabilityPolicy, ProfessionalDataSettings
 from .ledger import InMemoryUsageLedger, UsageLedger
-from .mongo_ledger import MongoLedgerUnavailable, MongoUsageLedger
 from .models import (
     CollectionStatus,
     CompanyIdentity,
@@ -16,11 +15,12 @@ from .models import (
     ResolveKind,
     ResolveResult,
 )
-from .runtime import CompanyIntelligenceRuntime
+from .mongo_ledger import MongoLedgerUnavailable, MongoUsageLedger
 from .rendering import (
     MAX_PROFESSIONAL_APPENDIX_BYTES,
     render_professional_evidence_markdown,
 )
+from .runtime import CompanyIntelligenceRuntime
 from .tokens import ResolutionTokenService, requester_fingerprint
 
 __all__ = [

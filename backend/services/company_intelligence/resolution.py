@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .config import CapabilityPolicy, ProfessionalDataSettings, TOOL_COST_CATALOG
+from .config import TOOL_COST_CATALOG, CapabilityPolicy, ProfessionalDataSettings
 from .ledger import (
     BudgetLimits,
     BudgetRequest,
@@ -19,7 +19,6 @@ from .ledger import (
 from .models import CompanyIdentity, ResolveKind, StrictModel
 from .provider import CompanyIntelligenceProvider
 from .tokens import ResolutionTokenService, requester_fingerprint
-
 
 logger = logging.getLogger(__name__)
 

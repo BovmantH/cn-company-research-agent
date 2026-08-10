@@ -13,8 +13,8 @@ from backend.services.company_intelligence.collection import (
 from backend.services.company_intelligence.config import (
     DATA_CAPABILITIES,
     FIXED_PLAN_WORST_CASE_POINTS,
-    ProfessionalDataSettings,
     TOOL_COST_CATALOG,
+    ProfessionalDataSettings,
 )
 from backend.services.company_intelligence.ledger import InMemoryUsageLedger
 from backend.services.company_intelligence.models import (

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Mapping
 
-
 REQUIRED_CAPABILITIES: tuple[str, ...] = (
     "identity.resolve",
     "company.registration",

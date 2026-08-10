@@ -23,7 +23,6 @@ from .models import (
     ShareholderRecord,
 )
 
-
 _CAPABILITY_TITLES = {
     "company.registration": "工商登记",
     "company.shareholders": "股东信息",

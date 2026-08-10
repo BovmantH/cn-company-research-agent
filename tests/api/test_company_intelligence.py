@@ -19,8 +19,8 @@ from backend.services.company_intelligence.models import (
 from backend.services.company_intelligence.provider import (
     FakeCompanyIntelligenceProvider,
 )
-from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
 from backend.services.company_intelligence.resolution import ResolutionInProgress
+from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
 
 
 def _settings(**overrides: str) -> ProfessionalDataSettings:

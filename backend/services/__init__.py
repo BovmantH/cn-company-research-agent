@@ -8,9 +8,9 @@
 
 from .llm_factory import get_llm
 from .search import (
+    CrawledPage,
     SearchProvider,
     SearchResult,
-    CrawledPage,
     get_search_provider,
 )
 

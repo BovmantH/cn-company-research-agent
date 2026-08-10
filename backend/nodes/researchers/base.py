@@ -7,10 +7,10 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from ...classes import ResearchState
 from ...classes.state import job_status
+from ...prompts import QUERY_FORMAT_GUIDELINES
 from ...services.llm_factory import get_llm
 from ...services.search import SearchResult, get_search_provider
 from ...utils.references import clean_title
-from ...prompts import QUERY_FORMAT_GUIDELINES
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +245,7 @@ class BaseResearcher:
 
         # Process and merge results
         merged_docs: Dict[str, Dict[str, Any]] = {}
-        for query, result in zip(queries, results):
+        for query, result in zip(queries, results, strict=True):
             if isinstance(result, Exception):
                 logger.error(
                     "Search failed for query, exception_type=%s",

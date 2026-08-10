@@ -12,7 +12,6 @@ from backend.services.company_intelligence.ledger import (
     operation_fingerprint,
 )
 
-
 FULL_PLAN = tuple(DATA_CAPABILITIES)
 
 

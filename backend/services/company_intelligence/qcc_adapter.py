@@ -8,7 +8,6 @@ from pydantic import ValidationError
 
 from .models import CompanyIdentity, ResolveKind, ResolveResult
 
-
 _MISSING = object()
 _SUCCESS_STATUSES = frozenset({"200", "ok", "success", "succeeded"})
 

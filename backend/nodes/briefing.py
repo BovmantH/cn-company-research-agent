@@ -2,19 +2,19 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Union
 
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 from ..classes import ResearchState
 from ..classes.state import job_status
-from ..services.llm_factory import get_llm
 from ..prompts import (
-    COMPANY_BRIEFING_PROMPT,
-    INDUSTRY_BRIEFING_PROMPT,
-    FINANCIAL_BRIEFING_PROMPT,
-    NEWS_BRIEFING_PROMPT,
     BRIEFING_ANALYSIS_INSTRUCTION,
+    COMPANY_BRIEFING_PROMPT,
+    FINANCIAL_BRIEFING_PROMPT,
+    INDUSTRY_BRIEFING_PROMPT,
+    NEWS_BRIEFING_PROMPT,
 )
+from ..services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 

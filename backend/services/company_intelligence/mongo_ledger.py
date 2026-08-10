@@ -25,7 +25,6 @@ from .ledger import (
     utc_day,
 )
 
-
 T = TypeVar("T")
 TransactionRunner = Callable[[Callable[[Any], T]], T]
 MAJORITY_WRITE_CONCERN = WriteConcern("majority")
