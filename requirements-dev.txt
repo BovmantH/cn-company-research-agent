@@ -2,7 +2,7 @@
 # 安装：uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
 # 验证：ruff format --check . && ruff check . && pytest
 
-pytest==8.3.4
+pytest==9.1.1
 pytest-asyncio==0.25.0
 pytest-mock==3.14.0
 mongomock==4.3.0
