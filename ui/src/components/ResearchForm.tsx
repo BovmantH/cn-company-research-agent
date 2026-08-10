@@ -3,17 +3,17 @@ import { Building2, Factory, Globe, Loader2, Search } from 'lucide-react';
 import LocationInput from './LocationInput';
 import ExamplePopup from './ExamplePopup';
 import type { ExampleCompany } from './ExamplePopup';
-
-interface FormData {
-  companyName: string;
-  companyUrl: string;
-  companyHq: string;
-  companyIndustry: string;
-}
+import ProfessionalDataOption from './ProfessionalDataOption';
+import type { CapabilityLoadState } from '../api/companyIntelligence';
+import type { ResearchFormValues } from '../research/model';
 
 interface ResearchFormProps {
-  onSubmit: (formData: FormData) => Promise<void>;
-  isResearching: boolean;
+  onSubmit: (formData: ResearchFormValues) => Promise<void>;
+  isBusy: boolean;
+  busyLabel: string;
+  capabilityState: CapabilityLoadState;
+  professionalDataRequested: boolean;
+  onProfessionalDataChange: (requested: boolean) => void;
   glassStyle: {
     card: string;
     input: string;
@@ -23,11 +23,18 @@ interface ResearchFormProps {
 
 const ResearchForm = ({
   onSubmit,
-  isResearching,
+  isBusy,
+  busyLabel,
+  capabilityState,
+  professionalDataRequested,
+  onProfessionalDataChange,
   glassStyle,
   loaderColor
 }: ResearchFormProps) => {
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<Omit<
+    ResearchFormValues,
+    'professionalDataRequested'
+  >>({
     companyName: "",
     companyUrl: "",
     companyHq: "",
@@ -51,9 +58,21 @@ const ResearchForm = ({
     }
   }, [formData.companyName, isExampleAnimating]);
 
+  useEffect(() => {
+    const available = capabilityState.status === 'ready'
+      && capabilityState.capability.enabled;
+    if (!available && professionalDataRequested) {
+      onProfessionalDataChange(false);
+    }
+  }, [
+    capabilityState,
+    onProfessionalDataChange,
+    professionalDataRequested,
+  ]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(formData);
+    await onSubmit({ ...formData, professionalDataRequested });
   };
   
   const fillExampleData = (example: ExampleCompany) => {
@@ -77,6 +96,7 @@ const ResearchForm = ({
     // Fill in form data after a short delay for animation
     setTimeout(() => {
       const newFormData = {
+        ...formData,
         companyName: example.name,
         companyUrl: example.url,
         companyHq: example.hq,
@@ -87,8 +107,8 @@ const ResearchForm = ({
       setFormData(newFormData);
       
       // Start research automatically (only if not already researching)
-      if (!isResearching) {
-        onSubmit(newFormData);
+      if (!isBusy) {
+        onSubmit({ ...newFormData, professionalDataRequested });
       }
       
       setIsExampleAnimating(false);
@@ -108,7 +128,8 @@ const ResearchForm = ({
       {/* Main Form */}
       <div className={`${glassStyle.card} backdrop-blur-2xl bg-white/90 border-gray-200/50 shadow-xl`}>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <fieldset disabled={isBusy} className="space-y-6 disabled:opacity-75">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Company Name */}
             <div className="relative group">
               <label
@@ -210,19 +231,27 @@ const ResearchForm = ({
                 />
               </div>
             </div>
-          </div>
+            </div>
+
+            <ProfessionalDataOption
+              capabilityState={capabilityState}
+              checked={professionalDataRequested}
+              disabled={isBusy}
+              onChange={onProfessionalDataChange}
+            />
+          </fieldset>
 
           <button
             type="submit"
-            disabled={isResearching || !formData.companyName}
+            disabled={isBusy || !formData.companyName}
             className="relative group w-fit mx-auto block overflow-hidden rounded-lg bg-white/80 backdrop-blur-sm border border-gray-200 transition-all duration-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed px-12 font-['DM_Sans']"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-gray-50/0 via-gray-100/50 to-gray-50/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
             <div className="relative flex items-center justify-center py-3.5">
-              {isResearching ? (
+              {isBusy ? (
                 <>
                   <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5 loader-icon" style={{ stroke: loaderColor }} />
-                  <span className="text-base font-medium text-gray-900/90">调研中……</span>
+                  <span className="text-base font-medium text-gray-900/90">{busyLabel}</span>
                 </>
               ) : (
                 <>

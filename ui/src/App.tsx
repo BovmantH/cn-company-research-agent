@@ -6,7 +6,8 @@ import {
   ResearchForm,
   ResearchQueries,
   CurationExtraction,
-  ResearchBriefings
+  ResearchBriefings,
+  CompanyResolutionPanel,
 } from './components';
 import { glassStyle, fadeInAnimation } from './styles';
 import {
@@ -15,10 +16,20 @@ import {
   parseResearchSsePayload,
   researchStreamReducer,
 } from './research/researchStreamReducer';
+import type { ResearchFormValues } from './research/model';
+import {
+  buildResearchRequest,
+  parseResearchAcceptedResponse,
+} from './research/researchRequest';
+import {
+  useProfessionalResearchFlow,
+  type PreparedResearch,
+} from './research/useProfessionalResearchFlow';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 function App() {
+  const professionalFlow = useProfessionalResearchFlow(API_URL);
   const [researchState, dispatchResearch] = useReducer(
     researchStreamReducer,
     undefined,
@@ -37,6 +48,15 @@ function App() {
   } = researchState;
   const isResearching = researchState.lifecycle === 'running';
   const isComplete = researchState.lifecycle === 'completed';
+  const isResolvingCompany = professionalFlow.flowState.status === 'resolving';
+  const needsCompanyDecision = professionalFlow.flowState.status === 'candidates'
+    || professionalFlow.flowState.status === 'fallback';
+  const isFormBusy = isResearching || isResolvingCompany || needsCompanyDecision;
+  const formBusyLabel = isResearching
+    ? '调研中……'
+    : isResolvingCompany
+      ? '正在核对主体……'
+      : '等待主体确认……';
   const visibleStatus = researchState.connection === 'reconnecting'
     ? { step: '连接恢复中', message: '进度连接中断，正在自动重连……' }
     : status;
@@ -46,6 +66,7 @@ function App() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [professionalDataRequested, setProfessionalDataRequested] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
   const [isQueriesExpanded, setIsQueriesExpanded] = useState(true);
   const [isEnrichmentExpanded, setIsEnrichmentExpanded] = useState(true);
@@ -187,20 +208,11 @@ function App() {
     };
   }, []);
 
-  // Create a custom handler for the form that receives form data
-  const handleFormSubmit = async (formData: {
-    companyName: string;
-    companyUrl: string;
-    companyHq: string;
-    companyIndustry: string;
-  }) => {
-
-    // If research is complete, reset the UI first
-    if (isComplete) {
-      resetResearch();
-      await new Promise(resolve => setTimeout(resolve, 300)); // Wait for reset animation
-    }
-
+  /** 提交已确认的基础/专业调研；关闭专业数据时保持旧请求体完全不变。 */
+  const startResearch = async ({
+    values,
+    resolutionToken,
+  }: PreparedResearch): Promise<void> => {
     // Clear any existing SSE connection
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -209,24 +221,12 @@ function App() {
 
     lastHandledEventIdRef.current = 0;
     dispatchResearch({ type: 'start' });
-    setOriginalCompanyName(formData.companyName);
+    setOriginalCompanyName(values.companyName);
 
     try {
       const url = `${API_URL}/research`;
 
-      // Format the company URL if provided
-      const formattedCompanyUrl = formData.companyUrl
-        ? formData.companyUrl.startsWith('http://') || formData.companyUrl.startsWith('https://')
-          ? formData.companyUrl
-          : `https://${formData.companyUrl}`
-        : undefined;
-
-      const requestData = {
-        company: formData.companyName,
-        company_url: formattedCompanyUrl,
-        industry: formData.companyIndustry || undefined,
-        hq_location: formData.companyHq || undefined,
-      };
+      const requestData = buildResearchRequest(values, resolutionToken);
 
       const response = await fetch(url, {
         method: "POST",
@@ -243,10 +243,11 @@ function App() {
         throw new Error(`HTTP 请求失败,状态码:${response.status}`);
       }
 
-      const data = await response.json();
+      const accepted = parseResearchAcceptedResponse(await response.json() as unknown);
 
-      if (data.job_id) {
-        streamResults(data.job_id);
+      if (accepted) {
+        professionalFlow.markResearchAccepted(accepted.professionalData);
+        streamResults(accepted.jobId);
       } else {
         throw new Error("未收到任务 ID");
       }
@@ -255,6 +256,30 @@ function App() {
         type: 'submit_failed',
         message: err instanceof Error ? err.message : "启动调研失败",
       });
+    }
+  };
+
+  const handleFormSubmit = async (
+    formData: ResearchFormValues,
+  ): Promise<void> => {
+    if (isComplete) {
+      resetResearch();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    const outcome = await professionalFlow.prepare(formData);
+    if (outcome.kind === 'ready') await startResearch(outcome.prepared);
+  };
+
+  const handleCandidateSelect = (viewId: string) => {
+    const prepared = professionalFlow.selectCandidate(viewId);
+    if (prepared) void startResearch(prepared);
+  };
+
+  const handleContinueBasic = () => {
+    const prepared = professionalFlow.continueBasic();
+    if (prepared) {
+      setProfessionalDataRequested(false);
+      void startResearch(prepared);
     }
   };
 
@@ -334,10 +359,23 @@ function App() {
         {/* Form Section */}
         <ResearchForm 
           onSubmit={handleFormSubmit}
-          isResearching={isResearching}
+          isBusy={isFormBusy}
+          busyLabel={formBusyLabel}
+          capabilityState={professionalFlow.capabilityState}
+          professionalDataRequested={professionalDataRequested}
+          onProfessionalDataChange={setProfessionalDataRequested}
           glassStyle={glassStyle}
           loaderColor={loaderColor}
         />
+
+        {needsCompanyDecision && (
+          <CompanyResolutionPanel
+            flow={professionalFlow.flowState}
+            onSelect={handleCandidateSelect}
+            onContinueBasic={handleContinueBasic}
+            onCancel={professionalFlow.cancel}
+          />
+        )}
 
         {/* Error Message */}
         {error && (
