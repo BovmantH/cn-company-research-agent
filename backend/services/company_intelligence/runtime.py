@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -20,6 +21,8 @@ from .models import ProfessionalEvidence
 from .mongo_ledger import MongoUsageLedger
 from .provider import CompanyIntelligenceProvider
 from .resolution import CompanyResolutionService, PublicResolution
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -43,8 +46,13 @@ class CompanyIntelligenceRuntime:
         cls, env: Mapping[str, str] | None = None
     ) -> CompanyIntelligenceRuntime:
         """创建默认运行时；内存账本不满足生产付费能力的持久化要求。"""
+        settings = ProfessionalDataSettings.from_env(env)
+        if settings.allow_unsafe_memory_ledger:
+            logger.warning(
+                "已允许使用危险的内存专业数据账本；重启会重置预算，不可用于公开部署"
+            )
         return cls(
-            settings=ProfessionalDataSettings.from_env(env),
+            settings=settings,
             ledger=InMemoryUsageLedger(),
         )
 

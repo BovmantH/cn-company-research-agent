@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 import backend.services.company_intelligence.runtime as runtime_module
@@ -19,6 +21,17 @@ from backend.services.company_intelligence.runtime import (
 
 class PersistentLedgerStub:
     persistent = True
+
+
+def test_unsafe_memory_ledger_emits_startup_warning(caplog) -> None:
+    with caplog.at_level(
+        logging.WARNING,
+        logger="backend.services.company_intelligence.runtime",
+    ):
+        CompanyIntelligenceRuntime.from_env({"QCC_ALLOW_UNSAFE_MEMORY_LEDGER": "true"})
+
+    assert "重启会重置预算" in caplog.text
+    assert "不可用于公开部署" in caplog.text
 
 
 def test_configure_mongo_ledger_replaces_memory_only_after_success(
