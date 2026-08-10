@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 import application
 from backend.services.llm_factory import get_llm_credential_candidates
 
-
 PROJECT_ROOT = Path(__file__).parents[1]
 
 
