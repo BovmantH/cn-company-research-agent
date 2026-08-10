@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import Dict, List
 
 from langchain_core.messages import AIMessage
 
@@ -19,7 +18,7 @@ class Enricher:
         self.search = get_search_provider()
         self.batch_size = 20
 
-    async def fetch_single_content(self, url: str) -> Dict[str, str]:
+    async def fetch_single_content(self, url: str) -> dict[str, str]:
         """抓取单个 URL 的正文内容。"""
         try:
             pages = await self.search.extract([url])
@@ -34,7 +33,7 @@ class Enricher:
             return {url: ""}
         return {url: ""}
 
-    async def fetch_raw_content(self, urls: List[str]) -> Dict[str, str]:
+    async def fetch_raw_content(self, urls: list[str]) -> dict[str, str]:
         """在限流约束下并行抓取多个 URL 的正文。"""
         raw_contents = {}
 
@@ -46,7 +45,7 @@ class Enricher:
         # 在限流约束下处理批次
         semaphore = asyncio.Semaphore(3)  # 并发批次最多为 3
 
-        async def process_batch(batch_urls: List[str]) -> Dict[str, str]:
+        async def process_batch(batch_urls: list[str]) -> dict[str, str]:
             async with semaphore:
                 tasks = [self.fetch_single_content(url) for url in batch_urls]
                 results = await asyncio.gather(*tasks)

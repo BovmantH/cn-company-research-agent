@@ -25,7 +25,6 @@ import asyncio
 import os
 import sys
 from dataclasses import dataclass
-from typing import Optional
 
 # 让脚本能从仓库根目录直接跑
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -74,7 +73,7 @@ class TestResult:
 
 
 def _make_client(
-    vendor: str, *, streaming: bool, max_tokens: Optional[int] = None
+    vendor: str, *, streaming: bool, max_tokens: int | None = None
 ) -> tuple[ChatOpenAI, str]:
     """构造 ChatOpenAI，根据供应商来源从注册表或候选配置中取值。
 

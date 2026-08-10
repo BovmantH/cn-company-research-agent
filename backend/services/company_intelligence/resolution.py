@@ -46,7 +46,7 @@ class PublicResolution(StrictModel):
     reason: str | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
-    def enforce_shape(self) -> "PublicResolution":
+    def enforce_shape(self) -> PublicResolution:
         """保证公开状态与主体字段互斥，避免前端误用残留候选数据。"""
         if self.kind == ResolveKind.EXACT and (
             self.identity is None or self.candidates

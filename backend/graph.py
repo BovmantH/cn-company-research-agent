@@ -1,5 +1,6 @@
 import logging
-from typing import Any, AsyncIterator, Dict
+from collections.abc import AsyncIterator
+from typing import Any
 
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph
@@ -90,7 +91,7 @@ class Graph:
         self.workflow.add_edge("enricher", "briefing")
         self.workflow.add_edge("briefing", "editor")
 
-    async def run(self, thread: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
+    async def run(self, thread: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
         """执行调研工作流。"""
         compiled_graph = self.workflow.compile()
 

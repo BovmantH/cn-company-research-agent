@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-from typing import Dict, List
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -261,7 +260,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
         raise RuntimeError("PDF 渲染失败") from exc
 
 
-def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) -> List:
+def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: dict) -> list:
     """将 Markdown 字符串转换为 ReportLab Flowable 元素列表。
 
     该辅助函数独立于 generate_pdf_from_md。

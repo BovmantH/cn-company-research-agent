@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -71,7 +71,7 @@ class ResolutionTokenService:
         now: datetime | None = None,
     ) -> str:
         """签发与请求方绑定的短期主体凭证，避免前端伪造权威主体字段。"""
-        issued_at = int((now or datetime.now(timezone.utc)).timestamp())
+        issued_at = int((now or datetime.now(UTC)).timestamp())
         claims = ResolutionClaims(
             jti=uuid.uuid4().hex,
             requester_id=requester_id,
@@ -121,7 +121,7 @@ class ResolutionTokenService:
         except (ValueError, ValidationError) as exc:
             raise ResolutionTokenError("invalid_payload") from exc
 
-        current = int((now or datetime.now(timezone.utc)).timestamp())
+        current = int((now or datetime.now(UTC)).timestamp())
         if claims.exp <= current:
             raise ResolutionTokenError("expired_token")
         if claims.iat > current + 30:

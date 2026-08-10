@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from pymongo.database import Database
 
@@ -40,7 +41,7 @@ class CompanyIntelligenceRuntime:
     @classmethod
     def from_env(
         cls, env: Mapping[str, str] | None = None
-    ) -> "CompanyIntelligenceRuntime":
+    ) -> CompanyIntelligenceRuntime:
         """创建默认运行时；内存账本不满足生产付费能力的持久化要求。"""
         return cls(
             settings=ProfessionalDataSettings.from_env(env),

@@ -7,8 +7,9 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any, TypeVar
 
 from pymongo import ASCENDING, ReadPreference
 from pymongo.database import Database
@@ -60,7 +61,7 @@ class MongoUsageLedger:
             "company_intelligence_consumed_tokens",
             write_concern=MAJORITY_WRITE_CONCERN,
         )
-        self._now_factory = now_factory or (lambda: datetime.now(timezone.utc))
+        self._now_factory = now_factory or (lambda: datetime.now(UTC))
         self._pass_session = transaction_runner is None
         self._transaction_runner = transaction_runner or self._run_transaction
 
@@ -122,7 +123,7 @@ class MongoUsageLedger:
         value = self._now_factory()
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("now_factory 必须返回带时区的时间")
-        return value.astimezone(timezone.utc)
+        return value.astimezone(UTC)
 
     @staticmethod
     def _idempotency_hash(value: str) -> str:
@@ -295,9 +296,7 @@ class MongoUsageLedger:
                         "_id": token_id,
                         "schema_version": 1,
                         "consumed_at": now,
-                        "expires_at": datetime.fromtimestamp(
-                            token_expires_at, tz=timezone.utc
-                        ),
+                        "expires_at": datetime.fromtimestamp(token_expires_at, tz=UTC),
                     },
                     **session_kwargs,
                 )
@@ -469,7 +468,7 @@ class MongoUsageLedger:
                     "_id": token_id,
                     "schema_version": 1,
                     "consumed_at": now,
-                    "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc),
+                    "expires_at": datetime.fromtimestamp(expires_at, tz=UTC),
                 }
             )
         except DuplicateKeyError:

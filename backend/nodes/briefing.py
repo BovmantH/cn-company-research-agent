@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict, List, Union
+from typing import Any
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -42,9 +42,7 @@ class Briefing:
             "Create a focused, informative and insightful research briefing on the company: {company} in the {industry} industry based on the provided documents.",
         )
 
-    def _prepare_documents(
-        self, docs: Union[Dict[str, Any], List[Dict[str, Any]]]
-    ) -> str:
+    def _prepare_documents(self, docs: dict[str, Any] | list[dict[str, Any]]) -> str:
         """为生成简报准备并格式化文档。"""
         # 将文档规范化为 (url, doc) 元组列表
         items = (
@@ -82,9 +80,9 @@ class Briefing:
 
     async def generate_category_briefing(
         self,
-        docs: Union[Dict[str, Any], List[Dict[str, Any]]],
+        docs: dict[str, Any] | list[dict[str, Any]],
         category: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ):
         """生成类别简报并持续产出事件。"""
         company = context.get("company", "未知公司")
@@ -239,7 +237,7 @@ class Briefing:
         if briefing_tasks:
             briefing_semaphore = asyncio.Semaphore(2)  # 最多并发生成 2 份简报
 
-            async def process_briefing(task: Dict[str, Any]) -> Dict[str, Any]:
+            async def process_briefing(task: dict[str, Any]) -> dict[str, Any]:
                 """在限流约束下生成单份简报。"""
                 async with briefing_semaphore:
                     result = {"content": ""}

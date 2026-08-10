@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -35,7 +35,7 @@ class BaseResearcher:
     def analyst_type(self, value: str):
         self._analyst_type = value
 
-    async def generate_queries(self, state: Dict, prompt: str):
+    async def generate_queries(self, state: dict, prompt: str):
         """生成搜索词，并在生成过程中持续产出事件。"""
         company = state.get("company", "未知公司")
         industry = state.get("industry", "未知行业")
@@ -174,7 +174,7 @@ class BaseResearcher:
             )
             raise RuntimeError("严重 API 错误：查询词生成失败") from None
 
-    def _get_search_params(self) -> Dict[str, Any]:
+    def _get_search_params(self) -> dict[str, Any]:
         """根据分析器类型生成搜索参数。
 
         ``max_results`` 是 ``SearchProvider.search`` 的显式参数,其余字段
@@ -198,7 +198,7 @@ class BaseResearcher:
 
     def _process_search_result(
         self, result: SearchResult, query: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """把单条 ``SearchResult`` 标准化为下游节点期望的 dict 形态。"""
         if not result.content or not result.url:
             return {}
@@ -219,7 +219,7 @@ class BaseResearcher:
             "score": result.score,
         }
 
-    async def search_documents(self, state: ResearchState, queries: List[str]):
+    async def search_documents(self, state: ResearchState, queries: list[str]):
         """通过 SearchProvider 并行执行所有查询并 yield 进度事件。"""
         if not queries:
             logger.error("没有可执行的有效查询词")
@@ -251,7 +251,7 @@ class BaseResearcher:
             return
 
         # 处理并合并搜索结果
-        merged_docs: Dict[str, Dict[str, Any]] = {}
+        merged_docs: dict[str, dict[str, Any]] = {}
         for query, result in zip(queries, results, strict=True):
             if isinstance(result, Exception):
                 logger.error(

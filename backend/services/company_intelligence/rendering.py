@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .config import DATA_CAPABILITIES
 from .models import (
@@ -195,7 +195,7 @@ def _format_value(value: object) -> str:
 
 
 def _format_time(value: datetime) -> str:
-    normalized = value.astimezone(timezone.utc)
+    normalized = value.astimezone(UTC)
     return normalized.strftime("%Y-%m-%d %H:%M:%S UTC")
 
 

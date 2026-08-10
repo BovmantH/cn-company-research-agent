@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx2
@@ -281,7 +281,7 @@ class QccMcpClientPool:
             if stack is not None:
                 await stack.aclose()
 
-    async def __aenter__(self) -> "QccMcpClientPool":
+    async def __aenter__(self) -> QccMcpClientPool:
         await self.initialize()
         return self
 

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import threading
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypeVar
+from datetime import UTC, datetime, timedelta
+from typing import Any, TypeVar
 
 import mongomock
 import pytest
@@ -30,7 +31,7 @@ pytestmark = pytest.mark.filterwarnings(
 )
 FULL_PLAN = tuple(DATA_CAPABILITIES)
 FULL_PLAN_POINTS = sum(TOOL_COST_CATALOG[name] for name in FULL_PLAN)
-NOW = datetime(2026, 8, 9, 12, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 9, 12, tzinfo=UTC)
 LIMITS = BudgetLimits(
     max_points_per_job=220,
     max_calls_per_job=11,
@@ -300,7 +301,7 @@ def test_only_requester_counter_expires_after_48_hours(ledger_pair) -> None:
 
 def test_token_is_consumed_once_across_instances(ledger_pair) -> None:
     first_ledger, second_ledger = ledger_pair
-    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
 
     assert first_ledger.consume_token("token-id", expires_at) is True
     assert second_ledger.consume_token("token-id", expires_at) is False
@@ -311,7 +312,7 @@ def test_reserve_with_token_is_atomic_and_replayable_across_instances(
 ) -> None:
     first_ledger, second_ledger = ledger_pair
     token_id = "d" * 32
-    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
 
     first = first_ledger.reserve_with_token(
         _request("professional-token", "job-1"),
@@ -336,7 +337,7 @@ def test_reserve_with_token_is_atomic_and_replayable_across_instances(
 def test_same_token_cannot_reserve_two_jobs_across_instances(ledger_pair) -> None:
     first_ledger, second_ledger = ledger_pair
     token_id = "e" * 32
-    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
     barrier = threading.Barrier(2)
 
     def reserve(index: int):

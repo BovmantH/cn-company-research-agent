@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.services.company_intelligence.config import DATA_CAPABILITIES
 from backend.services.company_intelligence.models import (
@@ -33,7 +33,7 @@ IDENTITY = CompanyIdentity(
     provider_subject_id="internal-provider-id",
     original_query="用户原始查询",
 )
-QUERIED_AT = datetime(2026, 8, 10, 1, 2, 3, tzinfo=timezone.utc)
+QUERIED_AT = datetime(2026, 8, 10, 1, 2, 3, tzinfo=UTC)
 
 
 def _source(capability: str, status: CollectionStatus) -> SourceMetadata:
@@ -62,7 +62,7 @@ def _evidence(
     return ProfessionalEvidence(
         identity=IDENTITY,
         collections=collections,
-        generated_at=datetime(2026, 8, 10, 2, 3, 4, tzinfo=timezone.utc),
+        generated_at=datetime(2026, 8, 10, 2, 3, 4, tzinfo=UTC),
     )
 
 

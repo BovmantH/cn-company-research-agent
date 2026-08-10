@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping
 
 REQUIRED_CAPABILITIES: tuple[str, ...] = (
     "identity.resolve",
@@ -77,9 +77,7 @@ class ProfessionalDataSettings:
     allow_unsafe_memory_ledger: bool
 
     @classmethod
-    def from_env(
-        cls, env: Mapping[str, str] | None = None
-    ) -> "ProfessionalDataSettings":
+    def from_env(cls, env: Mapping[str, str] | None = None) -> ProfessionalDataSettings:
         """读取部署配置；任何非法数值都会在能力判定阶段按关闭处理。"""
         source = os.environ if env is None else env
 

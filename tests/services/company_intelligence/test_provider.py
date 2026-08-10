@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -38,7 +38,7 @@ async def test_fake_provider_is_deterministic_and_auditable() -> None:
             server="qcc-company",
             capability="company.registration",
             queried_subject=identity.credit_code,
-            queried_at=datetime.now(timezone.utc),
+            queried_at=datetime.now(UTC),
             status=CollectionStatus.SUCCEEDED_EMPTY,
         ),
     )

@@ -8,17 +8,18 @@ import json
 import re
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Callable, Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from .config import DATA_CAPABILITIES, TOOL_COST_CATALOG
 
 
 def utc_day(now: datetime | None = None) -> str:
-    value = now or datetime.now(timezone.utc)
-    return value.astimezone(timezone.utc).date().isoformat()
+    value = now or datetime.now(UTC)
+    return value.astimezone(UTC).date().isoformat()
 
 
 def operation_fingerprint(value: str) -> str:
@@ -170,7 +171,7 @@ class InMemoryUsageLedger:
         self._reservations: dict[str, dict[str, object]] = {}
         self._idempotency: dict[tuple[str, str], str] = {}
         self._consumed_tokens: dict[str, int] = {}
-        self._now_factory = now_factory or (lambda: datetime.now(timezone.utc))
+        self._now_factory = now_factory or (lambda: datetime.now(UTC))
 
     def reserve(
         self, request: BudgetRequest, limits: BudgetLimits
@@ -336,7 +337,7 @@ class InMemoryUsageLedger:
 
     def consume_token(self, token_id: str, expires_at: int) -> bool:
         """原子记录一次性 Token；过期或已经消费时返回 False。"""
-        now = int(datetime.now(timezone.utc).timestamp())
+        now = int(datetime.now(UTC).timestamp())
         with self._lock:
             self._consumed_tokens = {
                 key: exp for key, exp in self._consumed_tokens.items() if exp >= now

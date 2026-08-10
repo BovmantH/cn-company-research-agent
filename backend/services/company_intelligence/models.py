@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -12,14 +12,14 @@ from .config import DATA_CAPABILITIES
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     @model_validator(mode="after")
-    def reject_control_characters_in_text(self) -> "StrictModel":
+    def reject_control_characters_in_text(self) -> StrictModel:
         """拒绝可能破坏日志、SSE 或确定性报告结构的控制字符。"""
         for field_name in type(self).model_fields:
             value = getattr(self, field_name)
@@ -246,7 +246,7 @@ class EvidenceCollection(StrictModel):
     )
 
     @model_validator(mode="after")
-    def enforce_status_semantics(self) -> "EvidenceCollection":
+    def enforce_status_semantics(self) -> EvidenceCollection:
         """保证状态、记录类型和来源元数据符合该逻辑能力的固定契约。"""
         contract = CAPABILITY_CONTRACTS.get(self.capability)
         if contract is None:
@@ -325,7 +325,7 @@ class ProfessionalEvidence(StrictModel):
     schema_version: Literal["1"] = "1"
 
     @model_validator(mode="after")
-    def require_complete_coverage(self) -> "ProfessionalEvidence":
+    def require_complete_coverage(self) -> ProfessionalEvidence:
         """要求每个必需能力都有明确结果，包括失败、空结果和未请求状态。"""
         expected = set(DATA_CAPABILITIES)
         if set(self.collections) != expected:
@@ -349,7 +349,7 @@ class ResolveResult(StrictModel):
     reason_code: str | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
-    def enforce_resolve_shape(self) -> "ResolveResult":
+    def enforce_resolve_shape(self) -> ResolveResult:
         """限制不同解析结果可携带的主体数量，并拒绝重复候选。"""
         if self.kind == ResolveKind.EXACT and len(self.identities) != 1:
             raise ValueError("exact 必须且只能返回一个主体")

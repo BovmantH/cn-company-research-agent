@@ -48,7 +48,7 @@ class FakeCollection:
 
 
 class FakeMongoClient:
-    instance: "FakeMongoClient | None" = None
+    instance: FakeMongoClient | None = None
     admin_error: Exception | None = None
 
     def __init__(self, uri: str, **options: Any) -> None:

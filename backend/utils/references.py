@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -138,8 +138,8 @@ def extract_website_name_from_domain(domain: str) -> str:
 
 
 def process_references_from_search_results(
-    state: Dict[str, Any],
-) -> Tuple[List[str], Dict[str, str], Dict[str, Dict[str, Any]]]:
+    state: dict[str, Any],
+) -> tuple[list[str], dict[str, str], dict[str, dict[str, Any]]]:
     """处理搜索结果中的引用，并返回优先引用、标题和附加信息。"""
     all_top_references = []
 
@@ -273,7 +273,7 @@ def process_references_from_search_results(
     return top_reference_urls, reference_titles, reference_info
 
 
-def format_reference_for_markdown(reference_entry: Dict[str, Any]) -> str:
+def format_reference_for_markdown(reference_entry: dict[str, Any]) -> str:
     """为 Markdown 输出格式化一条引用。"""
     website = reference_entry.get("website", "")
     title = reference_entry.get("title", "")
@@ -339,9 +339,9 @@ def extract_link_info(line: str) -> tuple[str, str]:
 
 
 def format_references_section(
-    references: List[str],
-    reference_info: Dict[str, Dict[str, Any]],
-    reference_titles: Dict[str, str],
+    references: list[str],
+    reference_info: dict[str, dict[str, Any]],
+    reference_titles: dict[str, str],
 ) -> str:
     """格式化最终报告的参考资料章节。"""
     if not references:

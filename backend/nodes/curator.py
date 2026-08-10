@@ -1,5 +1,4 @@
 import logging
-from typing import Dict
 from urllib.parse import urljoin, urlparse
 
 from langchain_core.messages import AIMessage
@@ -19,7 +18,7 @@ class Curator:
             self.relevance_threshold,
         )
 
-    def evaluate_documents(self, docs: list, context: Dict[str, str]) -> list:
+    def evaluate_documents(self, docs: list, context: dict[str, str]) -> list:
         """根据搜索服务返回的相关性分数评估文档。"""
         if not docs:
             return []

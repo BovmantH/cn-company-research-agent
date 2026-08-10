@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -274,7 +274,7 @@ def test_finalize_operation_atomically_sets_terminal_and_usage() -> None:
 def test_reserve_with_token_replays_without_consuming_twice() -> None:
     ledger = InMemoryUsageLedger()
     token_id = "a" * 32
-    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
 
     first = ledger.reserve_with_token(
         _request("professional-token", "job-1"),
@@ -298,7 +298,7 @@ def test_reserve_with_token_replays_without_consuming_twice() -> None:
 def test_same_token_cannot_create_two_different_reservations() -> None:
     ledger = InMemoryUsageLedger()
     token_id = "b" * 32
-    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
     limits = BudgetLimits(
         max_points_per_job=220,
         max_calls_per_job=11,
@@ -327,7 +327,7 @@ def test_same_token_cannot_create_two_different_reservations() -> None:
 def test_budget_rejection_does_not_consume_token() -> None:
     ledger = InMemoryUsageLedger()
     token_id = "c" * 32
-    expires_at = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
     blocked_limits = BudgetLimits(
         max_points_per_job=1,
         max_calls_per_job=11,

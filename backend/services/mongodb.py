@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
 import certifi
@@ -33,15 +33,15 @@ class MongoDBService:
         self.jobs = self.db.jobs
         self.reports = self.db.reports
 
-    def create_job(self, job_id: str, inputs: Dict[str, Any]) -> None:
+    def create_job(self, job_id: str, inputs: dict[str, Any]) -> None:
         """创建新的调研任务记录。"""
         self.jobs.insert_one(
             {
                 "job_id": job_id,
                 "inputs": inputs,
                 "status": "pending",
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
             }
         )
 
@@ -49,11 +49,11 @@ class MongoDBService:
         self,
         job_id: str,
         status: str = None,
-        result: Dict[str, Any] = None,
+        result: dict[str, Any] = None,
         error: str = None,
     ) -> None:
         """更新调研任务的结果或状态。"""
-        update_data = {"updated_at": datetime.now(timezone.utc)}
+        update_data = {"updated_at": datetime.now(UTC)}
         if status:
             update_data["status"] = status
         if result:
@@ -63,14 +63,14 @@ class MongoDBService:
 
         self.jobs.update_one({"job_id": job_id}, {"$set": update_data})
 
-    def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get_job(self, job_id: str) -> dict[str, Any] | None:
         """按 ID 获取调研任务。"""
         document = self.jobs.find_one({"job_id": job_id})
         if document is None:
             return None
         return {key: value for key, value in document.items() if key != "_id"}
 
-    def store_report(self, job_id: str, report_data: Dict[str, Any]) -> None:
+    def store_report(self, job_id: str, report_data: dict[str, Any]) -> None:
         """保存最终调研报告。"""
         self.reports.insert_one(
             {
@@ -79,11 +79,11 @@ class MongoDBService:
                 "references": report_data.get("references", []),
                 "sections": report_data.get("sections_completed", []),
                 "analyst_queries": report_data.get("analyst_queries", {}),
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
         )
 
-    def get_report(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get_report(self, job_id: str) -> dict[str, Any] | None:
         """按任务 ID 获取报告。"""
         document = self.reports.find_one({"job_id": job_id})
         if document is None:

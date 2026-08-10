@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -26,7 +26,7 @@ def _registration() -> RegistrationRecord:
             server="qcc-company",
             capability="company.registration",
             queried_subject="示例科技有限公司",
-            queried_at=datetime.now(timezone.utc),
+            queried_at=datetime.now(UTC),
             status=CollectionStatus.SUCCEEDED_WITH_RECORDS,
         ),
     )
@@ -43,7 +43,7 @@ def _source(
         server=server,
         capability=capability,
         queried_subject="示例科技有限公司",
-        queried_at=queried_at or datetime.now(timezone.utc),
+        queried_at=queried_at or datetime.now(UTC),
         status=status,
     )
 
@@ -141,7 +141,7 @@ def test_provider_statuses_require_collection_source() -> None:
 
 
 def test_partial_requires_valid_record_reason_and_matching_collection_source() -> None:
-    queried_at = datetime.now(timezone.utc)
+    queried_at = datetime.now(UTC)
     source = _source(
         "company.registration",
         CollectionStatus.PARTIAL,

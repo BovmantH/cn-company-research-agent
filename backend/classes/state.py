@@ -5,7 +5,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from copy import deepcopy
 from datetime import datetime
 from threading import Lock
-from typing import Any, Dict, List, NotRequired, Required, TypedDict, overload
+from typing import Any, NotRequired, Required, TypedDict, overload
 
 JOB_EVENT_LOG_MAX_BYTES = 16 * 1024 * 1024
 FINAL_REPORT_EVENT_MAX_BYTES = JOB_EVENT_LOG_MAX_BYTES - 2 * 1024 * 1024
@@ -21,22 +21,22 @@ class InputState(TypedDict, total=False):
 
 
 class ResearchState(InputState):
-    site_scrape: Dict[str, Any]
-    messages: List[Any]
-    financial_data: Dict[str, Any]
-    news_data: Dict[str, Any]
-    industry_data: Dict[str, Any]
-    company_data: Dict[str, Any]
-    curated_financial_data: Dict[str, Any]
-    curated_news_data: Dict[str, Any]
-    curated_industry_data: Dict[str, Any]
-    curated_company_data: Dict[str, Any]
+    site_scrape: dict[str, Any]
+    messages: list[Any]
+    financial_data: dict[str, Any]
+    news_data: dict[str, Any]
+    industry_data: dict[str, Any]
+    company_data: dict[str, Any]
+    curated_financial_data: dict[str, Any]
+    curated_news_data: dict[str, Any]
+    curated_industry_data: dict[str, Any]
+    curated_company_data: dict[str, Any]
     financial_briefing: str
     news_briefing: str
     industry_briefing: str
     company_briefing: str
-    references: List[str]
-    briefings: Dict[str, Any]
+    references: list[str]
+    briefings: dict[str, Any]
     report: str
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -80,7 +80,7 @@ def _empty_result(capability: str) -> EvidenceCollection:
             server=CAPABILITY_CONTRACTS[capability][0],
             capability=capability,
             queried_subject=_identity().credit_code,
-            queried_at=datetime.now(timezone.utc),
+            queried_at=datetime.now(UTC),
             status=CollectionStatus.SUCCEEDED_EMPTY,
         ),
     )

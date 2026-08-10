@@ -1,5 +1,4 @@
 import logging
-from typing import Dict
 
 from langchain_core.messages import AIMessage
 from langchain_core.output_parsers import StrOutputParser
@@ -102,7 +101,7 @@ class Editor:
         state.setdefault("messages", []).append(AIMessage(content="\n".join(msg)))
         return state
 
-    async def edit_report(self, state: ResearchState, briefings: Dict[str, str]) -> str:
+    async def edit_report(self, state: ResearchState, briefings: dict[str, str]) -> str:
         """将章节简报编排为最终报告并更新状态。"""
         try:
             logger.info("开始编排报告")
@@ -159,7 +158,7 @@ class Editor:
             return ""
 
     async def compile_content(
-        self, state: ResearchState, briefings: Dict[str, str]
+        self, state: ResearchState, briefings: dict[str, str]
     ) -> str:
         """使用 LCEL 初步编排调研章节。"""
         combined_content = "\n\n".join(content for content in briefings.values())

@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -68,7 +68,7 @@ def test_tampering_is_rejected() -> None:
 
 
 def test_expired_token_is_rejected() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     service = ResolutionTokenService("s" * 32, InMemoryUsageLedger(), ttl_seconds=5)
     requester = requester_fingerprint("127.0.0.1", "s" * 32)
     token = service.issue(_identity(), requester, now=now)
