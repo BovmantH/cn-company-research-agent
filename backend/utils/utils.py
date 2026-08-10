@@ -6,6 +6,8 @@ from typing import Dict, List
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import (
     ListFlowable,
     ListItem,
@@ -17,6 +19,16 @@ from reportlab.platypus import (
 from .references import extract_link_info
 
 logger = logging.getLogger(__name__)
+
+PDF_CJK_FONT = "STSong-Light"
+pdfmetrics.registerFont(UnicodeCIDFont(PDF_CJK_FONT))
+pdfmetrics.registerFontFamily(
+    PDF_CJK_FONT,
+    normal=PDF_CJK_FONT,
+    bold=PDF_CJK_FONT,
+    italic=PDF_CJK_FONT,
+    boldItalic=PDF_CJK_FONT,
+)
 
 
 def clean_text(text: str) -> str:
@@ -31,9 +43,9 @@ def clean_text(text: str) -> str:
 def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
     """使用简化的 ReportLab 流程将 Markdown 内容转换为 PDF。
 
-    Args:
-        markdown_content (str): The markdown content to convert to PDF
-        output_pdf: Either a file path string or a BytesIO object
+    参数：
+        markdown_content：需要转换的 Markdown 内容。
+        output_pdf：输出文件路径或 BytesIO 对象。
     """
     try:
         # output_pdf 为文件路径时确保父目录存在
@@ -67,6 +79,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
             fontSize=20,
             textColor=colors.black,
             spaceAfter=12,
+            fontName=PDF_CJK_FONT,
         )
 
         heading2_style = ParagraphStyle(
@@ -76,7 +89,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
             textColor=colors.black,
             spaceBefore=12,
             spaceAfter=6,
-            fontName="Helvetica-Bold",
+            fontName=PDF_CJK_FONT,
         )
 
         heading3_style = ParagraphStyle(
@@ -86,6 +99,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
             textColor=colors.black,
             spaceBefore=10,
             spaceAfter=4,
+            fontName=PDF_CJK_FONT,
         )
 
         normal_style = ParagraphStyle(
@@ -95,6 +109,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
             textColor=colors.black,
             spaceBefore=2,
             spaceAfter=2,
+            fontName=PDF_CJK_FONT,
         )
 
         list_item_style = ParagraphStyle(
@@ -107,6 +122,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
             leftIndent=10,
             firstLineIndent=0,
             bulletIndent=0,
+            fontName=PDF_CJK_FONT,
         )
 
         # 创建 PDF 内容流
@@ -135,7 +151,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
                             ],
                             bulletType="bullet",
                             leftIndent=10,
-                            bulletFontName="Helvetica",
+                            bulletFontName=PDF_CJK_FONT,
                             bulletFontSize=10,
                             bulletOffsetY=0,
                             bulletDedent=10,
@@ -224,7 +240,7 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
                     [ListItem(Paragraph(item, list_item_style)) for item in list_items],
                     bulletType="bullet",
                     leftIndent=10,
-                    bulletFontName="Helvetica",
+                    bulletFontName=PDF_CJK_FONT,
                     bulletFontSize=10,
                     bulletOffsetY=0,
                     bulletDedent=10,
@@ -280,7 +296,7 @@ def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) ->
                                 leftIndent=20,
                                 bulletColor=colors.HexColor("#2c3e50"),
                                 bulletType="bullet",
-                                bulletFontName="Helvetica",
+                                bulletFontName=PDF_CJK_FONT,
                                 bulletFontSize=10,
                             )
                             for item in current_list_items
@@ -315,7 +331,7 @@ def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) ->
                                 leftIndent=20,
                                 bulletColor=colors.HexColor("#2c3e50"),
                                 bulletType="bullet",
-                                bulletFontName="Helvetica",
+                                bulletFontName=PDF_CJK_FONT,
                                 bulletFontSize=10,
                             )
                             for item in current_list_items
@@ -374,7 +390,7 @@ def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) ->
                             leftIndent=20,
                             bulletColor=colors.HexColor("#2c3e50"),
                             bulletType="bullet",
-                            bulletFontName="Helvetica",
+                            bulletFontName=PDF_CJK_FONT,
                             bulletFontSize=10,
                             bulletFormat="•",
                         )
@@ -402,7 +418,7 @@ def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) ->
                             leftIndent=20,
                             bulletColor=colors.HexColor("#2c3e50"),
                             bulletType="bullet",
-                            bulletFontName="Helvetica",
+                            bulletFontName=PDF_CJK_FONT,
                             bulletFontSize=10,
                         )
                         for item in current_list_items
@@ -447,7 +463,7 @@ def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) ->
                         leftIndent=20,
                         bulletColor=colors.HexColor("#2c3e50"),
                         bulletType="bullet",
-                        bulletFontName="Helvetica",
+                        bulletFontName=PDF_CJK_FONT,
                         bulletFontSize=10,
                     )
                     for item in current_list_items
@@ -481,7 +497,7 @@ def get_custom_styles():
             spaceBefore=2,
             spaceAfter=2,
             bulletIndent=15,
-            bulletFontName="Helvetica-Bold",
+            bulletFontName=PDF_CJK_FONT,
             bulletFontSize=12,
             textColor=colors.HexColor("#2c3e50"),
             leading=14,
@@ -490,19 +506,23 @@ def get_custom_styles():
 
     # 更新正文样式
     styles["BodyText"].textColor = colors.HexColor("#2c3e50")
+    styles["BodyText"].fontName = PDF_CJK_FONT
     styles["BodyText"].fontSize = 10
     styles["BodyText"].leading = 14
 
     # 标题样式
     styles["Heading1"].textColor = colors.HexColor("#2c3e50")
+    styles["Heading1"].fontName = PDF_CJK_FONT
     styles["Heading1"].fontSize = 24
     styles["Heading1"].leading = 28
 
     styles["Heading2"].textColor = colors.HexColor("#2c3e50")
+    styles["Heading2"].fontName = PDF_CJK_FONT
     styles["Heading2"].fontSize = 18
     styles["Heading2"].leading = 22
 
     styles["Heading3"].textColor = colors.HexColor("#2c3e50")
+    styles["Heading3"].fontName = PDF_CJK_FONT
     styles["Heading3"].fontSize = 14
     styles["Heading3"].leading = 18
 
