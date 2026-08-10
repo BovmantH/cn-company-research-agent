@@ -8,3 +8,4 @@ export { default as ResearchBriefings } from './ResearchBriefings';
 export { default as CurationExtraction } from './CurationExtraction';
 export { default as ExamplePopup } from './ExamplePopup';
 export { default as CompanyResolutionPanel } from './CompanyResolutionPanel';
+export { default as ProfessionalDataStatus } from './ProfessionalDataStatus';

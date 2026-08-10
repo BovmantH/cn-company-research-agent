@@ -8,6 +8,7 @@ import {
   CurationExtraction,
   ResearchBriefings,
   CompanyResolutionPanel,
+  ProfessionalDataStatus,
 } from './components';
 import { glassStyle, fadeInAnimation } from './styles';
 import {
@@ -45,6 +46,7 @@ function App() {
     enrichmentCounts,
     briefingStatus,
     isReportStreaming,
+    professional,
   } = researchState;
   const isResearching = researchState.lifecycle === 'running';
   const isComplete = researchState.lifecycle === 'completed';
@@ -397,6 +399,8 @@ function App() {
           loaderColor={loaderColor}
           statusRef={statusRef}
         />
+
+        <ProfessionalDataStatus state={professional} />
 
         {/* Research Report - always at the top when available */}
         {output && output.details && (

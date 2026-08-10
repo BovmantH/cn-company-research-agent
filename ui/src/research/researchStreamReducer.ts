@@ -150,7 +150,7 @@ export type StreamControlSignal = {
   reason?: string;
 };
 
-type ProfessionalState = {
+export type ProfessionalStreamState = {
   status:
     | "not_requested"
     | "running"
@@ -179,7 +179,7 @@ export type ResearchStreamState = {
   enrichmentCounts: EnrichmentCounts | undefined;
   briefingStatus: Record<ResearchCategory, boolean>;
   isReportStreaming: boolean;
-  professional: ProfessionalState;
+  professional: ProfessionalStreamState;
   degradations: Degradation[];
 };
 

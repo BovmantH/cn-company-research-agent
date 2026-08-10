@@ -83,6 +83,36 @@ describe("researchStreamReducer", () => {
     expect(state.output?.details.report).toBe("基础报告");
   });
 
+  it("专业采集状态单调推进且完成事件不覆盖既有降级", () => {
+    let succeeded = researchStreamReducer(createInitialResearchStreamState(), {
+      type: "event",
+      event: event({ type: "professional_data_started" }, 1),
+    });
+    succeeded = researchStreamReducer(succeeded, {
+      type: "event",
+      event: event({ type: "professional_data_progress" }, 2),
+    });
+    expect(succeeded.professional.status).toBe("running");
+    succeeded = researchStreamReducer(succeeded, {
+      type: "event",
+      event: event({ type: "professional_data_completed" }, 3),
+    });
+    expect(succeeded.professional.status).toBe("completed");
+
+    let degraded = researchStreamReducer(createInitialResearchStreamState(), {
+      type: "event",
+      event: event({
+        type: "professional_data_degraded",
+        reason: "provider_unavailable",
+      }, 1),
+    });
+    degraded = researchStreamReducer(degraded, {
+      type: "event",
+      event: event({ type: "professional_data_completed" }, 2),
+    });
+    expect(degraded.professional.status).toBe("degraded");
+  });
+
   it("成功终态清除不影响任务的临时界面错误", () => {
     let state = researchStreamReducer(createInitialResearchStreamState(), {
       type: "ui_error",
