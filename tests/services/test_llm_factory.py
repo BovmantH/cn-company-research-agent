@@ -13,15 +13,240 @@
 
 from __future__ import annotations
 
-import pytest
-from langchain_openai import ChatOpenAI
+from collections.abc import Iterator
 
+import httpx
+import pytest
+from langchain_core.runnables import RunnableGenerator, RunnableLambda
+from langchain_core.runnables.fallbacks import RunnableWithFallbacks
+from langchain_openai import ChatOpenAI
+from openai import APIConnectionError, BadRequestError
+
+import backend.services.llm_factory as llm_factory
 from backend.services.llm_factory import (
     DEFAULT_MODELS,
+    FALLBACK_EXCEPTIONS,
     OPENAI_BASE_URL,
     OPENROUTER_BASE_URL,
     get_llm,
 )
+
+
+def _api_connection_error() -> APIConnectionError:
+    """构造不包含凭证或第三方正文的上游连接异常。"""
+    return APIConnectionError(
+        request=httpx.Request("POST", "https://opencode.ai/zen/v1/chat/completions")
+    )
+
+
+# === OpenCode Zen 免费优先 ===
+
+
+def test_opencode_only_uses_free_deepseek(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+
+    llm = get_llm("editor")
+
+    assert isinstance(llm, ChatOpenAI)
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "opencode.ai/zen/v1" in base_url
+    assert llm.model_name == "deepseek-v4-flash-free"
+    assert getattr(llm, "use_responses_api", None) is False
+
+
+def test_opencode_precedes_configured_paid_vendor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+
+    llm = get_llm("researcher")
+
+    assert isinstance(llm, RunnableWithFallbacks)
+    assert "opencode.ai/zen/v1" in str(
+        getattr(llm.runnable, "openai_api_base", "") or ""
+    )
+    assert llm.runnable.model_name == "deepseek-v4-flash-free"
+    assert "api.deepseek.com" in str(
+        getattr(llm.fallbacks[0], "openai_api_base", "") or ""
+    )
+    assert llm.exceptions_to_handle == FALLBACK_EXCEPTIONS
+
+
+def test_opencode_api_failure_before_output_uses_paid_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+    paid_calls: list[str] = []
+
+    def fake_chat_openai(**kwargs: object) -> RunnableLambda:
+        if "opencode.ai" in str(kwargs["base_url"]):
+
+            def fail_before_output(_: object) -> str:
+                raise _api_connection_error()
+
+            return RunnableLambda(fail_before_output)
+
+        def paid_fallback(_: object) -> str:
+            paid_calls.append("deepseek")
+            return "付费供应商结果"
+
+        return RunnableLambda(paid_fallback)
+
+    monkeypatch.setattr(llm_factory, "ChatOpenAI", fake_chat_openai)
+
+    llm = get_llm("researcher")
+
+    assert llm.invoke("调研请求") == "付费供应商结果"
+    assert paid_calls == ["deepseek"]
+
+
+def test_opencode_success_does_not_use_paid_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+    paid_calls: list[str] = []
+
+    def fake_chat_openai(**kwargs: object) -> RunnableLambda:
+        if "opencode.ai" in str(kwargs["base_url"]):
+            return RunnableLambda(lambda _: "免费模型结果")
+
+        def paid_fallback(_: object) -> str:
+            paid_calls.append("deepseek")
+            return "付费供应商结果"
+
+        return RunnableLambda(paid_fallback)
+
+    monkeypatch.setattr(llm_factory, "ChatOpenAI", fake_chat_openai)
+
+    llm = get_llm("researcher")
+
+    assert llm.invoke("调研请求") == "免费模型结果"
+    assert paid_calls == []
+
+
+def test_opencode_failure_after_first_chunk_does_not_switch_vendor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+    paid_calls: list[str] = []
+
+    def zen_stream(_: Iterator[object]) -> Iterator[str]:
+        yield "首个输出块"
+        raise _api_connection_error()
+
+    def fake_chat_openai(**kwargs: object) -> RunnableGenerator | RunnableLambda:
+        if "opencode.ai" in str(kwargs["base_url"]):
+            return RunnableGenerator(zen_stream)
+
+        def paid_fallback(_: object) -> str:
+            paid_calls.append("deepseek")
+            return "付费供应商结果"
+
+        return RunnableLambda(paid_fallback)
+
+    monkeypatch.setattr(llm_factory, "ChatOpenAI", fake_chat_openai)
+
+    chunks = get_llm("researcher").stream("调研请求")
+
+    assert next(chunks) == "首个输出块"
+    with pytest.raises(APIConnectionError):
+        next(chunks)
+    assert paid_calls == []
+
+
+def test_opencode_local_error_does_not_trigger_paid_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+    paid_calls: list[str] = []
+
+    def fake_chat_openai(**kwargs: object) -> RunnableLambda:
+        if "opencode.ai" in str(kwargs["base_url"]):
+
+            def fail_locally(_: object) -> str:
+                raise ValueError("本地参数错误")
+
+            return RunnableLambda(fail_locally)
+
+        def paid_fallback(_: object) -> str:
+            paid_calls.append("deepseek")
+            return "付费供应商结果"
+
+        return RunnableLambda(paid_fallback)
+
+    monkeypatch.setattr(llm_factory, "ChatOpenAI", fake_chat_openai)
+
+    with pytest.raises(ValueError, match="本地参数错误"):
+        get_llm("researcher").invoke("调研请求")
+    assert paid_calls == []
+
+
+def test_opencode_bad_request_does_not_trigger_paid_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+    paid_calls: list[str] = []
+
+    def fake_chat_openai(**kwargs: object) -> RunnableLambda:
+        if "opencode.ai" in str(kwargs["base_url"]):
+
+            def reject_request(_: object) -> str:
+                request = httpx.Request(
+                    "POST", "https://opencode.ai/zen/v1/chat/completions"
+                )
+                raise BadRequestError(
+                    "请求参数不受支持",
+                    response=httpx.Response(400, request=request),
+                    body=None,
+                )
+
+            return RunnableLambda(reject_request)
+
+        def paid_fallback(_: object) -> str:
+            paid_calls.append("deepseek")
+            return "付费供应商结果"
+
+        return RunnableLambda(paid_fallback)
+
+    monkeypatch.setattr(llm_factory, "ChatOpenAI", fake_chat_openai)
+
+    with pytest.raises(BadRequestError, match="请求参数不受支持"):
+        get_llm("researcher").invoke("调研请求")
+    assert paid_calls == []
+
+
+def test_automatic_opencode_ignores_cross_vendor_model_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+    monkeypatch.setenv("LLM_MODEL_RESEARCHER", "deepseek/deepseek-v4-pro")
+
+    llm = get_llm("researcher")
+
+    assert isinstance(llm, RunnableWithFallbacks)
+    assert llm.runnable.model_name == "deepseek-v4-flash-free"
+    assert llm.fallbacks[0].model_name == "deepseek-v4-flash"
+
+
+def test_explicit_opencode_lock_disables_paid_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_VENDOR", "opencode")
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+
+    llm = get_llm("researcher")
+
+    assert isinstance(llm, ChatOpenAI)
+    assert llm.model_name == "deepseek-v4-flash-free"
+
 
 # === OpenRouter 路径 ===
 
@@ -107,7 +332,7 @@ def test_openrouter_keeps_vendor_prefix(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_missing_both_keys_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    """两个 key 都没配,必须给中文报错。"""
+    """所有 Key 都没配时必须给出中文报错。"""
     # conftest 已经把这些 env var 清空,这里不需要再 delenv
 
     with pytest.raises(RuntimeError) as exc_info:
@@ -362,6 +587,19 @@ def test_priority_unknown_vendor_ignored(
     assert any("wenxin" in r.message for r in caplog.records)
 
 
+def test_priority_all_unknown_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """自定义顺序全部无效时仍回到默认顺序，不能遗漏已配置供应商。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
+    monkeypatch.setenv("LLM_VENDOR_PRIORITY", "wenxin,baichuan")
+
+    llm = get_llm("researcher")
+
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "api.deepseek.com" in base_url
+
+
 def test_priority_phase1_compat_openrouter_still_works(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -518,6 +756,7 @@ def test_all_keys_missing_lists_all_vendors(monkeypatch: pytest.MonkeyPatch) -> 
 
     msg = str(exc_info.value)
     for env_key in (
+        "OPENCODE_API_KEY",
         "DEEPSEEK_API_KEY",
         "DASHSCOPE_API_KEY",
         "MOONSHOT_API_KEY",

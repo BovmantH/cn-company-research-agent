@@ -31,10 +31,17 @@ else:
 if not os.getenv("TAVILY_API_KEY"):
     logger.warning("未设置 TAVILY_API_KEY 环境变量。")
 
-# LLM 走统一工厂,任一 key 存在即可启动;Gemini 不再为强依赖
-if not os.getenv("OPENROUTER_API_KEY") and not os.getenv("OPENAI_API_KEY"):
-    logger.warning(
-        "OPENROUTER_API_KEY 与 OPENAI_API_KEY 均未设置，LLM 工厂会在首次调用时失败。"
-    )
+# LLM 走统一工厂，任一已支持的 Key 存在即可启动。
+_LLM_KEY_NAMES = (
+    "OPENCODE_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "MOONSHOT_API_KEY",
+    "XIAOMI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+)
+if not any(os.getenv(name) for name in _LLM_KEY_NAMES):
+    logger.warning("未设置任何受支持的 LLM 服务商 Key，LLM 工厂会在首次调用时失败。")
 
 __all__ = ["Graph"]

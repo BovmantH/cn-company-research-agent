@@ -3,7 +3,7 @@
 设计目标:
 - 通过 ``get_llm(role)`` 获取 LangChain ``BaseChatModel`` 实例
 - 后端所有 LLM 调用的唯一入口
-- 支持国产模型(DeepSeek / Qwen / Kimi)的官方 OpenAI 兼容端点直连,
+- 支持 OpenCode Zen 免费线路、国产模型原厂 OpenAI 兼容端点直连，
   以及 OpenRouter 聚合、OpenAI 原生
 - 启动期探测，**单供应商全包**：命中第一家供应商后接管所有角色
 - 通过 ``LLM_VENDOR`` 显式锁定可跳过探测,``LLM_VENDOR_PRIORITY`` 调整优先级
@@ -14,6 +14,7 @@
 
 环境变量约定:
     # 供应商密钥（任意一个；多个时按优先级）
+    OPENCODE_API_KEY          OpenCode Zen
     DEEPSEEK_API_KEY          DeepSeek 原厂
     DASHSCOPE_API_KEY         阿里百炼(Qwen)
     MOONSHOT_API_KEY          Moonshot(Kimi)
@@ -45,7 +46,17 @@ from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
+from openai import (
+    APIConnectionError,
+    AuthenticationError,
+    ConflictError,
+    InternalServerError,
+    NotFoundError,
+    PermissionDeniedError,
+    RateLimitError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +88,18 @@ class VendorConfig:
         return self.default_models.get(role, next(iter(self.default_models.values())))
 
 
-# 入选供应商列表。GLM / MiMo / MiniMax 待第 4 节兼容性冒烟测试通过后再补。
+# 入选供应商列表。GLM / MiniMax 在后续独立切片补充。
 VENDOR_REGISTRY: dict[str, VendorConfig] = {
+    "opencode": VendorConfig(
+        env_key="OPENCODE_API_KEY",
+        base_url="https://opencode.ai/zen/v1",
+        default_models={
+            "researcher": "deepseek-v4-flash-free",
+            "briefing": "deepseek-v4-flash-free",
+            "editor": "deepseek-v4-flash-free",
+        },
+        docs_url="https://opencode.ai/docs/zen",
+    ),
     "deepseek": VendorConfig(
         env_key="DEEPSEEK_API_KEY",
         base_url="https://api.deepseek.com/v1",
@@ -149,8 +170,9 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
     ),
 }
 
-# 默认探测顺序:中国用户优先 → OpenRouter 聚合 → OpenAI 兜底
+# 默认探测顺序：Zen 免费线路 → 国内原厂 → OpenRouter → OpenAI。
 DEFAULT_VENDOR_PRIORITY: list[str] = [
+    "opencode",
     "deepseek",
     "qwen",
     "kimi",
@@ -160,6 +182,17 @@ DEFAULT_VENDOR_PRIORITY: list[str] = [
 ]
 
 VALID_ROLES = frozenset({"researcher", "briefing", "editor"})
+
+# 只处理可归因于上游不可用的异常，避免把本地参数错误或业务缺陷隐藏成付费回退。
+FALLBACK_EXCEPTIONS = (
+    APIConnectionError,
+    AuthenticationError,
+    PermissionDeniedError,
+    NotFoundError,
+    RateLimitError,
+    ConflictError,
+    InternalServerError,
+)
 
 # 第一阶段旧导入兼容
 OPENROUTER_BASE_URL = VENDOR_REGISTRY["openrouter"].base_url
@@ -195,7 +228,9 @@ def _get_priority_list() -> list[str]:
     if not raw:
         return DEFAULT_VENDOR_PRIORITY
 
-    out: list[str] = []
+    # Zen 免费线路按产品约定始终优先；部署者可调整其后的付费供应商顺序。
+    out: list[str] = ["opencode"]
+    has_known_value = False
     for token in raw.split(","):
         v = token.strip().lower()
         if not v:
@@ -207,8 +242,10 @@ def _get_priority_list() -> list[str]:
                 sorted(VENDOR_REGISTRY.keys()),
             )
             continue
-        out.append(v)
-    return out or DEFAULT_VENDOR_PRIORITY
+        has_known_value = True
+        if v not in out:
+            out.append(v)
+    return out if has_known_value else DEFAULT_VENDOR_PRIORITY
 
 
 def _resolve_vendor() -> tuple[str, str]:
@@ -265,7 +302,13 @@ def _resolve_base_url(vendor: str) -> str:
     return VENDOR_REGISTRY[vendor].base_url
 
 
-def _resolve_model(role: str, vendor: str, override: str | None) -> str:
+def _resolve_model(
+    role: str,
+    vendor: str,
+    override: str | None,
+    *,
+    use_role_env: bool = True,
+) -> str:
     """解析模型标识。
 
     优先级：覆盖参数 > ``LLM_MODEL_<ROLE>`` > ``VendorConfig.default_model(role)``。
@@ -273,7 +316,7 @@ def _resolve_model(role: str, vendor: str, override: str | None) -> str:
     若供应商需要剥离前缀（OpenRouter 除外）且模型带供应商前缀，则自动剥离；
     环境变量触发时记录警告，调用方通过覆盖参数显式指定时不记录。
     """
-    env_value = os.getenv(f"LLM_MODEL_{role.upper()}")
+    env_value = os.getenv(f"LLM_MODEL_{role.upper()}") if use_role_env else None
     raw = override or env_value or VENDOR_REGISTRY[vendor].default_model(role)
 
     cfg = VENDOR_REGISTRY[vendor]
@@ -296,30 +339,23 @@ def _resolve_model(role: str, vendor: str, override: str | None) -> str:
 # === 主入口 ===
 
 
-def get_llm(role: str, **overrides: Any) -> BaseChatModel:
-    """根据角色获取一个配置好的 LLM 实例。
-
-    参数:
-        role: ``"researcher"`` / ``"briefing"`` / ``"editor"`` 之一。
-        **overrides: 任意可覆盖参数(``model``、``base_url``、``api_key``、
-            ``temperature``、``streaming``、``max_tokens`` 等)。
-
-    返回:
-        ``langchain_openai.ChatOpenAI`` 实例。所有支持的供应商都通过此类
-        实例化(全部走 OpenAI 协议兼容端点)。
-
-    抛出:
-        ValueError: 未知角色。
-        RuntimeError: 所有供应商密钥都未配置；或 ``LLM_VENDOR`` 显式锁定但对应
-            密钥缺失。
-    """
-    if role not in VALID_ROLES:
-        raise ValueError(f"未知的 LLM 角色：{role!r}。可选值：{sorted(VALID_ROLES)}")
-
-    vendor, api_key = _resolve_vendor()
+def _build_chat_model(
+    role: str,
+    vendor: str,
+    api_key: str,
+    *,
+    model_override: str | None,
+    use_role_env: bool,
+    overrides: dict[str, Any],
+) -> BaseChatModel:
+    """构造一个供应商隔离的聊天模型实例，防止 Key 或模型串线。"""
     base_url = _resolve_base_url(vendor)
-    model_override = overrides.pop("model", None)
-    model = _resolve_model(role, vendor, model_override)
+    model = _resolve_model(
+        role,
+        vendor,
+        model_override,
+        use_role_env=use_role_env,
+    )
 
     kwargs: dict[str, Any] = {
         "model": model,
@@ -328,6 +364,9 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel:
         "temperature": float(os.getenv("LLM_TEMPERATURE", "0")),
         "streaming": _str_to_bool(os.getenv("LLM_STREAMING"), default=True),
     }
+    if vendor == "opencode":
+        # Zen 的免费 DeepSeek 使用 Chat Completions，禁止客户端自动切到 Responses。
+        kwargs["use_responses_api"] = False
 
     max_tokens_env = os.getenv("LLM_MAX_TOKENS")
     if max_tokens_env:
@@ -346,5 +385,76 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel:
         kwargs["base_url"],
         kwargs["streaming"],
     )
-
     return ChatOpenAI(**kwargs)
+
+
+def get_llm(role: str, **overrides: Any) -> BaseChatModel | Runnable[Any, Any]:
+    """根据角色获取一个配置好的 LLM 实例。
+
+    参数:
+        role: ``"researcher"`` / ``"briefing"`` / ``"editor"`` 之一。
+        **overrides: 任意可覆盖参数(``model``、``base_url``、``api_key``、
+            ``temperature``、``streaming``、``max_tokens`` 等)。
+
+    返回:
+        单供应商时返回 ``ChatOpenAI``；Zen 与后续供应商同时配置时返回
+        首块输出前可回退的 LangChain Runnable。所有候选均走彼此隔离的
+        OpenAI 协议兼容端点和服务端 Key。
+
+    抛出:
+        ValueError: 未知角色。
+        RuntimeError: 所有供应商密钥都未配置；或 ``LLM_VENDOR`` 显式锁定但对应
+            密钥缺失。
+    """
+    if role not in VALID_ROLES:
+        raise ValueError(f"未知的 LLM 角色：{role!r}。可选值：{sorted(VALID_ROLES)}")
+
+    vendor, api_key = _resolve_vendor()
+    model_override = overrides.pop("model", None)
+    explicitly_locked = bool(os.getenv("LLM_VENDOR"))
+    primary = _build_chat_model(
+        role,
+        vendor,
+        api_key,
+        model_override=model_override,
+        # 自动模式下固定使用 Zen 免费模型，避免旧的跨供应商模型配置污染免费线路。
+        use_role_env=vendor != "opencode" or explicitly_locked,
+        overrides=overrides,
+    )
+
+    # 显式锁定或自定义连接边界时保持单供应商语义，避免把覆盖 Key/URL 扇出。
+    connection_overridden = bool(os.getenv("LLM_BASE_URL")) or any(
+        key in overrides for key in ("api_key", "base_url")
+    )
+    if vendor != "opencode" or explicitly_locked or connection_overridden:
+        return primary
+
+    fallbacks: list[BaseChatModel] = []
+    fallback_names: list[str] = []
+    for fallback_vendor in _get_priority_list():
+        if fallback_vendor == "opencode":
+            continue
+        fallback_config = VENDOR_REGISTRY[fallback_vendor]
+        fallback_key = os.getenv(fallback_config.env_key)
+        if not fallback_key:
+            continue
+        fallbacks.append(
+            _build_chat_model(
+                role,
+                fallback_vendor,
+                fallback_key,
+                model_override=None,
+                use_role_env=False,
+                overrides=overrides,
+            )
+        )
+        fallback_names.append(fallback_vendor)
+
+    if not fallbacks:
+        return primary
+
+    logger.info("OpenCode Zen 不可用时将依次回退：%s", fallback_names)
+    return primary.with_fallbacks(
+        fallbacks,
+        exceptions_to_handle=FALLBACK_EXCEPTIONS,
+    )

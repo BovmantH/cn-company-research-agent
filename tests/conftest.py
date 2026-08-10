@@ -13,6 +13,7 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     names = [
         # 第一阶段
+        "OPENCODE_API_KEY",
         "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",
         "GEMINI_API_KEY",
@@ -37,6 +38,7 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
     # 单 vendor 维度 base_url 覆盖,全部清掉
     for vendor in (
+        "OPENCODE",
         "DEEPSEEK",
         "QWEN",
         "KIMI",

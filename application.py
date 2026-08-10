@@ -52,6 +52,7 @@ if env_path.exists():
 # 启动校验：LLMFactory 依赖至少一个 LLM 服务商密钥，缺失则直接退出，
 # 避免在第一次请求时才发现 key 没配,把错误推到用户面前。
 _LLM_KEY_CANDIDATES = (
+    ("OPENCODE_API_KEY", "OpenCode Zen 免费线路", "https://opencode.ai/docs/zen"),
     ("DEEPSEEK_API_KEY", "DeepSeek 原厂", "https://api-docs.deepseek.com/"),
     ("DASHSCOPE_API_KEY", "阿里百炼(Qwen)", "https://help.aliyun.com/zh/dashscope/"),
     ("MOONSHOT_API_KEY", "Moonshot(Kimi)", "https://platform.moonshot.cn/"),
