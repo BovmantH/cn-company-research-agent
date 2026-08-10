@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
-    "start": "serve -s build -l $PORT",
+    "start": "serve -s dist -l $PORT",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
@@ -41,6 +41,6 @@
     "vitest": "^3.2.7"
   },
   "engines": {
-    "node": ">=14.x"
+    "node": ">=18.0.0"
   }
 }
