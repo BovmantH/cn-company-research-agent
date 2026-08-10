@@ -5,7 +5,7 @@
 > 主要差异:
 > - 🇨🇳 **国产原厂直连** —— 支持 DeepSeek、Kimi、Qwen、GLM、MiniMax、MiMo,无需经过聚合平台
 > - 🆓 **OpenCode Zen 免费优先** —— 部署者配置 Key 后优先使用 `deepseek-v4-flash-free`,可按需配置付费回退
-> - 🌏 **LLM 走 [OpenRouter](https://openrouter.ai)** —— 国内 DeepSeek / Qwen / Kimi / 智谱 与国外 GPT / Claude / Gemini 通过同一接口切换
+> - 🌏 **聚合与原生兼容入口** —— 保留 [OpenRouter](https://openrouter.ai) 和 OpenAI,部署者可按网络、成本与合规要求选择
 > - 🇨🇳 **Prompt 全量中文化** —— 不是机翻,人工重写,对国内模型更友好
 > - 🎨 **UI 与示例公司中文化** —— 默认示例换成腾讯、字节、宁德时代、比亚迪
 > - 🔌 **检索层抽象化** —— 引入 `SearchProvider` 接口,Phase 2 接 Bocha AI / AKShare / 巨潮资讯网 / 企查查 等国内数据源不再动节点代码
@@ -65,10 +65,13 @@ flowchart TB
     Pipeline --> Search["SearchProvider<br/>(backend/services/search/)"]
     LLM -.Zen 免费优先<br/>服务端选择与受控回退.-> Vendors
     Search --> Tavily[Tavily Search API]
-    subgraph Vendors["LLM Vendor"]
+    subgraph Vendors["LLM 供应商"]
+        OC[OpenCode Zen]
         D[DeepSeek 原厂]
         Q[Qwen / 阿里百炼]
         K[Kimi / Moonshot]
+        G[GLM / 智谱]
+        MM[MiniMax]
         M[MiMo / 小米]
         OR[OpenRouter 聚合]
         OAI[OpenAI 兜底]
@@ -333,6 +336,8 @@ LLM_VENDOR=deepseek
 # 走自建网关(OneAPI / LiteLLM)代理某一家:
 LLM_BASE_URL_DEEPSEEK=http://localhost:3000/v1
 ```
+
+设置全局 `LLM_BASE_URL`、代码级 `model` 或连接/认证类覆盖参数时，工厂会进入单供应商模式并关闭跨供应商回退，防止同一个模型名、Key 或 Authorization 头被发送到不同端点。若需要保留安全回退，请使用 `LLM_BASE_URL_<VENDOR>` 分别配置各供应商。
 
 完整说明见 [`.env.example`](.env.example) 第 1~4 节。
 

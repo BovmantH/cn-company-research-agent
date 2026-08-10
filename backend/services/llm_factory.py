@@ -47,14 +47,17 @@ from __future__ import annotations
 import logging
 import math
 import os
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_openai import ChatOpenAI
 from openai import (
     APIConnectionError,
+    APIError,
     AuthenticationError,
     ConflictError,
     InternalServerError,
@@ -217,6 +220,11 @@ DEFAULT_VENDOR_PRIORITY: list[str] = [
 
 VALID_ROLES = frozenset({"researcher", "briefing", "editor"})
 
+
+class ZenStreamUnavailable(RuntimeError):
+    """Zen 在完成首个流式响应块前返回无状态 SSE 错误。"""
+
+
 # 只处理可归因于上游不可用的异常，避免把本地参数错误或业务缺陷隐藏成付费回退。
 FALLBACK_EXCEPTIONS = (
     APIConnectionError,
@@ -226,7 +234,81 @@ FALLBACK_EXCEPTIONS = (
     RateLimitError,
     ConflictError,
     InternalServerError,
+    ZenStreamUnavailable,
 )
+
+# 仅这些生成参数能安全复用于不同供应商；连接、认证、客户端或模型相关参数
+# 必须保持单供应商语义，防止凭证或专有配置被发送到其他端点。
+SAFE_CROSS_VENDOR_OVERRIDES = frozenset({"streaming", "temperature", "max_tokens"})
+
+
+class _ZenFallbackBoundary(Runnable[Any, Any]):
+    """把 SDK 的无状态流错误收敛为可安全回退且不含上游正文的异常。"""
+
+    def __init__(self, runnable: Runnable[Any, Any]) -> None:
+        self._runnable = runnable
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._runnable, name)
+
+    @staticmethod
+    def _translate_generic_error(exc: APIError) -> None:
+        # OpenAI SDK 对 SSE error 事件直接抛 APIError；有状态的 4xx/5xx
+        # 会使用其子类，继续交给既有的精确异常策略处理。
+        if type(exc) is APIError:
+            raise ZenStreamUnavailable(
+                "OpenCode Zen 流式响应在完成前失败，已按安全策略处理。"
+            ) from None
+
+    def invoke(
+        self,
+        input: Any,
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        try:
+            return self._runnable.invoke(input, config=config, **kwargs)
+        except APIError as exc:
+            self._translate_generic_error(exc)
+            raise
+
+    async def ainvoke(
+        self,
+        input: Any,
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        try:
+            return await self._runnable.ainvoke(input, config=config, **kwargs)
+        except APIError as exc:
+            self._translate_generic_error(exc)
+            raise
+
+    def stream(
+        self,
+        input: Any,
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> Iterator[Any]:
+        try:
+            yield from self._runnable.stream(input, config=config, **kwargs)
+        except APIError as exc:
+            self._translate_generic_error(exc)
+            raise
+
+    async def astream(
+        self,
+        input: Any,
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[Any]:
+        try:
+            async for chunk in self._runnable.astream(input, config=config, **kwargs):
+                yield chunk
+        except APIError as exc:
+            self._translate_generic_error(exc)
+            raise
+
 
 # 第一阶段旧导入兼容
 OPENROUTER_BASE_URL = VENDOR_REGISTRY["openrouter"].base_url
@@ -461,12 +543,18 @@ def _build_chat_model(
 
     kwargs.update(overrides)
 
+    parsed_base_url = urlsplit(str(kwargs["base_url"]))
+    endpoint = (
+        f"{parsed_base_url.scheme}://{parsed_base_url.hostname}"
+        if parsed_base_url.scheme and parsed_base_url.hostname
+        else "<自定义端点>"
+    )
     logger.debug(
         "构造 LLM: role=%s, vendor=%s, model=%s, base_url=%s, streaming=%s",
         role,
         vendor,
         kwargs["model"],
-        kwargs["base_url"],
+        endpoint,
         kwargs["streaming"],
     )
     return ChatOpenAI(**kwargs)
@@ -495,7 +583,7 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel | Runnable[Any, Any]:
 
     vendor, api_key = _resolve_vendor()
     model_override = overrides.pop("model", None)
-    explicitly_locked = bool(os.getenv("LLM_VENDOR"))
+    explicitly_locked = bool(os.getenv("LLM_VENDOR", "").strip())
     primary = _build_chat_model(
         role,
         vendor,
@@ -507,10 +595,12 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel | Runnable[Any, Any]:
     )
 
     # 显式锁定或自定义连接边界时保持单供应商语义，避免把覆盖 Key/URL 扇出。
-    connection_overridden = bool(os.getenv("LLM_BASE_URL")) or any(
-        key in overrides for key in ("api_key", "base_url")
+    custom_single_vendor_mode = (
+        bool(os.getenv("LLM_BASE_URL"))
+        or model_override is not None
+        or any(key not in SAFE_CROSS_VENDOR_OVERRIDES for key in overrides)
     )
-    if vendor != "opencode" or explicitly_locked or connection_overridden:
+    if vendor != "opencode" or explicitly_locked or custom_single_vendor_mode:
         return primary
 
     fallbacks: list[BaseChatModel] = []
@@ -537,7 +627,7 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel | Runnable[Any, Any]:
         return primary
 
     logger.info("OpenCode Zen 不可用时将依次回退：%s", fallback_names)
-    return primary.with_fallbacks(
+    return _ZenFallbackBoundary(primary).with_fallbacks(
         fallbacks,
         exceptions_to_handle=FALLBACK_EXCEPTIONS,
     )
