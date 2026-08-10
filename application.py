@@ -9,7 +9,7 @@ from collections.abc import Coroutine
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import uvicorn
 from dotenv import load_dotenv
@@ -142,18 +142,31 @@ if mongo_uri := os.getenv("MONGODB_URI"):
         )
 
 
+ProfessionalFallbackReason = Literal[
+    "identity_not_found",
+    "identity_unconfirmed",
+    "resolution_in_progress",
+    "provider_unavailable",
+]
+
+
 class ProfessionalDataRequest(BaseModel):
-    """用户显式开启专业增强时，只接受服务端签发的一次性主体 Token。"""
+    """约束专业增强 Token 与基础报告降级原因的互斥请求。"""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     enabled: bool = False
     resolution_token: str | None = Field(default=None, max_length=4096)
+    fallback_reason: ProfessionalFallbackReason | None = None
 
     @model_validator(mode="after")
     def require_token_when_enabled(self) -> "ProfessionalDataRequest":
         if self.enabled and not self.resolution_token:
             raise ValueError("启用专业数据时必须提交主体确认 Token")
+        if self.enabled and self.fallback_reason is not None:
+            raise ValueError("启用专业数据时不能同时提交降级原因")
+        if self.fallback_reason is not None and self.resolution_token is not None:
+            raise ValueError("提交专业数据降级原因时不能携带主体确认 Token")
         return self
 
 
@@ -301,6 +314,12 @@ async def research(data: ResearchRequest, request: Request):
                         "status": "accepted",
                         "reason": None,
                     }
+        elif professional is not None and professional.fallback_reason is not None:
+            blocked_reason = professional.fallback_reason
+            professional_response = {
+                "status": "degraded",
+                "reason": blocked_reason,
+            }
 
         # Token 已在准入阶段消费；后台任务和 Mongo 只接收基础字段。
         sanitized_update = {"professional_data": None}

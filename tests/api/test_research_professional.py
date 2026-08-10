@@ -100,6 +100,91 @@ def test_enabled_professional_data_requires_resolution_token() -> None:
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(
+    "fallback_reason",
+    [
+        "identity_not_found",
+        "identity_unconfirmed",
+        "resolution_in_progress",
+        "provider_unavailable",
+    ],
+)
+def test_disabled_professional_fallback_reason_is_scheduled_without_provider_call(
+    monkeypatch,
+    fallback_reason,
+) -> None:
+    scheduled = _capture_scheduled_research(monkeypatch)
+    runtime = RuntimeStub(ProfessionalPreparation(kind=PreparationKind.BLOCKED))
+    original_runtime = application.app.state.company_intelligence
+    application.app.state.company_intelligence = runtime
+    try:
+        response = TestClient(application.app).post(
+            "/research",
+            json={
+                "company": "示例科技",
+                "professional_data": {
+                    "enabled": False,
+                    "fallback_reason": fallback_reason,
+                },
+            },
+        )
+    finally:
+        application.app.state.company_intelligence = original_runtime
+
+    assert response.status_code == 200
+    assert response.json()["professional_data"] == {
+        "status": "degraded",
+        "reason": fallback_reason,
+    }
+    assert runtime.prepare_calls == 0
+    assert len(scheduled) == 1
+    assert scheduled[0][1].professional_data is None
+    assert scheduled[0][2]["professional_preparation"] is None
+    assert scheduled[0][2]["professional_blocked_reason"] == fallback_reason
+
+
+@pytest.mark.parametrize(
+    "professional_data",
+    [
+        {
+            "enabled": True,
+            "resolution_token": "signed-once-token",
+            "fallback_reason": "identity_not_found",
+        },
+        {
+            "enabled": False,
+            "resolution_token": "signed-once-token",
+            "fallback_reason": "identity_not_found",
+        },
+    ],
+)
+def test_professional_fallback_reason_is_mutually_exclusive(professional_data) -> None:
+    response = TestClient(application.app).post(
+        "/research",
+        json={"company": "示例科技", "professional_data": professional_data},
+    )
+
+    assert response.status_code == 422
+
+
+def test_unknown_professional_fallback_reason_is_rejected_without_echo() -> None:
+    malicious_reason = "raw-upstream-secret"
+
+    response = TestClient(application.app).post(
+        "/research",
+        json={
+            "company": "示例科技",
+            "professional_data": {
+                "enabled": False,
+                "fallback_reason": malicious_reason,
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert malicious_reason not in response.text
+
+
 def test_ready_professional_branch_is_scheduled_without_persisting_token(
     monkeypatch,
 ) -> None:
@@ -446,6 +531,39 @@ async def test_professional_evidence_is_appended_before_persist_and_complete(
     )
     assert appendix_omitted is True
     assert oversized_report == original_oversized_report
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_is_rendered_without_truncating_base_report(
+    monkeypatch,
+) -> None:
+    class GraphStub:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def run(self, thread):
+            yield {"report": "基础 Web 报告\n\n基础结论保持完整。"}
+
+    job_id = "job-professional-identity-not-found"
+    monkeypatch.setattr(application, "Graph", GraphStub)
+    monkeypatch.setattr(application.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(application, "mongodb", None)
+    application.job_status.pop(job_id, None)
+    try:
+        await application.process_research(
+            job_id,
+            application.ResearchRequest(company="示例科技"),
+            professional_blocked_reason="identity_not_found",
+        )
+        state = application.job_status[job_id]
+    finally:
+        application.job_status.pop(job_id, None)
+
+    assert state["status"] == "completed"
+    assert state["report"].startswith(
+        "基础 Web 报告\n\n基础结论保持完整。\n\n## 工商与司法专业数据"
+    )
+    assert "未找到可确认的企业主体" in state["report"]
 
 
 @pytest.mark.asyncio
