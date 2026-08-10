@@ -41,7 +41,7 @@ from backend.services.company_intelligence.runtime import CompanyIntelligenceRun
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 
-# Load environment variables from .env file at startup
+# 启动时从 .env 文件加载环境变量
 env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=True)
@@ -76,7 +76,7 @@ if not any(os.getenv(name) for name, _, _ in _LLM_KEY_CANDIDATES):
     )
     sys.exit(1)
 
-# Configure logging
+# 配置日志
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()

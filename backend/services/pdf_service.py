@@ -11,17 +11,17 @@ logger = logging.getLogger(__name__)
 class PDFService:
     def __init__(self, config):
         self.output_dir = config.get("pdf_output_dir", "pdfs")
-        # Create output directory if it doesn't exist
+        # 输出目录不存在时创建目录
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _sanitize_company_name(self, company_name):
-        """Sanitize company name for use in filenames."""
-        # Replace spaces with underscores and remove special characters
+        """清理公司名称，使其可以安全地用于文件名。"""
+        # 将空格替换为下划线并移除特殊字符
         sanitized = re.sub(r"[^\w\s-]", "", company_name).strip().replace(" ", "_")
         return sanitized.lower()
 
     def _generate_pdf_filename(self, company_name):
-        """Generate a PDF filename based on the company name."""
+        """根据公司名称生成 PDF 文件名。"""
         sanitized_name = self._sanitize_company_name(company_name)
         return f"{sanitized_name}_report.pdf"
 
@@ -37,7 +37,7 @@ class PDFService:
             tuple: (success status, PDF stream or error message)
         """
         try:
-            # Extract company name from the first line if not provided
+            # 未提供公司名称时尝试从报告首行提取
             if not company_name:
                 first_line = markdown_content.split("\n")[0].strip()
                 if first_line.startswith("# "):
@@ -45,24 +45,24 @@ class PDFService:
                 else:
                     company_name = "Company Research"
 
-            # Generate the output filename
+            # 生成输出文件名
             pdf_filename = self._generate_pdf_filename(company_name)
 
-            # Create a BytesIO object to store the PDF
+            # 创建 BytesIO 缓冲区保存 PDF
             pdf_buffer = io.BytesIO()
 
-            # Generate the PDF directly to the buffer
+            # 直接将 PDF 写入缓冲区
             generate_pdf_from_md(markdown_content, pdf_buffer)
 
-            # Reset buffer position to start
+            # 将缓冲区位置重置到开头
             pdf_buffer.seek(0)
 
-            # Return success and the buffer
+            # 返回成功状态和缓冲区
             return True, (pdf_buffer, pdf_filename)
 
         except Exception as exc:
             logger.error(
-                "PDF stream generation failed, exception_type=%s",
+                "PDF 流生成失败，异常类型=%s",
                 type(exc).__name__,
             )
             return False, "pdf_generation_failed"
