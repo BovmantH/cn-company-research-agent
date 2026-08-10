@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class GroundingNode:
-    """Gathers initial grounding data about the company."""
+    """收集公司的初始背景数据。"""
 
     def __init__(self) -> None:
         # 通过统一的 SearchProvider 调用,默认走 Tavily,可由
@@ -18,50 +18,56 @@ class GroundingNode:
         self.search = get_search_provider()
 
     async def initial_search(self, state: InputState):
-        """Initial search and yield events"""
-        company = state.get("company", "Unknown Company")
+        """执行初始搜索并持续产出事件。"""
+        company = state.get("company", "未知公司")
         job_id = state.get("job_id")
-        msg = f"🎯 Initiating research for {company}...\n"
+        msg = f"🎯 开始调研 {company}……\n"
 
-        # Emit initialization event
+        # 发送初始化事件
         event = {
             "type": "research_init",
             "company": company,
-            "message": f"Initiating research for {company}",
-            "step": "Initializing",
+            "message": f"开始调研 {company}",
+            "step": "正在初始化",
         }
 
         if job_id:
             try:
                 if job_id in job_status:
                     job_status[job_id]["events"].append(event)
-            except Exception as e:
-                logger.error(f"Error appending research_init event: {e}")
+            except Exception as exc:
+                logger.error(
+                    "追加 research_init 事件失败，异常类型=%s",
+                    type(exc).__name__,
+                )
 
         yield event
 
         site_scrape = {}
         crawl_error_message: str | None = None
 
-        # Only attempt extraction if we have a URL
+        # 仅在提供网址时抓取站点内容
         if url := state.get("company_url"):
-            msg += f"\n🌐 Crawling company website: {url}"
-            logger.info(f"Starting website analysis for {url}")
+            msg += f"\n🌐 正在抓取公司网站：{url}"
+            logger.info("开始分析公司网站：%s", url)
 
-            # Emit crawl start event
+            # 发送抓取开始事件
             event = {
                 "type": "crawl_start",
                 "url": url,
-                "message": f"Crawling company website: {url}",
-                "step": "Website Crawl",
+                "message": f"正在抓取公司网站：{url}",
+                "step": "网站抓取",
             }
 
             if job_id:
                 try:
                     if job_id in job_status:
                         job_status[job_id]["events"].append(event)
-                except Exception as e:
-                    logger.error(f"Error appending crawl_start event: {e}")
+                except Exception as exc:
+                    logger.error(
+                        "追加 crawl_start 事件失败，异常类型=%s",
+                        type(exc).__name__,
+                    )
 
             yield event
 
@@ -85,64 +91,62 @@ class GroundingNode:
                     }
 
                 if site_scrape:
-                    logger.info(
-                        f"Successfully crawled {len(site_scrape)} pages from website"
-                    )
-                    msg += f"\n✅ Successfully crawled {len(site_scrape)} pages from website"
+                    logger.info("已成功从网站抓取 %s 个页面", len(site_scrape))
+                    msg += f"\n✅ 已成功从网站抓取 {len(site_scrape)} 个页面"
                     yield {
                         "type": "crawl_success",
                         "pages_found": len(site_scrape),
-                        "message": f"Successfully crawled {len(site_scrape)} pages from website",
-                        "step": "Initial Site Scrape",
+                        "message": f"已成功抓取 {len(site_scrape)} 个网站页面",
+                        "step": "初始站点抓取",
                     }
                 else:
-                    logger.warning("No content found in crawl results")
-                    msg += "\n⚠️ No content found in website crawl"
+                    logger.warning("站点抓取结果中未发现内容")
+                    msg += "\n⚠️ 站点抓取未发现内容"
                     yield {
                         "type": "crawl_warning",
-                        "message": "⚠️ No content found in provided URL",
-                        "step": "Initial Site Scrape",
+                        "message": "⚠️ 提供的网址中未发现内容",
+                        "step": "初始站点抓取",
                     }
             except Exception as e:
                 logger.error(
-                    "Website crawl error, exception_type=%s",
+                    "网站抓取失败，异常类型=%s",
                     type(e).__name__,
                 )
-                error_msg = "⚠️ Website content crawl unavailable"
+                error_msg = "⚠️ 网站内容暂时无法抓取"
                 crawl_error_message = error_msg
                 msg += f"\n{error_msg}"
                 yield {
                     "type": "crawl_error",
                     "reason": "crawl_failed",
                     "message": error_msg,
-                    "step": "Initial Site Scrape",
+                    "step": "初始站点抓取",
                     "continue_research": True,
                 }
         else:
-            msg += "\n⏩ No company URL provided, proceeding directly to research phase"
+            msg += "\n⏩ 未提供公司网址，直接进入调研阶段"
             yield {
                 "type": "no_url",
-                "message": "No company URL provided, proceeding directly to research phase",
-                "step": "Initializing",
+                "message": "未提供公司网址，直接进入调研阶段",
+                "step": "正在初始化",
             }
-        # Add context about what information we have
+        # 补充已有的公司背景信息
         context_data = {}
         if hq := state.get("hq_location"):
-            msg += f"\n📍 Company HQ: {hq}"
+            msg += f"\n📍 公司总部：{hq}"
             context_data["hq_location"] = hq
         if industry := state.get("industry"):
-            msg += f"\n🏭 Industry: {industry}"
+            msg += f"\n🏭 所属行业：{industry}"
             context_data["industry"] = industry
 
-        # Initialize ResearchState with input information
+        # 使用输入信息初始化 ResearchState
         research_state = {
-            # Copy input fields
+            # 复制输入字段
             "company": state.get("company"),
             "company_url": state.get("company_url"),
             "hq_location": state.get("hq_location"),
             "industry": state.get("industry"),
             "job_id": state.get("job_id"),
-            # Initialize research fields
+            # 初始化调研字段
             "messages": [AIMessage(content=msg)],
             "site_scrape": site_scrape,
         }
@@ -155,13 +159,13 @@ class GroundingNode:
         yield research_state
 
     async def run(self, state: InputState) -> ResearchState:
-        """Run grounding - note: for now returns directly, events can be captured if needed"""
-        # For compatibility, we call the generator but don't yield
-        # The calling code can be updated later to consume events
+        """执行背景信息收集；当前直接返回结果，事件可按需接入。"""
+        # 为保持兼容，仅消费生成器而不向外转发事件
+        # 调用方后续可以按需改为直接消费这些事件
         result = None
         async for event in self.initial_search(state):
-            # The last yield should be the research_state (a dict with state fields)
-            # Earlier yields are event dicts with "type" field
+            # 最后一次产出应为 research_state，即不含 type 的状态字典
+            # 更早产出的均为带 type 字段的事件字典
             if isinstance(event, dict) and "type" not in event:
                 result = event
         return result if result else {}

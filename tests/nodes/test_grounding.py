@@ -22,5 +22,5 @@ async def test_crawl_failure_records_only_safe_state_error() -> None:
         )
     ]
 
-    assert events[-1]["error"] == "⚠️ Website content crawl unavailable"
+    assert events[-1]["error"] == "⚠️ 网站内容暂时无法抓取"
     assert "upstream-secret" not in repr(events)

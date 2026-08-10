@@ -25,24 +25,22 @@ class Graph:
     def __init__(
         self, company=None, url=None, hq_location=None, industry=None, job_id=None
     ):
-        # Initialize InputState
+        # 初始化图输入状态
         self.input_state = InputState(
             company=company,
             company_url=url,
             hq_location=hq_location,
             industry=industry,
             job_id=job_id,
-            messages=[
-                SystemMessage(content="Expert researcher starting investigation")
-            ],
+            messages=[SystemMessage(content="资深调研员开始调查")],
         )
 
-        # Initialize nodes
+        # 初始化工作流节点
         self._init_nodes()
         self._build_workflow()
 
     def _init_nodes(self):
-        """Initialize all workflow nodes"""
+        """初始化全部工作流节点。"""
         self.ground = GroundingNode()
         self.financial_analyst = FinancialAnalyst()
         self.news_scanner = NewsScanner()
@@ -55,10 +53,10 @@ class Graph:
         self.editor = Editor()
 
     def _build_workflow(self):
-        """Configure the state graph workflow"""
+        """配置状态图工作流。"""
         self.workflow = StateGraph(InputState)
 
-        # Add nodes with their respective processing functions
+        # 注册节点及其处理函数
         self.workflow.add_node("grounding", self.ground.run)
         self.workflow.add_node("financial_analyst", self.financial_analyst.run)
         self.workflow.add_node("news_scanner", self.news_scanner.run)
@@ -70,7 +68,7 @@ class Graph:
         self.workflow.add_node("briefing", self.briefing.run)
         self.workflow.add_node("editor", self.editor.run)
 
-        # Configure workflow edges
+        # 配置工作流边
         self.workflow.set_entry_point("grounding")
         self.workflow.set_finish_point("editor")
 
@@ -81,19 +79,19 @@ class Graph:
             "company_analyst",
         ]
 
-        # Connect grounding to all research nodes
+        # 将信息落地节点连接到全部调研节点
         for node in research_nodes:
             self.workflow.add_edge("grounding", node)
             self.workflow.add_edge(node, "collector")
 
-        # Connect remaining nodes
+        # 连接其余处理节点
         self.workflow.add_edge("collector", "curator")
         self.workflow.add_edge("curator", "enricher")
         self.workflow.add_edge("enricher", "briefing")
         self.workflow.add_edge("briefing", "editor")
 
     async def run(self, thread: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
-        """Execute the research workflow"""
+        """执行调研工作流。"""
         compiled_graph = self.workflow.compile()
 
         async for state in compiled_graph.astream(self.input_state, thread):

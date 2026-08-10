@@ -36,25 +36,30 @@ class BaseResearcher:
         self._analyst_type = value
 
     async def generate_queries(self, state: Dict, prompt: str):
-        """Generate search queries and yield events as they're created"""
-        company = state.get("company", "Unknown Company")
-        industry = state.get("industry", "Unknown Industry")
-        hq_location = state.get("hq_location", "Unknown")
+        """生成搜索词，并在生成过程中持续产出事件。"""
+        company = state.get("company", "未知公司")
+        industry = state.get("industry", "未知行业")
+        hq_location = state.get("hq_location", "未知地点")
         current_year = datetime.now().year
         job_id = state.get("job_id")
 
         logger.info(
-            f"=== GENERATE_QUERIES START: job_id={job_id}, analyst={self.analyst_type} ==="
+            "=== 开始生成查询词：job_id=%s，analyst=%s ===",
+            job_id,
+            self.analyst_type,
         )
         if not job_id:
-            logger.warning(f"⚠️ NO JOB_ID in state! Keys: {list(state.keys())}")
+            logger.warning("⚠️ 状态中缺少 job_id，现有字段：%s", list(state.keys()))
 
         try:
             logger.info(
-                f"Generating queries for {company} as {self.analyst_type}, job_id={job_id}"
+                "正在为 %s 生成 %s 查询词，job_id=%s",
+                company,
+                self.analyst_type,
+                job_id,
             )
 
-            # Create prompt template using LangChain
+            # 使用 LangChain 创建提示模板
             query_prompt = ChatPromptTemplate.from_messages(
                 [
                     (
@@ -70,14 +75,14 @@ class BaseResearcher:
                 ]
             )
 
-            # Create LCEL chain
+            # 创建 LCEL 链
             chain = query_prompt | self.llm
 
             queries = []
             current_query = ""
             current_query_number = 1
 
-            # Stream queries using LangChain's astream
+            # 使用 LangChain 的 astream 流式生成查询词
             async for chunk in chain.astream(
                 {
                     "company": company,
@@ -93,7 +98,7 @@ class BaseResearcher:
             ):
                 current_query += chunk.content
 
-                # Yield query generation progress
+                # 产出查询词生成进度
                 event = {
                     "type": "query_generating",
                     "query": current_query,
@@ -105,7 +110,7 @@ class BaseResearcher:
                 # 避免 append-only SSE 形成 O(n²) 内存；完成的 query 仍会持久事件化。
                 yield event
 
-                # Parse completed queries on newline
+                # 按换行符解析已完成的查询词
                 if "\n" in current_query:
                     parts = current_query.split("\n")
                     current_query = parts[-1]
@@ -121,24 +126,26 @@ class BaseResearcher:
                                 "category": self.analyst_type,
                             }
 
-                            # Update job status if job_id provided
+                            # 提供 job_id 时同步任务状态
                             if job_id:
                                 try:
                                     if job_id in job_status:
                                         job_status[job_id]["events"].append(event)
                                     else:
                                         logger.warning(
-                                            f"job_id {job_id} not found in job_status for query_generated"
+                                            "追加 query_generated 事件时未找到 job_id=%s",
+                                            job_id,
                                         )
-                                except Exception as e:
+                                except Exception as exc:
                                     logger.error(
-                                        f"Error appending query_generated event: {e}"
+                                        "追加 query_generated 事件失败，异常类型=%s",
+                                        type(exc).__name__,
                                     )
 
                             yield event
                             current_query_number += 1
 
-            # Add remaining query
+            # 加入最后一条尚未换行的查询词
             if current_query.strip():
                 queries.append(current_query.strip())
                 yield {
@@ -151,8 +158,8 @@ class BaseResearcher:
             if not queries:
                 raise ValueError(f"未能为 {company} 生成查询词")
 
-            queries = queries[:4]  # Limit to 4 queries
-            logger.info(f"Final queries for {self.analyst_type}: {queries}")
+            queries = queries[:4]  # 最多保留 4 条查询词
+            logger.info("%s 的最终查询词：%s", self.analyst_type, queries)
 
             yield {
                 "type": "queries_complete",
@@ -162,13 +169,13 @@ class BaseResearcher:
 
         except Exception as e:
             logger.error(
-                "Error generating queries, exception_type=%s",
+                "生成查询词失败，异常类型=%s",
                 type(e).__name__,
             )
             raise RuntimeError("严重 API 错误：查询词生成失败") from None
 
     def _get_search_params(self) -> Dict[str, Any]:
-        """Get search parameters based on analyst type.
+        """根据分析器类型生成搜索参数。
 
         ``max_results`` 是 ``SearchProvider.search`` 的显式参数,其余字段
         (``search_depth``、``include_raw_content``、``topic``)是 Tavily
@@ -199,7 +206,7 @@ class BaseResearcher:
         url = result.url
         title = clean_title(result.title) if result.title else ""
 
-        # Reset empty or invalid titles
+        # 重置空标题或无效标题
         if not title or title.lower() == url.lower():
             title = ""
 
@@ -215,21 +222,21 @@ class BaseResearcher:
     async def search_documents(self, state: ResearchState, queries: List[str]):
         """通过 SearchProvider 并行执行所有查询并 yield 进度事件。"""
         if not queries:
-            logger.error("No valid queries to search")
+            logger.error("没有可执行的有效查询词")
             yield {
                 "type": "research_degraded",
                 "reason": "no_valid_queries",
             }
             return
 
-        # Yield start event
+        # 产出搜索开始事件
         yield {
             "type": "search_started",
-            "message": f"Searching {len(queries)} queries",
+            "message": f"正在执行 {len(queries)} 条查询",
             "total_queries": len(queries),
         }
 
-        # Execute all searches in parallel through the provider abstraction
+        # 通过数据提供方抽象并行执行全部搜索
         search_params = self._get_search_params()
         search_tasks = [self.search.search(query, **search_params) for query in queries]
 
@@ -237,18 +244,18 @@ class BaseResearcher:
             results = await asyncio.gather(*search_tasks, return_exceptions=True)
         except Exception as e:
             logger.error(
-                "Error during parallel search execution, exception_type=%s",
+                "并行搜索执行失败，异常类型=%s",
                 type(e).__name__,
             )
             yield {"type": "research_degraded", "reason": "search_failed"}
             return
 
-        # Process and merge results
+        # 处理并合并搜索结果
         merged_docs: Dict[str, Dict[str, Any]] = {}
         for query, result in zip(queries, results, strict=True):
             if isinstance(result, Exception):
                 logger.error(
-                    "Search failed for query, exception_type=%s",
+                    "查询执行失败，异常类型=%s",
                     type(result).__name__,
                 )
                 yield {
@@ -263,10 +270,10 @@ class BaseResearcher:
                 if doc := self._process_search_result(item, query):
                     merged_docs[doc["url"]] = doc
 
-        # Yield completion event
+        # 产出搜索完成事件
         yield {
             "type": "search_complete",
-            "message": f"Found {len(merged_docs)} documents",
+            "message": f"已发现 {len(merged_docs)} 份文档",
             "total_documents": len(merged_docs),
             "queries_processed": len(queries),
             "merged_docs": merged_docs,

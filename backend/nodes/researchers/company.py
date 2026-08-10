@@ -13,26 +13,26 @@ class CompanyAnalyzer(BaseResearcher):
         self.analyst_type = "company_analyzer"
 
     async def analyze(self, state: ResearchState):
-        """Analyze company and yield events"""
-        company = state.get("company", "Unknown Company")
+        """分析公司信息并持续产出事件。"""
+        company = state.get("company", "未知公司")
 
-        # Generate search queries and yield events
+        # 生成搜索词并持续产出事件
         queries = []
         async for event in self.generate_queries(state, COMPANY_ANALYZER_QUERY_PROMPT):
             yield event
             if event.get("type") == "queries_complete":
                 queries = event.get("queries", [])
 
-        # Log subqueries
-        subqueries_msg = "🔍 Subqueries for company analysis:\n" + "\n".join(
+        # 记录公司分析子查询
+        subqueries_msg = "🔍 公司分析子查询：\n" + "\n".join(
             [f"• {query}" for query in queries]
         )
         state.setdefault("messages", []).append(AIMessage(content=subqueries_msg))
 
-        # Start with site scrape data
+        # 以站点抓取数据作为初始内容
         company_data = dict[str, Any](state.get("site_scrape", {}))
 
-        # Search and merge documents, yielding events
+        # 搜索并合并文档，同时持续产出事件
         documents = {}
         async for event in self.search_documents(state, queries):
             yield event
@@ -41,10 +41,8 @@ class CompanyAnalyzer(BaseResearcher):
 
         company_data.update(documents)
 
-        # Update state
-        completion_msg = (
-            f"🏢 Company Analyzer found {len(company_data)} documents for {company}"
-        )
+        # 更新状态
+        completion_msg = f"🏢 公司分析器为 {company} 找到 {len(company_data)} 份文档"
         state.setdefault("messages", []).append(AIMessage(content=completion_msg))
         state["company_data"] = company_data
 
@@ -56,7 +54,7 @@ class CompanyAnalyzer(BaseResearcher):
         yield {"message": [completion_msg], "company_data": company_data}
 
     async def run(self, state: ResearchState):
-        """Run analysis and yield all events"""
+        """执行分析并产出全部事件。"""
         result = None
         async for event in self.analyze(state):
             yield event

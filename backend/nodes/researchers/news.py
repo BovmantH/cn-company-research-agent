@@ -13,26 +13,26 @@ class NewsScanner(BaseResearcher):
         self.analyst_type = "news_analyzer"
 
     async def analyze(self, state: ResearchState):
-        """Analyze news and yield events"""
-        company = state.get("company", "Unknown Company")
+        """分析新闻信息并持续产出事件。"""
+        company = state.get("company", "未知公司")
 
-        # Generate search queries and yield events
+        # 生成搜索词并持续产出事件
         queries = []
         async for event in self.generate_queries(state, NEWS_SCANNER_QUERY_PROMPT):
             yield event
             if event.get("type") == "queries_complete":
                 queries = event.get("queries", [])
 
-        # Log subqueries
-        subqueries_msg = "🔍 Subqueries for news analysis:\n" + "\n".join(
+        # 记录新闻分析子查询
+        subqueries_msg = "🔍 新闻分析子查询：\n" + "\n".join(
             [f"• {query}" for query in queries]
         )
         state.setdefault("messages", []).append(AIMessage(content=subqueries_msg))
 
-        # Start with site scrape data
+        # 以站点抓取数据作为初始内容
         news_data = dict[str, Any](state.get("site_scrape", {}))
 
-        # Search and merge documents, yielding events
+        # 搜索并合并文档，同时持续产出事件
         documents = {}
         async for event in self.search_documents(state, queries):
             yield event
@@ -41,10 +41,8 @@ class NewsScanner(BaseResearcher):
 
         news_data.update(documents)
 
-        # Update state
-        completion_msg = (
-            f"📰 News Scanner found {len(news_data)} documents for {company}"
-        )
+        # 更新状态
+        completion_msg = f"📰 新闻扫描器为 {company} 找到 {len(news_data)} 份文档"
         state.setdefault("messages", []).append(AIMessage(content=completion_msg))
         state["news_data"] = news_data
 
@@ -56,7 +54,7 @@ class NewsScanner(BaseResearcher):
         yield {"message": [completion_msg], "news_data": news_data}
 
     async def run(self, state: ResearchState):
-        """Run analysis and yield all events"""
+        """执行分析并产出全部事件。"""
         result = None
         async for event in self.analyze(state):
             yield event
