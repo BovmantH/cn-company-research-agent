@@ -22,7 +22,7 @@
     MINIMAX_API_KEY           MiniMax
     MIMO_API_KEY              小米 MiMo
     XIAOMI_API_KEY            小米 MiMo 旧变量名（兼容）
-    OPENROUTER_API_KEY        OpenRouter 聚合（第一阶段主路径）
+    OPENROUTER_API_KEY        OpenRouter 聚合兼容入口
     OPENAI_API_KEY            OpenAI 原生
 
     # 选择策略
