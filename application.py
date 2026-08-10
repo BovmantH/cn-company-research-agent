@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.api.company_intelligence import router as company_intelligence_router
 from backend.classes.state import (
+    FINAL_REPORT_EVENT_MAX_BYTES,
     JOB_TERMINAL_TTL_SECONDS,
     JobEventLog,
     job_status,
@@ -96,7 +97,6 @@ app.add_middleware(
 )
 pdf_service = PDFService({"pdf_output_dir": "pdfs"})
 _PROFESSIONAL_COLLECTION_TIMEOUT_SECONDS = 120.0
-_MAX_FINAL_REPORT_EVENT_BYTES = 14 * 1024 * 1024
 
 
 # Pydantic / 请求体解析失败时,FastAPI 默认抛 422 + 英文 detail。
@@ -493,7 +493,7 @@ def _append_professional_evidence(
     report_content: str,
     serialized_evidence: object,
 ) -> tuple[str, bool]:
-    """追加专业附录，并保证最终 complete 事件留在持久化大小边界内。"""
+    """在不改写基础报告的前提下追加专业附录。"""
 
     def complete_event_size(report: str) -> int:
         probe = {
@@ -510,29 +510,12 @@ def _append_professional_evidence(
             ).encode("utf-8")
         )
 
-    def fit_with_notice(report: str, notice: str) -> str:
-        """二分保留尽可能多的基础报告，同时确保终态事件可编码。"""
-        suffix = f"\n\n{notice}"
-        lower = 0
-        upper = len(report)
-        while lower < upper:
-            middle = (lower + upper + 1) // 2
-            candidate_prefix = report[:middle].rstrip()
-            if (
-                complete_event_size(f"{candidate_prefix}{suffix}")
-                <= _MAX_FINAL_REPORT_EVENT_BYTES
-            ):
-                lower = middle
-            else:
-                upper = middle - 1
-        return f"{report[:lower].rstrip()}{suffix}"
-
     evidence = ProfessionalEvidence.model_validate(serialized_evidence)
     appendix = render_professional_evidence_markdown(evidence)
     base_report = report_content.rstrip()
     candidate = f"{base_report}\n\n{appendix}"
 
-    if complete_event_size(candidate) <= _MAX_FINAL_REPORT_EVENT_BYTES:
+    if complete_event_size(candidate) <= FINAL_REPORT_EVENT_MAX_BYTES:
         return candidate, False
 
     size_notice = (
@@ -540,13 +523,9 @@ def _append_professional_evidence(
         "> 专业数据已采集，但因最终报告大小限制未展开；基础 Web 报告不受影响。"
     )
     candidate = f"{base_report}\n\n{size_notice}"
-    if complete_event_size(candidate) <= _MAX_FINAL_REPORT_EVENT_BYTES:
+    if complete_event_size(candidate) <= FINAL_REPORT_EVENT_MAX_BYTES:
         return candidate, True
-    delivery_notice = (
-        "## 报告交付说明\n\n"
-        "> 基础 Web 报告因超过交付大小限制已截断；专业数据已采集，但未在本报告中展开。"
-    )
-    return fit_with_notice(report_content, delivery_notice), True
+    return report_content, True
 
 
 async def process_research(

@@ -7,6 +7,9 @@ from datetime import datetime
 from threading import Lock
 from typing import Any, Dict, List, NotRequired, Required, TypedDict, overload
 
+JOB_EVENT_LOG_MAX_BYTES = 16 * 1024 * 1024
+FINAL_REPORT_EVENT_MAX_BYTES = JOB_EVENT_LOG_MAX_BYTES - 2 * 1024 * 1024
+
 
 # 定义图输入状态
 class InputState(TypedDict, total=False):
@@ -44,7 +47,7 @@ class JobEventLog(Sequence[dict[str, Any]]):
         self,
         *,
         max_events: int = 5_000,
-        max_bytes: int = 16 * 1024 * 1024,
+        max_bytes: int = JOB_EVENT_LOG_MAX_BYTES,
     ) -> None:
         if max_events <= 0 or max_bytes <= 0:
             raise ValueError("事件日志限制必须为正数")

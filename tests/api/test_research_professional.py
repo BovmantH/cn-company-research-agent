@@ -414,7 +414,12 @@ async def test_professional_evidence_is_appended_before_persist_and_complete(
     complete = next(event for event in state["events"] if event["type"] == "complete")
     assert complete["report"] == state["report"]
 
-    monkeypatch.setattr(application, "_MAX_FINAL_REPORT_EVENT_BYTES", 512)
+    monkeypatch.setattr(
+        application,
+        "FINAL_REPORT_EVENT_MAX_BYTES",
+        512,
+        raising=False,
+    )
     limited_report, appendix_omitted = application._append_professional_evidence(
         "基础 Web 报告",
         evidence.model_dump(mode="json"),
@@ -433,23 +438,13 @@ async def test_professional_evidence_is_appended_before_persist_and_complete(
     assert "因最终报告大小限制未展开" in limited_report
     assert len(encoded_complete) <= 512
 
+    original_oversized_report = "基础内容" * 1_000
     oversized_report, appendix_omitted = application._append_professional_evidence(
-        "基础内容" * 1_000,
+        original_oversized_report,
         evidence.model_dump(mode="json"),
     )
-    oversized_complete = application.json.dumps(
-        {
-            "type": "complete",
-            "report": oversized_report,
-            "version": 1,
-            "event_id": 9_999_999_999,
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
     assert appendix_omitted is True
-    assert "基础 Web 报告因超过交付大小限制已截断" in oversized_report
-    assert len(oversized_complete) <= 512
+    assert oversized_report == original_oversized_report
 
 
 @pytest.mark.asyncio
