@@ -790,8 +790,17 @@ async def ping():
 
 @app.get("/research/pdf/{filename}")
 async def get_pdf(filename: str):
-    pdf_path = os.path.join("pdfs", filename)
-    if not os.path.exists(pdf_path):
+    pdf_root = Path("pdfs").resolve()
+    requested_path = Path(filename)
+    if (
+        requested_path.name != filename
+        or requested_path.suffix.lower() != ".pdf"
+        or "/" in filename
+        or "\\" in filename
+    ):
+        raise HTTPException(status_code=404, detail="PDF 文件不存在")
+    pdf_path = (pdf_root / filename).resolve()
+    if pdf_path.parent != pdf_root or not pdf_path.is_file():
         raise HTTPException(status_code=404, detail="PDF 文件不存在")
     return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
 
