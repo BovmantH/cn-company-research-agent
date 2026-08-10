@@ -1,5 +1,4 @@
 import ReactMarkdown from "react-markdown";
-import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { Check, Copy, Download, Loader2 } from 'lucide-react';
 import type { GlassStyle, AnimationStyle } from '../types';
@@ -82,7 +81,7 @@ const ResearchReport = ({
       <div className="prose prose-invert prose-lg max-w-none">
         <div className="mt-4">
           <ReactMarkdown
-            rehypePlugins={[rehypeRaw]}
+            skipHtml
             remarkPlugins={[remarkGfm]}
             components={{
               div: ({node: _node, ...props}) => (
