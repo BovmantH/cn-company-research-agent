@@ -170,17 +170,31 @@ class ProfessionalDataRequest(BaseModel):
         return self
 
 
+MAX_COMPANY_NAME_LENGTH = 200
+MAX_COMPANY_URL_LENGTH = 2_048
+MAX_RESEARCH_CONTEXT_LENGTH = 200
+MAX_REPORT_CONTENT_LENGTH = 2_000_000
+
+
 class ResearchRequest(BaseModel):
-    company: str
-    company_url: str | None = None
-    industry: str | None = None
-    hq_location: str | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    company: str = Field(min_length=1, max_length=MAX_COMPANY_NAME_LENGTH)
+    company_url: str | None = Field(default=None, max_length=MAX_COMPANY_URL_LENGTH)
+    industry: str | None = Field(default=None, max_length=MAX_RESEARCH_CONTEXT_LENGTH)
+    hq_location: str | None = Field(
+        default=None,
+        max_length=MAX_RESEARCH_CONTEXT_LENGTH,
+    )
     professional_data: ProfessionalDataRequest | None = None
 
 
 class PDFGenerationRequest(BaseModel):
-    report_content: str
-    company_name: str | None = None
+    report_content: str = Field(
+        min_length=1,
+        max_length=MAX_REPORT_CONTENT_LENGTH,
+    )
+    company_name: str | None = Field(default=None, max_length=MAX_COMPANY_NAME_LENGTH)
 
 
 def _research_accepted_response(
