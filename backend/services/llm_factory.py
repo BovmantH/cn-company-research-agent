@@ -353,6 +353,11 @@ def _resolve_vendor() -> tuple[str, str]:
     )
 
 
+def validate_llm_configuration() -> None:
+    """离线校验当前供应商选择能否解析到对应 Key，不发起任何模型请求。"""
+    _resolve_vendor()
+
+
 def _resolve_base_url(vendor: str) -> str:
     """解析单个供应商的 ``base_url``。
 

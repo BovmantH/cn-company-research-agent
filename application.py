@@ -2,10 +2,10 @@ import asyncio
 import json
 import logging
 import os
-import sys
 import time
 import uuid
 from collections.abc import Coroutine
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -41,7 +41,7 @@ from backend.services.company_intelligence.rendering import (
 )
 from backend.services.company_intelligence.requester import resolve_client_ip
 from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
-from backend.services.llm_factory import get_llm_credential_candidates
+from backend.services.llm_factory import validate_llm_configuration
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 
@@ -50,36 +50,26 @@ env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=True)
 
-# 启动校验：LLMFactory 依赖至少一个 LLM 服务商密钥，缺失则直接退出，
-# 避免在第一次请求时才发现 key 没配,把错误推到用户面前。
-_LLM_KEY_CANDIDATES = get_llm_credential_candidates()
-if not any(os.getenv(name) for name, _, _ in _LLM_KEY_CANDIDATES):
-    # 把标准错误流切换为 UTF-8，避免 Windows GBK 控制台显示乱码
-    if hasattr(sys.stderr, "reconfigure"):
-        try:
-            sys.stderr.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
-
-    candidates = "\n".join(
-        f"  - {name:<22}({label},见 {url})" for name, label, url in _LLM_KEY_CANDIDATES
-    )
-    print(
-        "\n[启动失败] 未检测到 LLM provider 凭证。\n"
-        "请在 .env 中至少配置以下其中一项:\n"
-        f"{candidates}\n"
-        "\n参考 .env.example 复制一份 .env 后填写。\n",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
 # 配置日志
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
 
-app = FastAPI(title="公司调研助手 API")
+
+@asynccontextmanager
+async def _application_lifespan(_: FastAPI):
+    """在服务真正启动时校验 LLM 配置，保持模块导入可测试、可复用。"""
+    try:
+        validate_llm_configuration()
+    except RuntimeError as exc:
+        raise RuntimeError(
+            f"LLM 启动配置无效：{exc}\n参考 .env.example 配置服务端凭证。"
+        ) from None
+    yield
+
+
+app = FastAPI(title="公司调研助手 API", lifespan=_application_lifespan)
 app.state.company_intelligence = CompanyIntelligenceRuntime.from_env()
 app.state.research_tasks = set()
 app.include_router(company_intelligence_router)
