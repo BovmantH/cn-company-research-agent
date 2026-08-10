@@ -274,7 +274,12 @@ def render_professional_evidence_markdown(
     lines = [
         "## 工商与司法专业数据",
         "",
-        "> 本章节由已校验的结构化数据确定性生成，未经过大语言模型改写；内容仅供调研参考，不构成法律意见。",
+        (
+            "> 本章节由已校验的结构化数据确定性生成，未经过大语言模型改写；"
+            "内容仅供调研参考，不构成法律、征信、投资或信贷意见；"
+            "司法执行状态请以[中国执行信息公开网](https://zxgk.court.gov.cn/)"
+            "的人工核验结果为准。"
+        ),
         "",
         f"- **规范主体：** {_format_value(identity.canonical_name)}",
         f"- **统一社会信用代码：** {_format_value(identity.credit_code)}",

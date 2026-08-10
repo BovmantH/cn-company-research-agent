@@ -160,6 +160,8 @@ def test_renderer_uses_fixed_capability_order_and_distinct_statuses() -> None:
         "主体未确认",
     ):
         assert status_text in rendered
+    assert "不构成法律、征信、投资或信贷意见" in rendered
+    assert "https://zxgk.court.gov.cn/" in rendered
 
 
 def test_renderer_outputs_every_record_type_without_llm_rewriting() -> None:
