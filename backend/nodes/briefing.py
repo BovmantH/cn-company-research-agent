@@ -20,17 +20,17 @@ logger = logging.getLogger(__name__)
 
 
 class Briefing:
-    """Creates briefings for each research category and updates the ResearchState."""
+    """为每个调研类别生成简报并更新 ResearchState。"""
 
     def __init__(self) -> None:
-        self.max_doc_length = 8000  # Maximum document content length
+        self.max_doc_length = 8000  # 单份文档正文的最大长度
         # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
         # 模型可通过 LLM_MODEL_BRIEFING 环境变量覆盖(默认 qwen/qwen-2.5-72b-instruct)。
         # 简报阶段不需要流式输出,关掉以减少与上游的连接开销。
         self.llm = get_llm("briefing", streaming=False)
 
     def _get_category_prompt(self, category: str) -> str:
-        """Get the category-specific prompt template"""
+        """获取指定类别的提示模板。"""
         prompts = {
             "company": COMPANY_BRIEFING_PROMPT,
             "industry": INDUSTRY_BRIEFING_PROMPT,
@@ -45,22 +45,22 @@ class Briefing:
     def _prepare_documents(
         self, docs: Union[Dict[str, Any], List[Dict[str, Any]]]
     ) -> str:
-        """Prepare and format documents for briefing generation"""
-        # Normalize docs to list of (url, doc) tuples
+        """为生成简报准备并格式化文档。"""
+        # 将文档规范化为 (url, doc) 元组列表
         items = (
             list(docs.items())
             if isinstance(docs, dict)
             else [(doc.get("url", f"doc_{i}"), doc) for i, doc in enumerate(docs)]
         )
 
-        # Sort by evaluation score
+        # 按评估分数排序
         sorted_items = sorted(
             items,
             key=lambda x: float(x[1].get("evaluation", {}).get("overall_score", "0")),
             reverse=True,
         )
 
-        # Format documents with length limits
+        # 在长度限制内格式化文档
         doc_texts = []
         total_length = 0
         for _, doc in sorted_items:
@@ -68,10 +68,10 @@ class Briefing:
             content = doc.get("raw_content") or doc.get("content", "")
 
             if len(content) > self.max_doc_length:
-                content = content[: self.max_doc_length] + "... [content truncated]"
+                content = content[: self.max_doc_length] + "……[正文已截断]"
 
             doc_entry = f"Title: {title}\n\nContent: {content}"
-            if total_length + len(doc_entry) < 120000:  # Keep under limit
+            if total_length + len(doc_entry) < 120000:  # 保持在总长度限制内
                 doc_texts.append(doc_entry)
                 total_length += len(doc_entry)
             else:
@@ -86,40 +86,46 @@ class Briefing:
         category: str,
         context: Dict[str, Any],
     ):
-        """Generate category briefing and yield events"""
-        company = context.get("company", "Unknown")
-        industry = context.get("industry", "Unknown")
-        hq_location = context.get("hq_location", "Unknown")
+        """生成类别简报并持续产出事件。"""
+        company = context.get("company", "未知公司")
+        industry = context.get("industry", "未知行业")
+        hq_location = context.get("hq_location", "未知地点")
         job_id = context.get("job_id")
 
         logger.info(
-            f"Generating {category} briefing for {company} using {len(docs)} documents"
+            "正在使用 %s 份文档为 %s 生成 %s 简报",
+            len(docs),
+            company,
+            category,
         )
 
-        # Emit briefing start event
+        # 发送简报生成开始事件
         event = {
             "type": "briefing_start",
             "category": category,
             "total_docs": len(docs),
-            "step": "Briefing",
+            "step": "生成简报",
         }
 
         if job_id:
             try:
                 if job_id in job_status:
                     job_status[job_id]["events"].append(event)
-            except Exception as e:
-                logger.error(f"Error appending briefing_start event: {e}")
+            except Exception as exc:
+                logger.error(
+                    "追加 briefing_start 事件失败，异常类型=%s",
+                    type(exc).__name__,
+                )
 
         yield event
 
-        # Get category-specific prompt and prepare documents
+        # 获取类别提示模板并准备文档
         category_prompt = self._get_category_prompt(category).format(
             company=company, industry=industry, hq_location=hq_location
         )
         formatted_docs = self._prepare_documents(docs)
 
-        # Create LCEL chain for briefing generation
+        # 创建用于生成简报的 LCEL 链
         briefing_prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -136,7 +142,7 @@ class Briefing:
         chain = briefing_prompt | self.llm | StrOutputParser()
 
         try:
-            logger.info("Sending prompt to LLM")
+            logger.info("正在向 LLM 发送提示")
             content = await chain.ainvoke(
                 {
                     "category_prompt": category_prompt,
@@ -146,7 +152,7 @@ class Briefing:
             )
 
             if not content:
-                logger.error(f"Empty response from LLM for {category} briefing")
+                logger.error("LLM 返回的 %s 简报为空", category)
                 yield {
                     "type": "briefing_degraded",
                     "reason": "empty_response",
@@ -155,44 +161,47 @@ class Briefing:
                 yield {"content": ""}
                 return
 
-            # Emit completion event
+            # 发送简报生成完成事件
             event = {
                 "type": "briefing_complete",
                 "category": category,
                 "content_length": len(content),
-                "step": "Briefing",
+                "step": "生成简报",
             }
 
             if job_id:
                 try:
                     if job_id in job_status:
                         job_status[job_id]["events"].append(event)
-                except Exception as e:
-                    logger.error(f"Error appending briefing_complete event: {e}")
+                except Exception as exc:
+                    logger.error(
+                        "追加 briefing_complete 事件失败，异常类型=%s",
+                        type(exc).__name__,
+                    )
 
             yield event
             yield {"content": content.strip()}
         except Exception as e:
             logger.error(
-                "Error generating %s briefing, exception_type=%s",
+                "生成 %s 简报失败，异常类型=%s",
                 category,
                 type(e).__name__,
             )
             raise RuntimeError(f"严重 API 错误：{category} 简报生成失败") from None
 
     async def create_briefings(self, state: ResearchState) -> ResearchState:
-        """Create briefings for all categories in parallel."""
-        company = state.get("company", "Unknown Company")
-        logger.info(f"Creating section briefings for {company}")
+        """并行为全部类别生成简报。"""
+        company = state.get("company", "未知公司")
+        logger.info("正在为 %s 生成各章节简报", company)
 
         context = {
             "company": company,
-            "industry": state.get("industry", "Unknown"),
-            "hq_location": state.get("hq_location", "Unknown"),
+            "industry": state.get("industry", "未知行业"),
+            "hq_location": state.get("hq_location", "未知地点"),
             "job_id": state.get("job_id"),
         }
 
-        # Mapping of curated data fields to briefing categories
+        # 筛选数据字段与简报类别的映射
         categories = {
             "financial_data": ("financial", "financial_briefing"),
             "news_data": ("news", "news_briefing"),
@@ -202,7 +211,7 @@ class Briefing:
 
         briefings = {}
 
-        # Create tasks for parallel processing
+        # 创建并行处理任务
         briefing_tasks = []
         for data_field, (cat, briefing_key) in categories.items():
             curated_key = f"curated_{data_field}"
@@ -210,7 +219,9 @@ class Briefing:
 
             if curated_data:
                 logger.info(
-                    f"Processing {data_field} with {len(curated_data)} documents"
+                    "正在处理 %s，共 %s 份文档",
+                    data_field,
+                    len(curated_data),
                 )
                 briefing_tasks.append(
                     {
@@ -221,20 +232,20 @@ class Briefing:
                     }
                 )
             else:
-                logger.info(f"No data available for {data_field}")
+                logger.info("%s 没有可用数据", data_field)
                 state[briefing_key] = ""
 
-        # Process briefings in parallel with rate limiting
+        # 在限流约束下并行生成简报
         if briefing_tasks:
-            briefing_semaphore = asyncio.Semaphore(2)  # Limit to 2 concurrent briefings
+            briefing_semaphore = asyncio.Semaphore(2)  # 最多并发生成 2 份简报
 
             async def process_briefing(task: Dict[str, Any]) -> Dict[str, Any]:
-                """Process a single briefing with rate limiting."""
+                """在限流约束下生成单份简报。"""
                 async with briefing_semaphore:
                     result = {"content": ""}
 
-                    # Consume events from briefing generation
-                    # Exceptions will propagate immediately (no catching)
+                    # 消费简报生成事件
+                    # 异常不在这里捕获，直接向上传播
                     async for event in self.generate_category_briefing(
                         task["curated_data"], task["category"], context
                     ):
@@ -245,7 +256,9 @@ class Briefing:
                         briefings[task["category"]] = result["content"]
                         state[task["briefing_key"]] = result["content"]
                         logger.info(
-                            f"Completed {task['data_field']} briefing ({len(result['content'])} characters)"
+                            "已完成 %s 简报，共 %s 个字符",
+                            task["data_field"],
+                            len(result["content"]),
                         )
                     else:
                         raise RuntimeError(f"为 {task['data_field']} 生成的简报为空")
@@ -256,16 +269,19 @@ class Briefing:
                         "length": len(result["content"]) if result["content"] else 0,
                     }
 
-            # Process all briefings in parallel - exceptions will propagate and kill entire process
+            # 并行处理全部简报；任一异常都会向上传播并终止流程
             results = await asyncio.gather(
                 *[process_briefing(task) for task in briefing_tasks]
             )
 
-            # Log completion statistics
+            # 记录完成统计
             successful_briefings = sum(1 for r in results if r["success"])
             total_length = sum(r["length"] for r in results)
             logger.info(
-                f"Generated {successful_briefings}/{len(briefing_tasks)} briefings with total length {total_length}"
+                "已生成 %s/%s 份简报，总长度=%s",
+                successful_briefings,
+                len(briefing_tasks),
+                total_length,
             )
 
         state["briefings"] = briefings
