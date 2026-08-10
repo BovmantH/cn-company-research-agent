@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 class VendorConfig:
     """单个供应商的连接配置。
 
-    Attributes:
+    属性:
         env_key: 触发该供应商命中的环境变量名（也是 ``api_key`` 的来源）。
         base_url: 该供应商的 OpenAI 协议兼容端点。
         default_models: ``角色 -> 默认模型标识`` 映射（未设 ``LLM_MODEL_<ROLE>`` 时兜底）。
@@ -299,16 +299,16 @@ def _resolve_model(role: str, vendor: str, override: str | None) -> str:
 def get_llm(role: str, **overrides: Any) -> BaseChatModel:
     """根据角色获取一个配置好的 LLM 实例。
 
-    Args:
+    参数:
         role: ``"researcher"`` / ``"briefing"`` / ``"editor"`` 之一。
         **overrides: 任意可覆盖参数(``model``、``base_url``、``api_key``、
             ``temperature``、``streaming``、``max_tokens`` 等)。
 
-    Returns:
+    返回:
         ``langchain_openai.ChatOpenAI`` 实例。所有支持的供应商都通过此类
         实例化(全部走 OpenAI 协议兼容端点)。
 
-    Raises:
+    抛出:
         ValueError: 未知角色。
         RuntimeError: 所有供应商密钥都未配置；或 ``LLM_VENDOR`` 显式锁定但对应
             密钥缺失。

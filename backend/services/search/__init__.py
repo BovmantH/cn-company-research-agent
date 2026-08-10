@@ -22,7 +22,7 @@ from typing import Any, Protocol, runtime_checkable
 class SearchResult:
     """单条搜索结果。
 
-    Attributes:
+    属性:
         url: 文档原始 URL(必有)
         title: 文档标题(可能为空字符串)
         content: 摘要或正文片段
@@ -43,7 +43,7 @@ class SearchResult:
 class CrawledPage:
     """单个被抓取的页面。
 
-    Attributes:
+    属性:
         url: 页面 URL
         raw_content: 抓取到的纯文本(可能很长)
         title: 页面标题(可选)
@@ -107,7 +107,7 @@ def get_search_provider() -> SearchProvider:
 
     默认 ``"tavily"``。
 
-    Raises:
+    抛出:
         ValueError: 未知数据提供方名称。
     """
     name = os.getenv("SEARCH_PROVIDER", "tavily").strip().lower()
