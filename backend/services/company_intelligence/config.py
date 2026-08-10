@@ -108,7 +108,7 @@ class ProfessionalDataSettings:
             ),
             allowed_origins=tuple(
                 value.strip()
-                for value in get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+                for value in get("ALLOWED_ORIGINS", "http://localhost:5174").split(",")
                 if value.strip()
             ),
             trusted_proxy_cidrs=tuple(

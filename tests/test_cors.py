@@ -7,12 +7,12 @@ def test_configured_local_frontend_origin_is_allowed() -> None:
     response = TestClient(app).options(
         "/research",
         headers={
-            "Origin": "http://localhost:5173",
+            "Origin": "http://localhost:5174",
             "Access-Control-Request-Method": "POST",
         },
     )
     assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5174"
 
 
 def test_unconfigured_origin_is_not_allowed() -> None:

@@ -218,7 +218,7 @@ if [[ $start_servers =~ ^[Yy]$ ]]; then
     cd ..
 
     echo -e "\n${GREEN}服务正在启动，应用访问地址：${NC}"
-    echo -e "${BOLD}http://localhost:5173${NC}"
+    echo -e "${BOLD}http://localhost:5174${NC}"
 
     # 注册退出处理，脚本终止时清理服务进程
     trap 'kill $backend_pid $frontend_pid 2>/dev/null' EXIT
@@ -234,7 +234,7 @@ else
     echo -e "\n2. 在新终端中启动前端："
     echo "   cd ui"
     echo "   npm run dev"
-    echo -e "\n3. 访问应用：${BOLD}http://localhost:5173${NC}"
+    echo -e "\n3. 访问应用：${BOLD}http://localhost:5174${NC}"
 fi
 
 echo -e "\n${BOLD}需要帮助？${NC}"

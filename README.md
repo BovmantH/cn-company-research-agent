@@ -192,7 +192,7 @@ cd ui && npm install && cd ..
 # 4) 配置 .env(见下一节),然后:
 uvicorn application:app --reload --port 8000     # 一个终端跑后端
 cd ui && npm run dev                              # 另一个终端跑前端
-# 访问 http://localhost:5173
+# 访问 http://localhost:5174
 ```
 
 ### Docker 一键启动
