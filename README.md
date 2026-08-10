@@ -44,7 +44,7 @@
 | 检索层 | 直接调 Tavily 客户端,5 个文件分散调用 | **`SearchProvider` 抽象接口**,Tavily 收拢为默认 provider,新增 provider 无需改节点代码 |
 | 启动校验 | 缺 key 运行时报错 | **启动期校验**,中文报错并立即退出 |
 | 默认示例 | Apple、Stripe 等欧美公司 | 腾讯、字节跳动、宁德时代、比亚迪 |
-| 国内可用性 | 需要科学上网调 OpenAI / Gemini | OpenRouter + 国产模型可纯境内跑通 |
+| 国内可用性 | 需要科学上网调 OpenAI / Gemini | 可选六家国产原厂直连；OpenCode、OpenRouter、OpenAI 仍需评估网络与数据出境边界 |
 
 ---
 

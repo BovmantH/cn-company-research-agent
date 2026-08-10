@@ -38,8 +38,8 @@
     LLM_MAX_TOKENS            响应 max_tokens 上限
 
     # base_url 覆盖
-    LLM_BASE_URL              全局 base_url(优先级最高,所有 vendor 都被覆盖)
-    LLM_BASE_URL_<VENDOR>     单 vendor 覆盖,如 LLM_BASE_URL_DEEPSEEK
+    LLM_BASE_URL              全局 base_url(优先级最高,并关闭跨供应商回退)
+    LLM_BASE_URL_<VENDOR>     单供应商覆盖,如 LLM_BASE_URL_DEEPSEEK
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ from __future__ import annotations
 import logging
 import math
 import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -225,6 +225,10 @@ class ZenStreamUnavailable(RuntimeError):
     """Zen 在完成首个流式响应块前返回无状态 SSE 错误。"""
 
 
+class ZenStreamRejected(RuntimeError):
+    """Zen 流式错误不符合自动付费回退条件。"""
+
+
 # 只处理可归因于上游不可用的异常，避免把本地参数错误或业务缺陷隐藏成付费回退。
 FALLBACK_EXCEPTIONS = (
     APIConnectionError,
@@ -241,6 +245,21 @@ FALLBACK_EXCEPTIONS = (
 # 必须保持单供应商语义，防止凭证或专有配置被发送到其他端点。
 SAFE_CROSS_VENDOR_OVERRIDES = frozenset({"streaming", "temperature", "max_tokens"})
 
+RETRYABLE_ZEN_STREAM_ERROR_CODES = frozenset(
+    {
+        "internal_error",
+        "internal_server_error",
+        "model_not_found",
+        "not_found_error",
+        "overloaded_error",
+        "rate_limit_error",
+        "rate_limit_exceeded",
+        "server_error",
+        "service_unavailable",
+        "temporarily_unavailable",
+    }
+)
+
 
 class _ZenFallbackBoundary(Runnable[Any, Any]):
     """把 SDK 的无状态流错误收敛为可安全回退且不含上游正文的异常。"""
@@ -255,10 +274,28 @@ class _ZenFallbackBoundary(Runnable[Any, Any]):
     def _translate_generic_error(exc: APIError) -> None:
         # OpenAI SDK 对 SSE error 事件直接抛 APIError；有状态的 4xx/5xx
         # 会使用其子类，继续交给既有的精确异常策略处理。
-        if type(exc) is APIError:
+        if type(exc) is not APIError:
+            return
+
+        body = exc.body
+        if isinstance(body, Mapping) and isinstance(body.get("error"), Mapping):
+            body = body["error"]
+
+        retryable = False
+        if isinstance(body, Mapping):
+            codes = {str(body.get(key, "")).strip().lower() for key in ("code", "type")}
+            status = body.get("status_code", body.get("status"))
+            retryable = bool(codes & RETRYABLE_ZEN_STREAM_ERROR_CODES) or (
+                isinstance(status, int) and (status == 429 or status >= 500)
+            )
+
+        if retryable:
             raise ZenStreamUnavailable(
                 "OpenCode Zen 流式响应在完成前失败，已按安全策略处理。"
             ) from None
+        raise ZenStreamRejected(
+            "OpenCode Zen 流式响应未完成，错误不符合自动付费回退条件。"
+        ) from None
 
     def invoke(
         self,
@@ -351,7 +388,7 @@ def _strip_vendor_prefix(model: str) -> str:
 def _get_priority_list() -> list[str]:
     """解析 ``LLM_VENDOR_PRIORITY``,未设置则用默认顺序。
 
-    未知供应商名称会记录警告并丢弃；全部丢弃后回退到默认顺序。
+    未知供应商名称会记录警告并丢弃；全部无效时拒绝启动，避免恢复默认付费顺序。
     """
     raw = os.getenv("LLM_VENDOR_PRIORITY")
     if not raw:
@@ -374,7 +411,12 @@ def _get_priority_list() -> list[str]:
         has_known_value = True
         if v not in out:
             out.append(v)
-    return out if has_known_value else DEFAULT_VENDOR_PRIORITY
+    if not has_known_value:
+        raise RuntimeError(
+            "LLM_VENDOR_PRIORITY 未包含任何受支持的供应商，"
+            "请修正该配置或删除它以使用默认顺序。"
+        )
+    return out
 
 
 def _get_vendor_api_key(vendor: str) -> tuple[str | None, str | None]:
