@@ -28,6 +28,7 @@
   - **Editor**(终稿编辑,严谨格式)— 默认 `kimi-k2.5` / `moonshotai/kimi-k2.6`(走 OpenRouter)
 - **现代 React 前端**:进度跟踪、PDF 下载
 - **模块化架构**:每个 agent 是独立的 LangGraph 节点,易于替换扩展
+- **工商司法专业数据（预览）**:主体确认、预算账本、安全降级和确定性报告附录已经就绪；生产 QCC Provider 尚未完成真实响应适配,当前版本默认关闭
 
 ## 🆚 与原版的差异
 
@@ -146,6 +147,16 @@ API 端点:
 | `GET` | `/research/{job_id}/stream` | 订阅进度流(SSE) |
 | `GET` | `/research/{job_id}/report` | 拉取终稿报告 |
 | `POST` | `/generate-pdf` | 生成 PDF |
+| `GET` | `/capabilities` | 查询专业数据能力是否可用 |
+| `POST` | `/companies/resolve` | 解析并确认公司主体；能力关闭时不会调用付费 Provider |
+
+### 工商司法专业数据（预览）
+
+专业数据分支采用部署者自备企查查 Key（BYOK）的设计。当前仓库已经实现主体确认、一次性 Token、幂等与预算准入、MongoDB 持久账本、MCP 传输边界、前端降级流程，以及工商司法事实的确定性报告附录。
+
+当前版本**尚未完成生产 QCC Provider 的真实业务响应字段适配和应用生命周期装配**，所以 `/capabilities` 会返回不可用状态。请不要把填写 `QCC_API_KEY` 视为已经启用；在取得经过脱敏的官方工具真实响应样例并完成回归测试前，项目不会猜测上游字段，也不会执行未经部署者明确授权的付费 Smoke 测试。
+
+项目不会抓取需要登录的爱企查、企查查网页或中国执行信息公开网，不保存第三方 Cookie，也不绕过验证码、限流或反自动化措施。专业分支不可用、预算受限或主体未确认时，基础 Web 调研仍会继续生成报告。
 
 ---
 
@@ -195,7 +206,17 @@ cd ui && npm run dev                              # 另一个终端跑前端
 # 访问 http://localhost:5174
 ```
 
-### Docker 一键启动
+### Docker 运行
+
+构建单个生产镜像时，FastAPI 会同时提供 API 和前端静态文件，统一从 `8000` 端口访问：
+
+```bash
+docker build -t cn-company-research .
+docker run --env-file .env -p 8000:8000 cn-company-research
+# 访问 http://localhost:8000
+```
+
+本地联调可使用 Compose；它会额外启动 Vite 开发服务器：
 
 ```bash
 git clone https://github.com/BovmantH/cn-company-research-agent.git
@@ -205,8 +226,8 @@ cd cn-company-research-agent
 docker compose up --build
 ```
 
-- 后端:`http://localhost:8000`
-- 前端:`http://localhost:5174`
+- API 与生产构建入口:`http://localhost:8000`
+- Vite 开发入口:`http://localhost:5174`
 
 修改 `.env` 后需要重启:`docker compose down && docker compose up`
 
