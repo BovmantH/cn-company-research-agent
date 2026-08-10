@@ -148,26 +148,56 @@ else
 fi
 
 if [ "$setup_env" = true ]; then
-    echo -e "\n请输入 API Key："
-    echo -n "Tavily API Key: "
-    read -r tavily_key
-    echo -n "Google Gemini API Key："
-    read -r gemini_key
-    echo -n "OpenAI API Key："
-    read -r openai_key
+    echo -e "\n请输入 API Key（输入内容不会显示在终端）："
+    echo -n "Tavily API Key："
+    read -r -s tavily_key
+    echo
+    if [ -z "$tavily_key" ]; then
+        echo "❌ Tavily API Key 不能为空"
+        exit 1
+    fi
+
+    echo -e "\n请选择一个 LLM 服务商："
+    echo "1) DeepSeek"
+    echo "2) 阿里百炼（Qwen）"
+    echo "3) Moonshot（Kimi）"
+    echo "4) 小米 MiMo"
+    echo "5) OpenRouter"
+    echo "6) OpenAI"
+    read -r llm_choice
+    llm_choice=${llm_choice:-1}
+    case "$llm_choice" in
+        1) llm_key_name="DEEPSEEK_API_KEY" ;;
+        2) llm_key_name="DASHSCOPE_API_KEY" ;;
+        3) llm_key_name="MOONSHOT_API_KEY" ;;
+        4) llm_key_name="XIAOMI_API_KEY" ;;
+        5) llm_key_name="OPENROUTER_API_KEY" ;;
+        6) llm_key_name="OPENAI_API_KEY" ;;
+        *)
+            echo "❌ LLM 服务商选项无效"
+            exit 1
+            ;;
+    esac
+    echo -n "${llm_key_name}："
+    read -r -s llm_key
+    echo
+    if [ -z "$llm_key" ]; then
+        echo "❌ LLM API Key 不能为空"
+        exit 1
+    fi
+
     echo -n "MongoDB URI（可选，按回车跳过）："
     read -r mongodb_uri
 
     # 创建 .env 文件
-    cat > .env << EOL
-TAVILY_API_KEY=$tavily_key
-GEMINI_API_KEY=$gemini_key
-OPENAI_API_KEY=$openai_key
-EOL
+    {
+        printf 'TAVILY_API_KEY=%s\n' "$tavily_key"
+        printf '%s=%s\n' "$llm_key_name" "$llm_key"
+    } > .env
 
     # 提供 MongoDB URI 时写入配置
-    if [ ! -z "$mongodb_uri" ]; then
-        echo "MONGODB_URI=$mongodb_uri" >> .env
+    if [ -n "$mongodb_uri" ]; then
+        printf 'MONGODB_URI=%s\n' "$mongodb_uri" >> .env
     fi
 
     echo -e "${GREEN}✓ 环境变量已保存到 .env${NC}"
@@ -191,14 +221,14 @@ start_servers=${start_servers:-Y}
 
 if [[ $start_servers =~ ^[Yy]$ ]]; then
     echo -e "\n${BLUE}请选择后端启动方式：${NC}"
-    echo "1) python -m application.py"
+    echo "1) python application.py"
     echo "2) uvicorn application:app --reload --port 8000"
     read -r backend_choice
 
     # 在后台启动后端服务
     if [ "$backend_choice" = "1" ]; then
         echo -e "\n${GREEN}正在使用 Python 启动后端服务……${NC}"
-        python -m application.py &
+        python application.py &
     else
         echo -e "\n${GREEN}正在使用 Uvicorn 启动后端服务……${NC}"
         uvicorn application:app --reload --port 8000 &
@@ -229,7 +259,7 @@ if [[ $start_servers =~ ^[Yy]$ ]]; then
 else
     echo -e "\n${BOLD}手工启动应用：${NC}"
     echo -e "\n1. 选择一种方式启动后端服务："
-    echo "   方式 1：python -m application.py"
+    echo "   方式 1：python application.py"
     echo "   方式 2：uvicorn application:app --reload --port 8000"
     echo -e "\n2. 在新终端中启动前端："
     echo "   cd ui"
