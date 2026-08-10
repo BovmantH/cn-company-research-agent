@@ -65,10 +65,7 @@ class MongoDBService:
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         """按 ID 获取调研任务。"""
-        document = self.jobs.find_one({"job_id": job_id})
-        if document is None:
-            return None
-        return {key: value for key, value in document.items() if key != "_id"}
+        return self._find_public_document(self.jobs, job_id)
 
     def store_report(self, job_id: str, report_data: dict[str, Any]) -> None:
         """保存最终调研报告。"""
@@ -85,7 +82,12 @@ class MongoDBService:
 
     def get_report(self, job_id: str) -> dict[str, Any] | None:
         """按任务 ID 获取报告。"""
-        document = self.reports.find_one({"job_id": job_id})
+        return self._find_public_document(self.reports, job_id)
+
+    @staticmethod
+    def _find_public_document(collection: Any, job_id: str) -> dict[str, Any] | None:
+        """查询任务关联文档并隐藏 MongoDB 内部标识。"""
+        document = collection.find_one({"job_id": job_id})
         if document is None:
             return None
         return {key: value for key, value in document.items() if key != "_id"}
