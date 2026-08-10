@@ -33,6 +33,7 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "DASHSCOPE_API_KEY",
         "MOONSHOT_API_KEY",
         "ZAI_API_KEY",
+        "MIMO_API_KEY",
         "XIAOMI_API_KEY",
         "MINIMAX_API_KEY",
     ]

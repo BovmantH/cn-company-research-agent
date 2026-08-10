@@ -5,7 +5,7 @@
 - 后端所有 LLM 调用的唯一入口
 - 支持 OpenCode Zen 免费线路、国产模型原厂 OpenAI 兼容端点直连，
   以及 OpenRouter 聚合、OpenAI 原生
-- 启动期探测，**单供应商全包**：命中第一家供应商后接管所有角色
+- 启动期按服务端配置选择供应商；Zen 与付费候选并存时支持首块输出前回退
 - 通过 ``LLM_VENDOR`` 显式锁定可跳过探测,``LLM_VENDOR_PRIORITY`` 调整优先级
 - 解析 ``LLM_MODEL_<ROLE>``：OpenRouter 原样保留供应商前缀；
   原厂或 OpenAI 自动剥离前缀（环境变量触发时会记录警告）
