@@ -24,8 +24,8 @@ class Briefing:
 
     def __init__(self) -> None:
         self.max_doc_length = 8000  # 单份文档正文的最大长度
-        # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
-        # 模型可通过 LLM_MODEL_BRIEFING 环境变量覆盖(默认 qwen/qwen-2.5-72b-instruct)。
+        # LLM 通过统一工厂获取，供应商和当前默认模型由服务端注册表决定。
+        # 部署者可通过 LLM_MODEL_BRIEFING 环境变量覆盖单供应商模型。
         # 简报阶段不需要流式输出,关掉以减少与上游的连接开销。
         self.llm = get_llm("briefing", streaming=False)
 

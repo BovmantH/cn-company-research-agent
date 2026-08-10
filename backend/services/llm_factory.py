@@ -18,6 +18,10 @@
     DEEPSEEK_API_KEY          DeepSeek 原厂
     DASHSCOPE_API_KEY         阿里百炼(Qwen)
     MOONSHOT_API_KEY          Moonshot(Kimi)
+    ZAI_API_KEY               智谱 GLM
+    MINIMAX_API_KEY           MiniMax
+    MIMO_API_KEY              小米 MiMo
+    XIAOMI_API_KEY            小米 MiMo 旧变量名（兼容）
     OPENROUTER_API_KEY        OpenRouter 聚合（第一阶段主路径）
     OPENAI_API_KEY            OpenAI 原生
 
@@ -29,7 +33,7 @@
     LLM_MODEL_RESEARCHER      researcher 模型 slug
     LLM_MODEL_BRIEFING        briefing 模型 slug
     LLM_MODEL_EDITOR          editor 模型 slug
-    LLM_TEMPERATURE           温度,默认 0
+    LLM_TEMPERATURE           可选温度；不填时使用供应商默认值
     LLM_STREAMING             是否流式,默认 true
     LLM_MAX_TOKENS            响应 max_tokens 上限
 
@@ -41,6 +45,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -69,7 +74,8 @@ class VendorConfig:
     """单个供应商的连接配置。
 
     属性:
-        env_key: 触发该供应商命中的环境变量名（也是 ``api_key`` 的来源）。
+        display_name: 用于启动错误提示的供应商名称。
+        env_keys: 按优先级排列的环境变量名，也是 ``api_key`` 的来源。
         base_url: 该供应商的 OpenAI 协议兼容端点。
         default_models: ``角色 -> 默认模型标识`` 映射（未设 ``LLM_MODEL_<ROLE>`` 时兜底）。
         docs_url: 文档地址,用户排错用。
@@ -77,7 +83,8 @@ class VendorConfig:
             OpenRouter 依赖前缀路由，必须保留；其余供应商均剥离。
     """
 
-    env_key: str
+    display_name: str
+    env_keys: tuple[str, ...]
     base_url: str
     default_models: dict[str, str]
     docs_url: str = ""
@@ -88,10 +95,11 @@ class VendorConfig:
         return self.default_models.get(role, next(iter(self.default_models.values())))
 
 
-# 入选供应商列表。GLM / MiniMax 在后续独立切片补充。
+# 供应商注册表是连接信息、Key 名称和角色默认模型的唯一事实来源。
 VENDOR_REGISTRY: dict[str, VendorConfig] = {
     "opencode": VendorConfig(
-        env_key="OPENCODE_API_KEY",
+        display_name="OpenCode Zen 免费线路",
+        env_keys=("OPENCODE_API_KEY",),
         base_url="https://opencode.ai/zen/v1",
         default_models={
             "researcher": "deepseek-v4-flash-free",
@@ -101,25 +109,24 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         docs_url="https://opencode.ai/docs/zen",
     ),
     "deepseek": VendorConfig(
-        env_key="DEEPSEEK_API_KEY",
-        base_url="https://api.deepseek.com/v1",
-        # 注:deepseek-chat / deepseek-reasoner 将于 2026/07/24 退役,
-        # 自动路由到 deepseek-v4-flash。新代码直接用 V4 slug。
+        display_name="DeepSeek 原厂",
+        env_keys=("DEEPSEEK_API_KEY",),
+        base_url="https://api.deepseek.com",
         default_models={
             "researcher": "deepseek-v4-flash",
             "briefing": "deepseek-v4-flash",
-            "editor": "deepseek-v4-flash",
+            "editor": "deepseek-v4-pro",
         },
         docs_url="https://api-docs.deepseek.com/",
     ),
     "qwen": VendorConfig(
-        env_key="DASHSCOPE_API_KEY",
+        display_name="阿里百炼（Qwen）",
+        env_keys=("DASHSCOPE_API_KEY",),
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        # Qwen3 系列(2026 主流):flash 便宜 / plus 性价比 / max 旗舰
         default_models={
-            "researcher": "qwen3.6-flash",
-            "briefing": "qwen3.6-plus",
-            "editor": "qwen3-max",
+            "researcher": "qwen3.7-flash",
+            "briefing": "qwen3.7-plus",
+            "editor": "qwen3.7-max",
         },
         docs_url=(
             "https://help.aliyun.com/zh/model-studio/"
@@ -127,46 +134,71 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         ),
     ),
     "kimi": VendorConfig(
-        env_key="MOONSHOT_API_KEY",
+        display_name="Moonshot（Kimi）",
+        env_keys=("MOONSHOT_API_KEY",),
         base_url="https://api.moonshot.cn/v1",
-        # K2 系列(2026 主流):k2.5 多模态旗舰 / k2-turbo-preview 快速版
         default_models={
-            "researcher": "kimi-k2.5",
-            "briefing": "kimi-k2-turbo-preview",
-            "editor": "kimi-k2.5",
+            "researcher": "kimi-k3",
+            "briefing": "kimi-k3",
+            "editor": "kimi-k3",
         },
-        docs_url="https://platform.moonshot.cn/docs",
+        docs_url="https://platform.kimi.com/docs/models",
+    ),
+    "glm": VendorConfig(
+        display_name="智谱 GLM",
+        env_keys=("ZAI_API_KEY",),
+        base_url="https://open.bigmodel.cn/api/paas/v4/",
+        default_models={
+            "researcher": "glm-4.7-flash",
+            "briefing": "glm-4.7",
+            "editor": "glm-5.2",
+        },
+        docs_url="https://docs.bigmodel.cn/cn/guide/develop/openai/introduction",
+    ),
+    "minimax": VendorConfig(
+        display_name="MiniMax",
+        env_keys=("MINIMAX_API_KEY",),
+        base_url="https://api.minimaxi.com/v1",
+        default_models={
+            "researcher": "MiniMax-M3",
+            "briefing": "MiniMax-M3",
+            "editor": "MiniMax-M3",
+        },
+        docs_url="https://platform.minimaxi.com/docs/api-reference/text-openai-api",
     ),
     "mimo": VendorConfig(
-        env_key="XIAOMI_API_KEY",
+        display_name="小米 MiMo",
+        env_keys=("MIMO_API_KEY", "XIAOMI_API_KEY"),
         base_url="https://api.xiaomimimo.com/v1",
         default_models={
-            "researcher": "mimo-v2.5-pro",
-            "briefing": "mimo-v2.5-pro",
+            "researcher": "mimo-v2.5",
+            "briefing": "mimo-v2.5",
             "editor": "mimo-v2.5-pro",
         },
-        docs_url="https://api.xiaomimimo.com/",
+        docs_url="https://mimo.mi.com/docs/zh-CN/quick-start/summary/model",
     ),
     "openrouter": VendorConfig(
-        env_key="OPENROUTER_API_KEY",
+        display_name="OpenRouter 聚合",
+        env_keys=("OPENROUTER_API_KEY",),
         base_url="https://openrouter.ai/api/v1",
         default_models={
             "researcher": "deepseek/deepseek-v4-flash",
-            "briefing": "qwen/qwen3.6-flash",
-            "editor": "moonshotai/kimi-k2.6",
+            "briefing": "qwen/qwen3.7-plus",
+            "editor": "moonshotai/kimi-k3",
         },
         docs_url="https://openrouter.ai/docs",
         strip_role_prefix=False,
     ),
     "openai": VendorConfig(
-        env_key="OPENAI_API_KEY",
+        display_name="OpenAI 原生兜底",
+        env_keys=("OPENAI_API_KEY",),
         base_url="https://api.openai.com/v1",
         default_models={
-            "researcher": "gpt-4o-mini",
-            "briefing": "gpt-4o-mini",
-            "editor": "gpt-4o",
+            "researcher": "gpt-5.6-luna",
+            "briefing": "gpt-5.6-terra",
+            "editor": "gpt-5.6-sol",
         },
-        docs_url="https://platform.openai.com/docs",
+        docs_url="https://developers.openai.com/api/docs/models",
     ),
 }
 
@@ -174,8 +206,10 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
 DEFAULT_VENDOR_PRIORITY: list[str] = [
     "opencode",
     "deepseek",
-    "qwen",
     "kimi",
+    "qwen",
+    "glm",
+    "minimax",
     "mimo",
     "openrouter",
     "openai",
@@ -198,6 +232,19 @@ FALLBACK_EXCEPTIONS = (
 OPENROUTER_BASE_URL = VENDOR_REGISTRY["openrouter"].base_url
 OPENAI_BASE_URL = VENDOR_REGISTRY["openai"].base_url
 DEFAULT_MODELS: dict[str, str] = VENDOR_REGISTRY["openrouter"].default_models
+
+
+def get_llm_credential_candidates() -> tuple[tuple[str, str, str], ...]:
+    """从注册表生成启动凭证提示，避免入口文件重复维护供应商清单。"""
+    candidates: list[tuple[str, str, str]] = []
+    for vendor in DEFAULT_VENDOR_PRIORITY:
+        config = VENDOR_REGISTRY[vendor]
+        for index, env_key in enumerate(config.env_keys):
+            label = config.display_name
+            if index:
+                label = f"{label}（兼容旧变量）"
+            candidates.append((env_key, label, config.docs_url))
+    return tuple(candidates)
 
 
 # === 工具 ===
@@ -248,6 +295,23 @@ def _get_priority_list() -> list[str]:
     return out if has_known_value else DEFAULT_VENDOR_PRIORITY
 
 
+def _get_vendor_api_key(vendor: str) -> tuple[str | None, str | None]:
+    """按注册表优先级读取供应商 Key，并对旧变量名给出无敏感值警告。"""
+    config = VENDOR_REGISTRY[vendor]
+    for index, env_key in enumerate(config.env_keys):
+        value = os.getenv(env_key)
+        if not value:
+            continue
+        if index:
+            logger.warning(
+                "%s 已兼容但不再推荐，请迁移到 %s。",
+                env_key,
+                config.env_keys[0],
+            )
+        return value, env_key
+    return None, None
+
+
 def _resolve_vendor() -> tuple[str, str]:
     """返回 ``(供应商名称, api_key)``。
 
@@ -262,26 +326,27 @@ def _resolve_vendor() -> tuple[str, str]:
                 f"可选值: {sorted(VENDOR_REGISTRY.keys())}"
             )
         cfg = VENDOR_REGISTRY[explicit]
-        key = os.getenv(cfg.env_key)
+        key, _ = _get_vendor_api_key(explicit)
         if not key:
+            expected_keys = " 或 ".join(cfg.env_keys)
             raise RuntimeError(
                 f"LLM_VENDOR={explicit!r} 已显式锁定,但对应环境变量 "
-                f"{cfg.env_key} 未配置。请在 .env 中填写该密钥，或删除 "
+                f"{expected_keys} 未配置。请在 .env 中填写该密钥，或删除 "
                 f"LLM_VENDOR 走自动探测。"
             )
         logger.info("已通过 LLM_VENDOR 选定供应商：%s", explicit)
         return explicit, key
 
     for vendor in _get_priority_list():
-        cfg = VENDOR_REGISTRY[vendor]
-        key = os.getenv(cfg.env_key)
+        key, _ = _get_vendor_api_key(vendor)
         if key:
             logger.info("已按 LLM_VENDOR_PRIORITY 选定供应商：%s", vendor)
             return vendor, key
 
     available = "\n  ".join(
-        f"- {VENDOR_REGISTRY[v].env_key}  (vendor: {v})"
-        for v in DEFAULT_VENDOR_PRIORITY
+        f"- {env_key}  (vendor: {vendor})"
+        for vendor in DEFAULT_VENDOR_PRIORITY
+        for env_key in VENDOR_REGISTRY[vendor].env_keys
     )
     raise RuntimeError(
         "未配置任何 LLM 服务商凭证。请在 .env 中至少设置以下其中一个：\n  " + available
@@ -361,12 +426,26 @@ def _build_chat_model(
         "model": model,
         "base_url": base_url,
         "api_key": api_key,
-        "temperature": float(os.getenv("LLM_TEMPERATURE", "0")),
         "streaming": _str_to_bool(os.getenv("LLM_STREAMING"), default=True),
     }
+    if "temperature" not in overrides:
+        temperature_env = os.getenv("LLM_TEMPERATURE")
+        if temperature_env:
+            try:
+                temperature = float(temperature_env)
+            except ValueError:
+                raise ValueError(
+                    f"LLM_TEMPERATURE={temperature_env!r} 不是合法数字。"
+                ) from None
+            if not math.isfinite(temperature):
+                raise ValueError(f"LLM_TEMPERATURE={temperature_env!r} 不是有限数字。")
+            kwargs["temperature"] = temperature
     if vendor == "opencode":
         # Zen 的免费 DeepSeek 使用 Chat Completions，禁止客户端自动切到 Responses。
         kwargs["use_responses_api"] = False
+    if vendor == "minimax":
+        # MiniMax 原始响应可能把思考过程混入正文，显式要求拆分 reasoning_content。
+        kwargs["extra_body"] = {"reasoning_split": True}
 
     max_tokens_env = os.getenv("LLM_MAX_TOKENS")
     if max_tokens_env:
@@ -434,8 +513,7 @@ def get_llm(role: str, **overrides: Any) -> BaseChatModel | Runnable[Any, Any]:
     for fallback_vendor in _get_priority_list():
         if fallback_vendor == "opencode":
             continue
-        fallback_config = VENDOR_REGISTRY[fallback_vendor]
-        fallback_key = os.getenv(fallback_config.env_key)
+        fallback_key, _ = _get_vendor_api_key(fallback_vendor)
         if not fallback_key:
             continue
         fallbacks.append(

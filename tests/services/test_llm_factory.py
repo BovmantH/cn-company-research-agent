@@ -25,10 +25,12 @@ from openai import APIConnectionError, BadRequestError
 import backend.services.llm_factory as llm_factory
 from backend.services.llm_factory import (
     DEFAULT_MODELS,
+    DEFAULT_VENDOR_PRIORITY,
     FALLBACK_EXCEPTIONS,
     OPENAI_BASE_URL,
     OPENROUTER_BASE_URL,
     get_llm,
+    get_llm_credential_candidates,
 )
 
 
@@ -403,6 +405,38 @@ def test_temperature_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert abs(llm.temperature - 0.42) < 1e-6
 
 
+@pytest.mark.parametrize(
+    ("vendor", "env_key"),
+    [
+        ("kimi", "MOONSHOT_API_KEY"),
+        ("glm", "ZAI_API_KEY"),
+        ("minimax", "MINIMAX_API_KEY"),
+        ("openai", "OPENAI_API_KEY"),
+    ],
+)
+def test_temperature_is_omitted_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    vendor: str,
+    env_key: str,
+) -> None:
+    monkeypatch.setenv("LLM_VENDOR", vendor)
+    monkeypatch.setenv(env_key, "sk-provider-test")
+
+    llm = get_llm("researcher")
+
+    assert llm.temperature is None
+
+
+def test_invalid_temperature_has_chinese_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-provider-test")
+    monkeypatch.setenv("LLM_TEMPERATURE", "不是数字")
+
+    with pytest.raises(ValueError, match="LLM_TEMPERATURE.*不是合法数字"):
+        get_llm("researcher")
+
+
 def test_streaming_default_is_true(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
@@ -495,17 +529,28 @@ def test_max_tokens_override_takes_precedence(
 # === 第二阶段：供应商探测 ===
 
 
-def test_detect_deepseek_only(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("role", "expected_model"),
+    [
+        ("researcher", "deepseek-v4-flash"),
+        ("briefing", "deepseek-v4-flash"),
+        ("editor", "deepseek-v4-pro"),
+    ],
+)
+def test_detect_deepseek_only(
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+    expected_model: str,
+) -> None:
     """仅配 DEEPSEEK_API_KEY 时,所有 role 都走 DeepSeek 原厂。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
 
-    for role in ("researcher", "briefing", "editor"):
-        llm = get_llm(role)
-        base_url = str(getattr(llm, "openai_api_base", "") or "")
-        assert "api.deepseek.com" in base_url
-        # 默认 slug 应该是 DeepSeek 原厂 slug,而非 OpenRouter 前缀
-        assert "/" not in llm.model_name
-        assert llm.model_name == "deepseek-v4-flash"
+    llm = get_llm(role)
+
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert base_url.rstrip("/") == "https://api.deepseek.com"
+    assert "/" not in llm.model_name
+    assert llm.model_name == expected_model
 
 
 def test_detect_qwen_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -514,7 +559,7 @@ def test_detect_qwen_only(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = get_llm("editor")
     base_url = str(getattr(llm, "openai_api_base", "") or "")
     assert "dashscope.aliyuncs.com" in base_url
-    assert llm.model_name == "qwen3-max"
+    assert llm.model_name == "qwen3.7-max"
 
 
 def test_detect_kimi_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -523,7 +568,15 @@ def test_detect_kimi_only(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = get_llm("briefing")
     base_url = str(getattr(llm, "openai_api_base", "") or "")
     assert "api.moonshot.cn" in base_url
-    assert llm.model_name == "kimi-k2-turbo-preview"
+    assert llm.model_name == "kimi-k3"
+
+
+def test_kimi_editor_uses_current_flagship(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MOONSHOT_API_KEY", "sk-kimi-test")
+
+    llm = get_llm("editor")
+
+    assert llm.model_name == "kimi-k3"
 
 
 def test_detect_mimo_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -532,7 +585,78 @@ def test_detect_mimo_only(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = get_llm("researcher")
     base_url = str(getattr(llm, "openai_api_base", "") or "")
     assert "api.xiaomimimo.com" in base_url
+    assert llm.model_name == "mimo-v2.5"
+
+
+def test_detect_mimo_official_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MIMO_API_KEY", "sk-mimo-official")
+
+    llm = get_llm("editor")
+
     assert llm.model_name == "mimo-v2.5-pro"
+    assert llm.openai_api_key.get_secret_value() == "sk-mimo-official"
+
+
+def test_mimo_official_key_precedes_legacy_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MIMO_API_KEY", "sk-mimo-official")
+    monkeypatch.setenv("XIAOMI_API_KEY", "sk-mimo-legacy")
+
+    llm = get_llm("researcher")
+
+    assert llm.openai_api_key.get_secret_value() == "sk-mimo-official"
+
+
+def test_mimo_legacy_key_warns_without_exposing_value(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("XIAOMI_API_KEY", "sk-mimo-legacy-secret")
+
+    with caplog.at_level("WARNING"):
+        get_llm("researcher")
+
+    messages = "\n".join(record.message for record in caplog.records)
+    assert "XIAOMI_API_KEY" in messages
+    assert "MIMO_API_KEY" in messages
+    assert "sk-mimo-legacy-secret" not in messages
+
+
+@pytest.mark.parametrize(
+    ("env_key", "role", "expected_host", "expected_model"),
+    [
+        ("ZAI_API_KEY", "researcher", "open.bigmodel.cn", "glm-4.7-flash"),
+        ("ZAI_API_KEY", "briefing", "open.bigmodel.cn", "glm-4.7"),
+        ("ZAI_API_KEY", "editor", "open.bigmodel.cn", "glm-5.2"),
+        ("MINIMAX_API_KEY", "researcher", "api.minimaxi.com", "MiniMax-M3"),
+        ("MINIMAX_API_KEY", "briefing", "api.minimaxi.com", "MiniMax-M3"),
+        ("MINIMAX_API_KEY", "editor", "api.minimaxi.com", "MiniMax-M3"),
+    ],
+)
+def test_detect_new_domestic_vendors(
+    monkeypatch: pytest.MonkeyPatch,
+    env_key: str,
+    role: str,
+    expected_host: str,
+    expected_model: str,
+) -> None:
+    monkeypatch.setenv(env_key, "sk-provider-test")
+
+    llm = get_llm(role)
+
+    assert expected_host in str(getattr(llm, "openai_api_base", "") or "")
+    assert llm.model_name == expected_model
+
+
+def test_minimax_separates_reasoning_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-minimax-test")
+
+    llm = get_llm("editor")
+
+    assert llm.extra_body == {"reasoning_split": True}
 
 
 def test_mimo_token_plan_base_url_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -558,6 +682,32 @@ def test_priority_default_picks_deepseek_over_qwen(
     llm = get_llm("researcher")
     base_url = str(getattr(llm, "openai_api_base", "") or "")
     assert "api.deepseek.com" in base_url
+
+
+def test_priority_default_picks_kimi_over_qwen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MOONSHOT_API_KEY", "sk-kimi-test")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-qwen-test")
+
+    llm = get_llm("researcher")
+
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    assert "api.moonshot.cn" in base_url
+
+
+def test_default_vendor_priority_matches_product_order() -> None:
+    assert DEFAULT_VENDOR_PRIORITY == [
+        "opencode",
+        "deepseek",
+        "kimi",
+        "qwen",
+        "glm",
+        "minimax",
+        "mimo",
+        "openrouter",
+        "openai",
+    ]
 
 
 def test_priority_env_var_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -760,8 +910,55 @@ def test_all_keys_missing_lists_all_vendors(monkeypatch: pytest.MonkeyPatch) -> 
         "DEEPSEEK_API_KEY",
         "DASHSCOPE_API_KEY",
         "MOONSHOT_API_KEY",
+        "ZAI_API_KEY",
+        "MINIMAX_API_KEY",
+        "MIMO_API_KEY",
         "XIAOMI_API_KEY",
         "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",
     ):
         assert env_key in msg, f"报错信息缺少 {env_key}"
+
+
+def test_credential_candidates_are_derived_from_registry() -> None:
+    candidates = get_llm_credential_candidates()
+    env_names = [name for name, _, _ in candidates]
+
+    assert env_names == [
+        "OPENCODE_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "MOONSHOT_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "ZAI_API_KEY",
+        "MINIMAX_API_KEY",
+        "MIMO_API_KEY",
+        "XIAOMI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("vendor", "role", "expected_model"),
+    [
+        ("openrouter", "researcher", "deepseek/deepseek-v4-flash"),
+        ("openrouter", "briefing", "qwen/qwen3.7-plus"),
+        ("openrouter", "editor", "moonshotai/kimi-k3"),
+        ("openai", "researcher", "gpt-5.6-luna"),
+        ("openai", "briefing", "gpt-5.6-terra"),
+        ("openai", "editor", "gpt-5.6-sol"),
+    ],
+)
+def test_fallback_vendor_current_default_models(
+    monkeypatch: pytest.MonkeyPatch,
+    vendor: str,
+    role: str,
+    expected_model: str,
+) -> None:
+    env_key = "OPENROUTER_API_KEY" if vendor == "openrouter" else "OPENAI_API_KEY"
+    monkeypatch.setenv("LLM_VENDOR", vendor)
+    monkeypatch.setenv(env_key, "sk-provider-test")
+
+    llm = get_llm(role)
+
+    assert llm.model_name == expected_model

@@ -22,8 +22,8 @@ class Editor:
     """将各章节简报编排为完整的最终报告。"""
 
     def __init__(self) -> None:
-        # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
-        # 模型可通过 LLM_MODEL_EDITOR 环境变量覆盖(默认 anthropic/claude-3.5-sonnet)。
+        # LLM 通过统一工厂获取，供应商和当前默认模型由服务端注册表决定。
+        # 部署者可通过 LLM_MODEL_EDITOR 环境变量覆盖单供应商模型。
         # 编辑器阶段需要把报告文本块流式推送到前端 SSE，这里显式打开流式模式
         # 以避免 LLM_STREAMING=false 时整篇报告变成一次性返回。
         self.llm = get_llm("editor", streaming=True)

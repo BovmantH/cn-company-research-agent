@@ -41,6 +41,7 @@ from backend.services.company_intelligence.rendering import (
 )
 from backend.services.company_intelligence.requester import resolve_client_ip
 from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
+from backend.services.llm_factory import get_llm_credential_candidates
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 
@@ -51,15 +52,7 @@ if env_path.exists():
 
 # 启动校验：LLMFactory 依赖至少一个 LLM 服务商密钥，缺失则直接退出，
 # 避免在第一次请求时才发现 key 没配,把错误推到用户面前。
-_LLM_KEY_CANDIDATES = (
-    ("OPENCODE_API_KEY", "OpenCode Zen 免费线路", "https://opencode.ai/docs/zen"),
-    ("DEEPSEEK_API_KEY", "DeepSeek 原厂", "https://api-docs.deepseek.com/"),
-    ("DASHSCOPE_API_KEY", "阿里百炼(Qwen)", "https://help.aliyun.com/zh/dashscope/"),
-    ("MOONSHOT_API_KEY", "Moonshot(Kimi)", "https://platform.moonshot.cn/"),
-    ("XIAOMI_API_KEY", "小米 MiMo", "https://api.xiaomimimo.com/"),
-    ("OPENROUTER_API_KEY", "OpenRouter 聚合", "https://openrouter.ai/"),
-    ("OPENAI_API_KEY", "OpenAI 原生(降级)", "https://platform.openai.com/"),
-)
+_LLM_KEY_CANDIDATES = get_llm_credential_candidates()
 if not any(os.getenv(name) for name, _, _ in _LLM_KEY_CANDIDATES):
     # 把标准错误流切换为 UTF-8，避免 Windows GBK 控制台显示乱码
     if hasattr(sys.stderr, "reconfigure"):

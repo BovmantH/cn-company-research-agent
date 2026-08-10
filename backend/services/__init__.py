@@ -1,7 +1,7 @@
 """Backend services 子包。
 
 提供横切关注点的服务抽象:
-- llm_factory: 统一 LLM 工厂(走 OpenRouter / OpenAI fallback)
+- llm_factory: 统一 LLM 工厂（Zen 免费优先、国内原厂与聚合服务回退）
 - search: 检索 provider 抽象层(SearchProvider Protocol + 具体实现)
 - mongodb / pdf_service: 已有的辅助服务
 """

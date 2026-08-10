@@ -20,7 +20,7 @@ class BaseResearcher:
         # 检索通过统一 SearchProvider 调用,默认 Tavily;
         # API key 校验由 provider 内部完成,缺失时会抛 RuntimeError。
         self.search = get_search_provider()
-        # LLM 通过统一工厂获取,默认走 OpenRouter,降级 OpenAI;
+        # LLM 通过统一工厂获取，Zen 免费线路优先，失败时按服务端配置回退。
         # 模型可通过 LLM_MODEL_RESEARCHER 环境变量覆盖。
         self.llm = get_llm("researcher")
         self.analyst_type = "base_researcher"
