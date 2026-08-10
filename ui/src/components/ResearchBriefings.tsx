@@ -64,7 +64,7 @@ const ResearchBriefings = ({
                   : 'border border-gray-200 bg-white/80 hover:border-gray-300 hover:shadow-sm'
               } backdrop-blur-sm group`}
             >
-              {/* Background decoration element (only visible when active) */}
+              {/* 背景装饰元素，仅在激活时显示 */}
               <div 
                 className={`absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(70,139,255,0.15),transparent_70%)] opacity-0 transition-opacity duration-700 ease-in-out rounded-lg ${
                   briefingStatus[category as keyof BriefingStatus] ? 'opacity-100' : ''
@@ -98,4 +98,4 @@ const ResearchBriefings = ({
   );
 };
 
-export default ResearchBriefings; 
+export default ResearchBriefings;

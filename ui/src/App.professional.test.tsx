@@ -66,7 +66,7 @@ describe('App professional fallback', () => {
           message: 'ok',
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-      throw new Error('unexpected_request');
+      throw new Error('收到非预期请求');
     });
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('EventSource', EventSourceStub);

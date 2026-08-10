@@ -215,15 +215,15 @@ export const resolveCompany = async (
     signal,
   });
   if (!response.ok && response.status !== 202) {
-    throw new Error("company_resolution_failed");
+    throw new Error("企业主体解析请求失败");
   }
   let payload: unknown;
   try {
     payload = await response.json();
   } catch {
-    throw new Error("company_resolution_invalid");
+    throw new Error("企业主体解析响应无效");
   }
   const resolution = parseCompanyResolution(payload);
-  if (!resolution) throw new Error("company_resolution_invalid");
+  if (!resolution) throw new Error("企业主体解析响应无效");
   return resolution;
 };

@@ -60,7 +60,7 @@ export interface ExamplePopupProps {
   exampleRef: RefObject<HTMLDivElement>;
 }
 
-// Example Popup Component
+// 示例公司弹窗
 const ExamplePopup = ({
   visible,
   onExampleSelect,
@@ -70,10 +70,10 @@ const ExamplePopup = ({
   const [selectedExample, setSelectedExample] = useState(0);
   const [isNameAnimating, setIsNameAnimating] = useState(false);
   
-  // Cycle through examples periodically
+  // 定期轮换示例
   useEffect(() => {
     const interval = setInterval(() => {
-      // Trigger name animation
+      // 触发名称切换动画
       setIsNameAnimating(true);
       setTimeout(() => {
         setSelectedExample((prev) => (prev + 1) % EXAMPLE_COMPANIES.length);
@@ -120,4 +120,4 @@ const ExamplePopup = ({
   );
 };
 
-export default ExamplePopup; 
+export default ExamplePopup;

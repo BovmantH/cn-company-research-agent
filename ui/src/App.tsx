@@ -75,10 +75,10 @@ function App() {
   const [isBriefingExpanded, setIsBriefingExpanded] = useState(true);
   const [hasScrolledToStatus, setHasScrolledToStatus] = useState(false);
 
-  // Add new state for color cycling
+  // 加载动画的颜色轮换状态
   const [loaderColor, setLoaderColor] = useState("#468BFF");
   
-  // Scroll helper function
+  // 滚动到状态区域的辅助函数
   const scrollToStatus = () => {
     if (!hasScrolledToStatus && statusRef.current) {
       const yOffset = -20;
@@ -88,17 +88,17 @@ function App() {
     }
   };
 
-  // Add useEffect for color cycling
+  // 调研期间轮换加载动画颜色
   useEffect(() => {
     if (!isResearching) return;
     
     const colors = [
-      "#468BFF", // Blue
-      "#8FBCFA", // Light Blue
-      "#FE363B", // Red
-      "#FF9A9D", // Light Red
-      "#FDBB11", // Yellow
-      "#F6D785", // Light Yellow
+      "#468BFF", // 蓝色
+      "#8FBCFA", // 浅蓝色
+      "#FE363B", // 红色
+      "#FF9A9D", // 浅红色
+      "#FDBB11", // 黄色
+      "#F6D785", // 浅黄色
     ];
     
     let currentIndex = 0;
@@ -200,7 +200,7 @@ function App() {
     };
   };
 
-  // Cleanup SSE on unmount
+  // 组件卸载时关闭 SSE 连接
   useEffect(() => {
     return () => {
       if (eventSourceRef.current) {
@@ -215,7 +215,7 @@ function App() {
     values,
     resolutionToken,
   }: PreparedResearch): Promise<void> => {
-    // Clear any existing SSE connection
+    // 关闭已有的 SSE 连接
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -285,7 +285,7 @@ function App() {
     }
   };
 
-  // Add new function to handle PDF generation
+  // 生成并下载 PDF 报告
   const handleGeneratePdf = async () => {
     if (!output || isGeneratingPdf) return;
     
@@ -355,10 +355,10 @@ function App() {
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-gray-50 to-white p-8 relative">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(70,139,255,0.35)_1px,transparent_0)] bg-[length:24px_24px] bg-center"></div>
       <div className="max-w-5xl mx-auto space-y-8 relative">
-        {/* Header Component */}
+        {/* 页头 */}
         <Header glassStyle={glassStyle.card} />
 
-        {/* Form Section */}
+        {/* 调研表单 */}
         <ResearchForm 
           onSubmit={handleFormSubmit}
           isBusy={isFormBusy}
@@ -379,7 +379,7 @@ function App() {
           />
         )}
 
-        {/* Error Message */}
+        {/* 错误提示 */}
         {error && (
           <div 
             className={`${glassStyle.card} border-[#FE363B]/30 bg-[#FE363B]/10 ${fadeInAnimation.fadeIn} ${isResetting ? 'opacity-0 transform -translate-y-4' : 'opacity-100 transform translate-y-0'} font-['DM_Sans']`}
@@ -388,7 +388,7 @@ function App() {
           </div>
         )}
 
-        {/* Status Box */}
+        {/* 状态区域 */}
         <ResearchStatus
           status={visibleStatus}
           error={error}
@@ -402,7 +402,7 @@ function App() {
 
         <ProfessionalDataStatus state={professional} />
 
-        {/* Research Report - always at the top when available */}
+        {/* 调研报告：生成后始终置于内容区顶部 */}
         {output && output.details && (
           <ResearchReport
             output={{
@@ -423,7 +423,7 @@ function App() {
           />
         )}
 
-        {/* Research Briefings - show once briefing starts and keep visible */}
+        {/* 调研简报：开始生成后持续显示 */}
         {(currentPhase === 'briefing' || currentPhase === 'complete') && (
           <ResearchBriefings
             briefingStatus={briefingStatus}
@@ -433,7 +433,7 @@ function App() {
           />
         )}
 
-        {/* Curation and Extraction - show once enrichment starts and keep visible */}
+        {/* 筛选与抽取：增强阶段开始后持续显示 */}
         {(currentPhase === 'enrichment' || currentPhase === 'briefing' || currentPhase === 'complete') && enrichmentCounts && (
           <CurationExtraction
             enrichmentCounts={enrichmentCounts}
@@ -444,7 +444,7 @@ function App() {
           />
         )}
 
-        {/* Research Queries - always at the bottom when visible */}
+        {/* 检索词：显示时始终位于内容区底部 */}
         {(queries.length > 0 || Object.keys(streamingQueries).length > 0) && (
           <ResearchQueries
             queries={queries}

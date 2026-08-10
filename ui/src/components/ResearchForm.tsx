@@ -41,15 +41,15 @@ const ResearchForm = ({
     companyIndustry: "",
   });
   
-  // Animation states
+  // 动画状态
   const [showExampleSuggestion, setShowExampleSuggestion] = useState(true);
   const [isExampleAnimating, setIsExampleAnimating] = useState(false);
   
-  // Refs for form fields for animation
+  // 动画所需的表单节点引用
   const formRef = useRef<HTMLDivElement>(null);
   const exampleRef = useRef<HTMLDivElement>(null);
   
-  // Hide example suggestion when form is filled
+  // 填写公司名称后隐藏示例建议
   useEffect(() => {
     if (formData.companyName) {
       setShowExampleSuggestion(false);
@@ -76,24 +76,24 @@ const ResearchForm = ({
   };
   
   const fillExampleData = (example: ExampleCompany) => {
-    // Start animation
+    // 开始示例填充动画
     setIsExampleAnimating(true);
     
-    // Animate the suggestion moving into the form
+    // 让示例建议移动到表单内
     if (exampleRef.current && formRef.current) {
       const exampleRect = exampleRef.current.getBoundingClientRect();
       const formRect = formRef.current.getBoundingClientRect();
       
-      // Calculate the distance to move
+      // 计算动画位移
       const moveX = formRect.left + 20 - exampleRect.left;
       const moveY = formRect.top + 20 - exampleRect.top;
       
-      // Apply animation
+      // 应用位移动画
       exampleRef.current.style.transform = `translate(${moveX}px, ${moveY}px) scale(0.6)`;
       exampleRef.current.style.opacity = '0';
     }
     
-    // Fill in form data after a short delay for animation
+    // 动画短暂延迟后填入表单
     setTimeout(() => {
       const newFormData = {
         ...formData,
@@ -103,10 +103,10 @@ const ResearchForm = ({
         companyIndustry: example.industry
       };
       
-      // Update form data
+      // 更新表单数据
       setFormData(newFormData);
       
-      // Start research automatically (only if not already researching)
+      // 当前空闲时自动开始调研
       if (!isBusy) {
         onSubmit({ ...newFormData, professionalDataRequested });
       }
@@ -117,7 +117,7 @@ const ResearchForm = ({
 
   return (
     <div className="relative" ref={formRef}>
-      {/* Example Suggestion */}
+      {/* 示例建议 */}
       <ExamplePopup 
         visible={showExampleSuggestion}
         onExampleSelect={fillExampleData}
@@ -125,12 +125,12 @@ const ResearchForm = ({
         exampleRef={exampleRef}
       />
 
-      {/* Main Form */}
+      {/* 主表单 */}
       <div className={`${glassStyle.card} backdrop-blur-2xl bg-white/90 border-gray-200/50 shadow-xl`}>
         <form onSubmit={handleSubmit} className="space-y-6">
           <fieldset disabled={isBusy} className="space-y-6 disabled:opacity-75">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Company Name */}
+            {/* 公司名称 */}
             <div className="relative group">
               <label
                 htmlFor="companyName"
@@ -158,7 +158,7 @@ const ResearchForm = ({
               </div>
             </div>
 
-            {/* Company URL */}
+            {/* 公司网址 */}
             <div className="relative group">
               <label
                 htmlFor="companyUrl"
@@ -185,7 +185,7 @@ const ResearchForm = ({
               </div>
             </div>
 
-            {/* Company HQ */}
+            {/* 公司总部 */}
             <div className="relative group">
               <label
                 htmlFor="companyHq"
@@ -205,7 +205,7 @@ const ResearchForm = ({
               />
             </div>
 
-            {/* Company Industry */}
+            {/* 所属行业 */}
             <div className="relative group">
               <label
                 htmlFor="companyIndustry"

@@ -56,7 +56,7 @@ const renderHook = async (): Promise<{
   });
   return {
     current: () => {
-      if (!latest) throw new Error('hook_not_ready');
+      if (!latest) throw new Error('Hook 尚未就绪');
       return latest;
     },
     renderer,
@@ -221,7 +221,7 @@ describe('useProfessionalResearchFlow', () => {
     const state = hook.current().flowState;
     expect(state.status).toBe('candidates');
     expect(JSON.stringify(state)).not.toContain('signed.');
-    if (state.status !== 'candidates') throw new Error('candidates_not_ready');
+    if (state.status !== 'candidates') throw new Error('候选主体尚未就绪');
 
     const selected = hook.current().selectCandidate(state.candidates[1].view_id);
     expect(selected?.resolutionToken).toBe('signed.second-token');

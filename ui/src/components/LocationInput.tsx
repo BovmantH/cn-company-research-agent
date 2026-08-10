@@ -21,30 +21,30 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
   const onChangeRef = useRef(onChange);
   const isInitializedRef = useRef(false);
 
-  // Update the ref when onChange changes
+  // onChange 变化时同步引用
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
 
-  // Load the Google Maps API
+  // 加载 Google 地图 API
   useEffect(() => {
     const loadGoogleMapsScript = (): Promise<void> => {
       return new Promise((resolve, reject) => {
-        // Check if API key is available
+        // 检查 API Key
         const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
         if (!apiKey) {
-          console.warn('Google Maps API key not configured. Location autocomplete disabled.');
-          reject(new Error('Google Maps API key not configured'));
+          console.warn('未配置 Google 地图 API Key，已禁用地点自动补全。');
+          reject(new Error('未配置 Google 地图 API Key'));
           return;
         }
 
-        // Check if already loaded
+        // 检查 API 是否已经加载
         if (window.google?.maps?.places) {
           resolve();
           return;
         }
 
-        // Check if script is already being loaded
+        // 检查脚本是否正在加载
         if (document.querySelector('script[src*="maps.googleapis.com"]')) {
           const checkLoaded = setInterval(() => {
             if (window.google?.maps?.places) {
@@ -54,22 +54,22 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
           }, 100);
           setTimeout(() => {
             clearInterval(checkLoaded);
-            reject(new Error('Timeout loading Google Maps'));
+            reject(new Error('加载 Google 地图超时'));
           }, 10000);
           return;
         }
 
-        // Create callback
+        // 创建加载完成回调
         window.initGoogleMapsCallback = () => {
           resolve();
         };
 
-        // Load script
+        // 加载脚本
         const script = document.createElement('script');
         script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsCallback`;
         script.async = true;
         script.defer = true;
-        script.onerror = () => reject(new Error('Failed to load Google Maps script'));
+        script.onerror = () => reject(new Error('Google 地图脚本加载失败'));
         document.head.appendChild(script);
       });
     };
@@ -79,8 +79,8 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
         await loadGoogleMapsScript();
         setIsApiLoaded(true);
       } catch (error) {
-        console.warn('Google Maps autocomplete not available:', error instanceof Error ? error.message : error);
-        // Gracefully degrade to regular text input
+        console.warn('Google 地图自动补全不可用：', error instanceof Error ? error.message : '未知错误');
+        // 降级为普通文本框
         if (inputRef.current) {
           inputRef.current.style.display = '';
         }
@@ -90,30 +90,30 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
     loadApi();
   }, []);
 
-  // Initialize autocomplete when API is loaded and input is available
+  // API 加载完成且输入框可用时初始化自动补全
   useEffect(() => {
     if (!isApiLoaded || !inputRef.current || !window.google?.maps?.places || isInitializedRef.current) {
       return;
     }
 
     try {
-      // Use the modern PlaceAutocompleteElement if available, fallback to legacy Autocomplete
+      // 优先使用新版组件，并兼容旧版自动补全 API
       if (window.google.maps.places.PlaceAutocompleteElement) {
-        // Create and configure the new PlaceAutocompleteElement
+        // 创建并配置新版 PlaceAutocompleteElement
         const autocompleteElement = document.createElement('gmp-place-autocomplete');
         autocompleteElement.setAttribute('type', 'cities');
 
-        // Replace the input with the autocomplete element
+        // 用自动补全组件替换输入框
         const parentElement = inputRef.current.parentElement;
         if (parentElement) {
           parentElement.insertBefore(autocompleteElement, inputRef.current);
           inputRef.current.style.display = 'none';
 
-          // Style the autocomplete element to match the input
+          // 让自动补全组件样式与输入框一致
           autocompleteElement.style.width = '100%';
           autocompleteElement.style.height = '100%';
 
-          // Listen for place selection
+          // 监听地点选择
           autocompleteElement.addEventListener('gmp-placeselect', (event: any) => {
             const place = event.place;
             if (place?.formattedAddress) {
@@ -124,14 +124,14 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
           autocompleteElementRef.current = autocompleteElement;
         }
       } else {
-        // Fallback to legacy Autocomplete API
-        console.warn('Using deprecated Google Maps Autocomplete API. Consider upgrading to PlaceAutocompleteElement.');
+        // 回退到旧版自动补全 API
+        console.warn('正在使用已弃用的 Google 地图自动补全 API，建议升级到 PlaceAutocompleteElement。');
 
         autocompleteElementRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
           types: ['(cities)'],
         });
 
-        // Add place_changed listener
+        // 监听 place_changed 事件
         const autocomplete = autocompleteElementRef.current;
         if (autocomplete) {
           autocomplete.addListener('place_changed', () => {
@@ -143,7 +143,7 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
         }
       }
 
-      // Style the autocomplete dropdown
+      // 设置自动补全下拉框样式
       const style = document.createElement('style');
       style.textContent = `
         .pac-container {
@@ -183,11 +183,11 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
           font-size: 0.8125rem !important;
           margin-left: 0.5rem !important;
         }
-        /* Hide the location icon */
+        /* 隐藏地点图标 */
         .pac-icon {
           display: none !important;
         }
-        /* Style for the new PlaceAutocompleteElement */
+        /* 设置新版 PlaceAutocompleteElement 样式 */
         gmp-place-autocomplete {
           width: 100% !important;
           --gmp-place-autocomplete-font-family: "DM Sans", sans-serif !important;
@@ -197,17 +197,17 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
 
       isInitializedRef.current = true;
     } catch (error) {
-      console.error('Error initializing Google Maps Autocomplete:', error);
+      console.error('初始化 Google 地图自动补全失败：', error);
     }
 
-    // Cleanup
+    // 清理自动补全资源
     return () => {
       if (autocompleteElementRef.current) {
         if (window.google?.maps?.event && typeof autocompleteElementRef.current.addListener === 'function') {
-          // Legacy Autocomplete cleanup
+          // 清理旧版自动补全组件
           window.google.maps.event.clearInstanceListeners(autocompleteElementRef.current);
         } else if (autocompleteElementRef.current.remove) {
-          // Modern PlaceAutocompleteElement cleanup
+          // 清理新版自动补全组件
           autocompleteElementRef.current.remove();
           if (inputRef.current) {
             inputRef.current.style.display = '';
@@ -217,9 +217,9 @@ const LocationInput = ({ value, onChange, className }: LocationInputProps) => {
         isInitializedRef.current = false;
       }
     };
-  }, [isApiLoaded]); // Removed onChange from dependencies
+  }, [isApiLoaded]); // 通过引用读取 onChange，无需加入依赖项
 
-  // Handle manual input changes
+  // 处理手工输入
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.value);
   }, [onChange]);

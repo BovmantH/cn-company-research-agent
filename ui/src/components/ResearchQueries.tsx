@@ -50,7 +50,7 @@ const ResearchQueries = ({
                 {CATEGORY_LABELS[category]} Query
               </h3>
               <div className="space-y-2">
-                {/* Show streaming queries first */}
+                {/* 优先显示正在生成的检索词 */}
                 {Object.entries(streamingQueries)
                   .filter(([key]) => key.startsWith(category))
                   .map(([key, query]) => (
@@ -59,7 +59,7 @@ const ResearchQueries = ({
                       <span className="animate-pulse ml-1 text-[#8FBCFA]">|</span>
                     </div>
                   ))}
-                {/* Then show completed queries */}
+                {/* 随后显示已完成的检索词 */}
                 {queries
                   .filter((q) => q.category.startsWith(category))
                   .map((query, idx) => (
@@ -82,4 +82,4 @@ const ResearchQueries = ({
   );
 };
 
-export default ResearchQueries; 
+export default ResearchQueries;
