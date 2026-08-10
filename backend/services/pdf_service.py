@@ -26,15 +26,14 @@ class PDFService:
         return f"{sanitized_name}_report.pdf"
 
     def generate_pdf_stream(self, markdown_content, company_name=None):
-        """
-        Generate a PDF from markdown content and return it as a stream.
+        """将 Markdown 内容转换为 PDF 流。
 
-        Args:
-            markdown_content (str): The markdown content to convert to PDF
-            company_name (str, optional): The company name to use in the filename
+        参数：
+            markdown_content：需要转换为 PDF 的 Markdown 内容。
+            company_name：用于生成文件名的可选公司名称。
 
-        Returns:
-            tuple: (success status, PDF stream or error message)
+        返回：
+            二元组，包含成功状态以及 PDF 流或安全错误码。
         """
         try:
             # 未提供公司名称时尝试从报告首行提取

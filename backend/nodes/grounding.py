@@ -14,7 +14,7 @@ class GroundingNode:
 
     def __init__(self) -> None:
         # 通过统一的 SearchProvider 调用,默认走 Tavily,可由
-        # SEARCH_PROVIDER 环境变量切换为其他实现(Phase 2)。
+        # SEARCH_PROVIDER 环境变量切换为其他实现（第二阶段）。
         self.search = get_search_provider()
 
     async def initial_search(self, state: InputState):

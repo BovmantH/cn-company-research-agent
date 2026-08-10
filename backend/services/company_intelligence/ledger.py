@@ -348,7 +348,7 @@ class InMemoryUsageLedger:
 
     def complete_operation(self, reservation_id: str, result: dict[str, Any]) -> None:
         """把进行中操作置为成功终态；只允许完全相同的结果幂等重放。"""
-        # JSON round-trip both verifies persistence compatibility and breaks aliases.
+        # JSON 往返既验证持久化兼容性，也切断可变对象别名。
         encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
         if len(encoded.encode("utf-8")) > 1_000_000:
             raise ValueError("操作结果超过大小限制")

@@ -280,7 +280,7 @@ def test_factory_default_returns_tavily(
     """默认返回 Tavily,且符合 SearchProvider 协议。"""
     provider = get_search_provider()
 
-    # Protocol 用 isinstance 验证(@runtime_checkable)
+    # 协议通过 isinstance 验证（使用 @runtime_checkable）
     assert isinstance(provider, SearchProvider)
 
 

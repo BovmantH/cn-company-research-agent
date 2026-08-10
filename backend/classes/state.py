@@ -8,7 +8,7 @@ from threading import Lock
 from typing import Any, Dict, List, NotRequired, Required, TypedDict, overload
 
 
-# Define the input state
+# 定义图输入状态
 class InputState(TypedDict, total=False):
     company: Required[str]
     company_url: NotRequired[str]
@@ -141,7 +141,7 @@ def prune_expired_jobs(now_epoch: float | None = None) -> None:
         job_status.pop(job_id, None)
 
 
-# Global job status tracker - shared across application.py and backend nodes
+# 全局任务状态表，由 application.py 与后端节点共享
 job_status = defaultdict[str, dict[str, Any]](
     lambda: {
         "status": "pending",

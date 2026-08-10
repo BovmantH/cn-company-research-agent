@@ -161,7 +161,7 @@ DEFAULT_VENDOR_PRIORITY: list[str] = [
 
 VALID_ROLES = frozenset({"researcher", "briefing", "editor"})
 
-# Phase 1 老导入兼容
+# 第一阶段旧导入兼容
 OPENROUTER_BASE_URL = VENDOR_REGISTRY["openrouter"].base_url
 OPENAI_BASE_URL = VENDOR_REGISTRY["openai"].base_url
 DEFAULT_MODELS: dict[str, str] = VENDOR_REGISTRY["openrouter"].default_models

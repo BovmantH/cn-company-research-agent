@@ -246,9 +246,9 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
 
 
 def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) -> List:
-    """
-    Example function that converts a Markdown string into a list of
-    ReportLab Flowable elements. This is separate from generate_pdf_from_md.
+    """将 Markdown 字符串转换为 ReportLab Flowable 元素列表。
+
+    该辅助函数独立于 generate_pdf_from_md。
     """
     story = []
     current_list_items = []
@@ -468,9 +468,7 @@ def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) ->
 
 
 def get_custom_styles():
-    """
-    Example helper to retrieve a base stylesheet and then augment with custom styles.
-    """
+    """获取基础样式表并加入自定义样式。"""
     styles = getSampleStyleSheet()
 
     # 更新列表项样式

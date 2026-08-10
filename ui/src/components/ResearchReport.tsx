@@ -90,7 +90,7 @@ const ResearchReport = ({
               ),
               h1: ({node, children, ...props}) => {
                 const text = String(children);
-                // Group 5 prompt 中文化后,LLM 输出的一级标题已改为
+                // 第 5 组提示中文化后，LLM 输出的一级标题已改为
                 // "# {company} 调研报告",这里同步改为中文判断;
                 // "参考文献" 是 references.py 自己拼装的,保持中文一致
                 const isFirstH1 = text.includes("调研报告");
@@ -194,4 +194,4 @@ const ResearchReport = ({
   );
 };
 
-export default ResearchReport; 
+export default ResearchReport;
