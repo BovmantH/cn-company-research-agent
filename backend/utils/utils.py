@@ -236,10 +236,12 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
 
         logger.info(f"Successfully generated PDF: {output_pdf}")
 
-    except Exception as e:
-        error_msg = f"Error generating PDF: {str(e)}"
-        logger.error(error_msg)
-        raise Exception(error_msg)
+    except Exception as exc:
+        logger.error(
+            "PDF rendering failed, exception_type=%s",
+            type(exc).__name__,
+        )
+        raise RuntimeError("PDF rendering failed") from exc
 
 
 def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) -> List:

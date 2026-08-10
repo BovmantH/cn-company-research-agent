@@ -60,7 +60,9 @@ class PDFService:
             # Return success and the buffer
             return True, (pdf_buffer, pdf_filename)
 
-        except Exception as e:
-            error_msg = f"Error generating PDF: {str(e)}"
-            logger.error(error_msg)
-            return False, error_msg
+        except Exception as exc:
+            logger.error(
+                "PDF stream generation failed, exception_type=%s",
+                type(exc).__name__,
+            )
+            return False, "pdf_generation_failed"

@@ -19,20 +19,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.graph import Graph
-from backend.services.mongodb import MongoDBService
-from backend.services.pdf_service import PDFService
-from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
-from backend.services.company_intelligence.mongo_ledger import MongoLedgerUnavailable
-from backend.services.company_intelligence.collection import (
-    PreparationKind,
-    ProfessionalPreparation,
-)
-from backend.services.company_intelligence.requester import resolve_client_ip
-from backend.services.company_intelligence.models import ProfessionalEvidence
-from backend.services.company_intelligence.rendering import (
-    render_professional_evidence_markdown,
-)
 from backend.api.company_intelligence import router as company_intelligence_router
 from backend.classes.state import (
     JOB_TERMINAL_TTL_SECONDS,
@@ -40,6 +26,20 @@ from backend.classes.state import (
     job_status,
     prune_expired_jobs,
 )
+from backend.graph import Graph
+from backend.services.company_intelligence.collection import (
+    PreparationKind,
+    ProfessionalPreparation,
+)
+from backend.services.company_intelligence.models import ProfessionalEvidence
+from backend.services.company_intelligence.mongo_ledger import MongoLedgerUnavailable
+from backend.services.company_intelligence.rendering import (
+    render_professional_evidence_markdown,
+)
+from backend.services.company_intelligence.requester import resolve_client_ip
+from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
+from backend.services.mongodb import MongoDBService
+from backend.services.pdf_service import PDFService
 
 # Load environment variables from .env file at startup
 env_path = Path(__file__).parent / ".env"
@@ -777,7 +777,10 @@ async def stream_research(job_id: str, request: Request):
     try:
         initial_event_id = int(raw_last_event_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
+        raise HTTPException(
+            status_code=400,
+            detail="Last-Event-ID 必须是非负整数",
+        ) from None
     if initial_event_id < 0:
         raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
 
@@ -899,10 +902,13 @@ async def generate_pdf(data: PDFGenerationRequest):
                 media_type="application/pdf",
                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
-        else:
-            raise HTTPException(status_code=500, detail=f"PDF 生成失败: {result}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF 生成失败: {str(e)}")
+        logger.warning("PDF 生成失败，服务返回失败状态")
+        raise HTTPException(status_code=500, detail="PDF 生成失败")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("PDF 生成失败，异常类型=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="PDF 生成失败") from None
 
 
 if __name__ == "__main__":
