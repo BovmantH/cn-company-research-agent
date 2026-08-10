@@ -33,7 +33,7 @@ class TavilyProvider:
             )
         self._client = AsyncTavilyClient(api_key=key)
 
-    # ---- search ----
+    # ---- 搜索 ----
 
     async def search(
         self,
@@ -56,7 +56,7 @@ class TavilyProvider:
         response = await self._client.search(query, **params)
         return [_to_search_result(item) for item in response.get("results", [])]
 
-    # ---- crawl ----
+    # ---- 站点抓取 ----
 
     async def crawl(
         self,
@@ -87,7 +87,7 @@ class TavilyProvider:
             if item.get("raw_content")
         ]
 
-    # ---- extract ----
+    # ---- 正文提取 ----
 
     async def extract(
         self,

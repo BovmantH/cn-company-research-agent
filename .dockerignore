@@ -1,14 +1,14 @@
-# Version control
+# 版本控制
 .git
 .gitignore
 .gitattributes
 
-# Environment files
+# 环境变量文件
 .env
 .env.*
 *.env
 
-# Python
+# Python 文件
 __pycache__/
 *.py[cod]
 *.so
@@ -24,7 +24,7 @@ htmlcov/
 .venv/
 venv/
 
-# Node.js
+# Node.js 文件
 ui/node_modules/
 ui/.npm
 ui/npm-debug.log*
@@ -32,21 +32,21 @@ ui/yarn-debug.log*
 ui/yarn-error.log*
 ui/dist/
 
-# IDE
+# IDE 配置
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# OS
+# 操作系统文件
 .DS_Store
 Thumbs.db
 
-# Project specific
+# 项目专用文件
 reports/*
 .langgraph/
 .elasticbeanstalk/
 README.md
 LICENSE
 *.md
-*.log 
+*.log

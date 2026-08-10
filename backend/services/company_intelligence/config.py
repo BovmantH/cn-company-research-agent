@@ -43,7 +43,7 @@ def _as_int(value: str | None, default: int) -> int:
     try:
         return int(value)
     except ValueError:
-        # 配置拼写错误必须 fail closed，不能静默退回一个可能允许付费调用的默认值。
+        # 配置拼写错误时必须默认关闭，不能静默退回一个可能允许付费调用的默认值。
         return -1
 
 

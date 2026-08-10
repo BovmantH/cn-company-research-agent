@@ -2,11 +2,11 @@
 
 覆盖:
 - OpenRouter 路径(默认)
-- OpenAI 降级路径(去 vendor 前缀)
-- 缺 key 时明确报错
-- 角色隔离(researcher / briefing / editor 互不干扰)
-- overrides 覆盖默认参数
-- 未知 role 报错
+- OpenAI 降级路径（去除供应商前缀）
+- 缺少密钥时明确报错
+- 角色隔离（researcher / briefing / editor 互不干扰）
+- 覆盖参数优先于默认参数
+- 未知角色报错
 - LLM_BASE_URL 覆盖默认 base_url
 - LLM_TEMPERATURE / LLM_STREAMING 行为
 """
@@ -45,7 +45,7 @@ def test_openrouter_default_model_when_env_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
-    # 不设置 LLM_MODEL_RESEARCHER,应该用 default
+    # 不设置 LLM_MODEL_RESEARCHER 时应该使用默认值
 
     llm = get_llm("researcher")
 
@@ -121,11 +121,11 @@ def test_missing_both_keys_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_unknown_role_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
-    with pytest.raises(ValueError, match="未知的 LLM role"):
+    with pytest.raises(ValueError, match="未知的 LLM 角色"):
         get_llm("unknown_role")
 
 
-# === overrides ===
+# === 覆盖参数 ===
 
 
 def test_overrides_take_precedence(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -196,7 +196,7 @@ def test_streaming_default_is_true(monkeypatch: pytest.MonkeyPatch) -> None:
         ("false", False),
         ("0", False),
         ("no", False),
-        ("", True),  # 空字符串落到 default=True 之外的分支?conftest 实际删掉了 var
+        ("", True),  # 空字符串走默认值为 True 之外的分支；conftest 实际会删除该变量
     ],
 )
 def test_streaming_env_parsing(
@@ -258,7 +258,7 @@ def test_max_tokens_invalid_falls_back_silently(
 def test_max_tokens_override_takes_precedence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """overrides['max_tokens'] 应该覆盖环境变量。"""
+    """显式传入的 ``max_tokens`` 应该覆盖环境变量。"""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     monkeypatch.setenv("LLM_MAX_TOKENS", "1024")
 
@@ -267,7 +267,7 @@ def test_max_tokens_override_takes_precedence(
     assert getattr(llm, "max_tokens", None) == 8192
 
 
-# === Phase 2: vendor 探测 ===
+# === 第二阶段：供应商探测 ===
 
 
 def test_detect_deepseek_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -320,7 +320,7 @@ def test_mimo_token_plan_base_url_override(monkeypatch: pytest.MonkeyPatch) -> N
     assert "token-plan-cn.xiaomimimo.com" in base_url
 
 
-# === Phase 2: 优先级 ===
+# === 第二阶段：优先级 ===
 
 
 def test_priority_default_picks_deepseek_over_qwen(
@@ -376,7 +376,7 @@ def test_priority_phase1_compat_openrouter_still_works(
     assert llm.model_name == "deepseek/deepseek-v4-flash"
 
 
-# === Phase 2: 显式锁定 ===
+# === 第二阶段：显式锁定 ===
 
 
 def test_explicit_lock_uses_locked_vendor(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -425,14 +425,14 @@ def test_explicit_lock_case_insensitive(monkeypatch: pytest.MonkeyPatch) -> None
     assert "api.deepseek.com" in base_url
 
 
-# === Phase 2: 前缀剥离 ===
+# === 第二阶段：前缀剥离 ===
 
 
 def test_prefix_stripped_for_direct_vendor_with_warning(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """vendor=DeepSeek 但 LLM_MODEL_RESEARCHER 带 vendor/ 前缀 → 剥离 + WARN。"""
+    """使用 DeepSeek 时剥离 LLM_MODEL_RESEARCHER 中的供应商前缀并记录警告。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
     monkeypatch.setenv("LLM_MODEL_RESEARCHER", "deepseek/deepseek-v4-flash")
 
@@ -441,7 +441,7 @@ def test_prefix_stripped_for_direct_vendor_with_warning(
 
     assert llm.model_name == "deepseek-v4-flash"
     assert any(
-        "LLM_MODEL_RESEARCHER" in r.message and "vendor/" in r.message
+        "LLM_MODEL_RESEARCHER" in r.message and "供应商前缀" in r.message
         for r in caplog.records
     )
 
@@ -460,7 +460,7 @@ def test_prefix_override_does_not_warn(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """通过 overrides 显式传带前缀的 model → 剥离但不 warn(调用方明示)。"""
+    """显式传入带前缀的模型时剥离前缀，但不记录警告。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-test")
 
     with caplog.at_level("WARNING"):
@@ -470,7 +470,7 @@ def test_prefix_override_does_not_warn(
     assert not any("vendor/" in r.message for r in caplog.records)
 
 
-# === Phase 2: 单 vendor 维度 base_url 覆盖 ===
+# === 第二阶段：单供应商维度的 base_url 覆盖 ===
 
 
 def test_per_vendor_base_url_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -506,7 +506,7 @@ def test_per_vendor_base_url_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "dashscope.aliyuncs.com" in base_url
 
 
-# === Phase 2: 启动校验报错文案 ===
+# === 第二阶段：启动校验报错文案 ===
 
 
 def test_all_keys_missing_lists_all_vendors(monkeypatch: pytest.MonkeyPatch) -> None:

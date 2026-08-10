@@ -1,17 +1,17 @@
 """``backend.prompts`` 中文化后的渲染验收测试。
 
-Phase 1 的 prompt 中文化没法跑真实 LLM 端到端验收(免费额度有限,且不进 CI),
-所以做一组**结构化静态校验**作为替代验收:
+第一阶段的提示词中文化无法运行真实 LLM 端到端验收（免费额度有限，且不进入 CI），
+所以用一组**结构化静态校验**替代验收：
 
-1. **占位符未丢失**: 中文化前后,每个 prompt 的 ``{...}`` 占位符
-   名字与数量一一对应 —— 这是 spec 的硬性要求
+1. **占位符未丢失**：中文化前后，每个提示词的 ``{...}`` 占位符
+   名字与数量一一对应——这是规格的硬性要求
 2. **``.format(...)`` 能成功渲染**: 用真实可能出现的中文输入,
    ``str.format()`` 不抛 ``KeyError`` / ``ValueError``
-3. **章节小标题映射齐全**: 例如 briefing prompt 中应当出现「核心产品/服务」、
+3. **章节小标题映射齐全**：例如简报提示词中应当出现「核心产品/服务」、
    「领导团队」等中文标题,而不应该残留对应英文
-4. **否定指令保留**: spec Scenario 要求等效中文否定指令(「不得提及『未找到信息』」)
+4. **否定指令保留**：规格场景要求等效中文否定指令（「不得提及『未找到信息』」）
 
-如果将来跑了真实端到端,可以删掉这个测试或在 spec 上把它降级为冒烟。
+如果将来运行了真实端到端测试，可以删除这个测试或在规格中将它降级为冒烟测试。
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ def test_prompt_renders_with_chinese_inputs(prompt: str) -> None:
 
     rendered = prompt.format(**args)
 
-    # 渲染后必须把所有 placeholder 都替换掉
+    # 渲染后必须替换所有占位符
     assert _placeholders(rendered) == set()
     # 公司名必须出现在渲染结果中(只要原 prompt 里包含 {company} 占位符)
     if "company" in needed:
@@ -175,7 +175,7 @@ def test_editor_main_headers_present() -> None:
     ]:
         assert header in COMPILE_CONTENT_PROMPT
         assert header in CONTENT_SWEEP_PROMPT
-    # 参考文献是 sweep 阶段才组装的,只在 sweep prompt 中要求
+    # 参考文献只在内容清扫阶段组装，因此只在内容清扫提示词中要求
     assert "## 参考文献" in CONTENT_SWEEP_PROMPT
 
 
@@ -228,7 +228,7 @@ def test_no_english_headers_remain(header: str) -> None:
     assert header not in all_prompts, f"英文标题残留: {header!r}"
 
 
-# === 否定指令保留(spec scenario) ===
+# === 否定指令保留（规格场景）===
 
 
 @pytest.mark.parametrize(
@@ -241,7 +241,7 @@ def test_no_english_headers_remain(header: str) -> None:
     ],
 )
 def test_negative_instruction_preserved(prompt: str) -> None:
-    """spec scenario「否定指令保留」: 4 类 briefing 都要有「不得提及」之类的中文等效。"""
+    """规格场景“否定指令保留”：4 类简报都要有“不得提及”等中文表达。"""
     # 接受多种合理表述
     candidates = [
         "不得提及",

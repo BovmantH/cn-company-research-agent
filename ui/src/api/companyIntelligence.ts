@@ -169,7 +169,7 @@ export const parseCompanyResolution = (value: unknown): CompanyResolution | null
   return null;
 };
 
-/** 能力探测永远 fail-closed，网络异常和非法响应不会阻断基础调研。 */
+/** 能力探测始终默认关闭，网络异常和非法响应不会阻断基础调研。 */
 export const loadCapabilities = async (
   apiUrl: string,
   signal?: AbortSignal,

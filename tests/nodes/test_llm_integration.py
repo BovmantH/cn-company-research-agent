@@ -21,7 +21,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-# === fixtures ===
+# === 测试夹具 ===
 
 
 def _make_fake_llm() -> GenericFakeChatModel:

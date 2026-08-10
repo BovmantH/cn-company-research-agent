@@ -166,18 +166,22 @@ def process_references_from_search_results(
                         score = float(doc.get("score", 0))
 
                     logger.info(
-                        f"Found reference in {data_type}: URL={url}, Score={score:.4f}"
+                        "在 %s 中发现引用：URL=%s，分数=%.4f",
+                        data_type,
+                        url,
+                        score,
                     )
                     all_top_references.append((url, score))
-                except (KeyError, ValueError, TypeError) as e:
+                except (KeyError, ValueError, TypeError) as exc:
                     logger.warning(
-                        f"Error processing score for {url} in {data_type}: {e}"
+                        "处理引用分数失败：url=%s，数据类型=%s，异常类型=%s",
+                        url,
+                        data_type,
+                        type(exc).__name__,
                     )
                     continue
 
-    logger.info(
-        f"Collected a total of {len(all_top_references)} references before deduplication"
-    )
+    logger.info("去重前共收集 %s 条引用", len(all_top_references))
 
     # 按分数降序排列引用
     all_top_references.sort(key=lambda x: float(x[1]), reverse=True)
@@ -185,7 +189,7 @@ def process_references_from_search_results(
     # 记录去重前分数最高的 20 条引用，用于验证排序
     logger.info("去重前分数最高的 20 条引用：")
     for i, (url, score) in enumerate(all_top_references[:20]):
-        logger.info(f"{i + 1}. Score: {score:.4f} - URL: {url}")
+        logger.info("第 %s 条：分数=%.4f，URL=%s", i + 1, score, url)
 
     # 使用集合保存唯一 URL，每个 URL 只保留分数最高的版本
     seen_urls = set()
@@ -245,9 +249,7 @@ def process_references_from_search_results(
                 "url": normalized_url,
                 "score": score,
             }
-            logger.info(
-                f"Stored reference info for {normalized_url} with score {score:.4f}"
-            )
+            logger.info("已保存引用信息：url=%s，分数=%.4f", normalized_url, score)
 
     # 再次按分数排列唯一引用，确保顺序正确
     unique_references.sort(key=lambda x: float(x[1]), reverse=True)
@@ -256,7 +258,7 @@ def process_references_from_search_results(
     logger.info("去重后得到 %s 条唯一引用", len(unique_references))
     logger.info("按分数排序后的唯一引用：")
     for i, (url, score) in enumerate(unique_references):
-        logger.info(f"{i + 1}. Score: {score:.4f} - URL: {url}")
+        logger.info("第 %s 条：分数=%.4f，URL=%s", i + 1, score, url)
 
     # 最多保留 10 条唯一引用
     top_references = unique_references[:10]
@@ -266,7 +268,7 @@ def process_references_from_search_results(
     logger.info("最终选出前 %s 条引用：", len(top_reference_urls))
     for i, url in enumerate(top_reference_urls):
         score = next((s for u, s in unique_references if u == url), 0)
-        logger.info(f"{i + 1}. Score: {score:.4f} - URL: {url}")
+        logger.info("第 %s 条：分数=%.4f，URL=%s", i + 1, score, url)
 
     return top_reference_urls, reference_titles, reference_info
 
@@ -288,7 +290,7 @@ def format_reference_for_markdown(reference_entry: Dict[str, Any]) -> str:
 
         # 仍无标题时使用默认格式
         if not title:
-            title = f"Information from {website}"
+            title = f"来自 {website} 的信息"
 
     # 格式：* 网站名. "标题." URL
     return f'* {website}. "{title}." {url}'

@@ -1,11 +1,10 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
+# 要启用 Dependabot 版本更新，需要指定待更新的软件包生态系统及其清单目录。
+# 所有配置选项请参阅：
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "" # 可选值请参阅文档
+    directory: "/" # 软件包清单所在目录
     schedule:
       interval: "weekly"

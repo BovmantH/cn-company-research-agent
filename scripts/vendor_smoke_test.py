@@ -133,8 +133,10 @@ def test_basic_invoke(vendor: str) -> TestResult:
         return TestResult(
             "basic_invoke", True, f"返回长度 {len(text)},片段:{text[:40]!r}"
         )
-    except Exception as e:  # noqa: BLE001
-        return TestResult("basic_invoke", False, f"{type(e).__name__}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        return TestResult(
+            "basic_invoke", False, f"调用失败，异常类型：{type(exc).__name__}"
+        )
 
 
 async def _astream_once(vendor: str) -> tuple[int, str]:
@@ -159,8 +161,10 @@ def test_streaming(vendor: str) -> TestResult:
             True,
             f"chunks={chunks},合计长度 {len(text)},片段:{text[:40]!r}",
         )
-    except Exception as e:  # noqa: BLE001
-        return TestResult("streaming", False, f"{type(e).__name__}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        return TestResult(
+            "streaming", False, f"调用失败，异常类型：{type(exc).__name__}"
+        )
 
 
 def test_max_tokens(vendor: str) -> TestResult:
@@ -185,8 +189,10 @@ def test_max_tokens(vendor: str) -> TestResult:
             True,
             f"返回 {len(text)} 字符,片段:{text[:40]!r}",
         )
-    except Exception as e:  # noqa: BLE001
-        return TestResult("max_tokens", False, f"{type(e).__name__}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        return TestResult(
+            "max_tokens", False, f"调用失败，异常类型：{type(exc).__name__}"
+        )
 
 
 def main() -> int:

@@ -1,6 +1,6 @@
 """``backend.services.search.tavily_provider.TavilyProvider`` 单元测试。
 
-策略:mock ``AsyncTavilyClient`` 类(在 TavilyProvider 内部实例化)
+策略：模拟 ``AsyncTavilyClient`` 类（在 TavilyProvider 内部实例化），
 而不是发真实 HTTP。这样既快又稳,接口契约也一目了然。
 """
 
@@ -17,12 +17,12 @@ from backend.services.search import (
     get_search_provider,
 )
 
-# === fixture: 把 TavilyProvider 内部的 AsyncTavilyClient 换成 mock ===
+# === 测试夹具：把 TavilyProvider 内部的 AsyncTavilyClient 换成模拟对象 ===
 
 
 @pytest.fixture
 def fake_tavily_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
-    """构造一个 mock 的 AsyncTavilyClient 实例,monkeypatch 到 provider 模块。"""
+    """构造 AsyncTavilyClient 模拟实例，并替换数据提供方模块中的实现。"""
     monkeypatch.setenv("TAVILY_API_KEY", "fake-tavily-key")
 
     fake_instance = MagicMock()
@@ -58,7 +58,7 @@ def test_init_accepts_explicit_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     TavilyProvider(api_key="explicit-key")
 
 
-# === search ===
+# === 搜索 ===
 
 
 @pytest.mark.asyncio
@@ -141,7 +141,7 @@ async def test_search_empty_results(fake_tavily_client: MagicMock) -> None:
     assert await provider.search("nothing") == []
 
 
-# === crawl ===
+# === 站点抓取 ===
 
 
 @pytest.mark.asyncio
@@ -234,7 +234,7 @@ async def test_crawl_passes_tavily_specific_params(
     assert kwargs["extract_depth"] == "advanced"
 
 
-# === extract ===
+# === 正文提取 ===
 
 
 @pytest.mark.asyncio

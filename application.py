@@ -48,7 +48,7 @@ env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=True)
 
-# 启动校验: LLMFactory 依赖至少一个 LLM provider key,缺失则直接退出,
+# 启动校验：LLMFactory 依赖至少一个 LLM 服务商密钥，缺失则直接退出，
 # 避免在第一次请求时才发现 key 没配,把错误推到用户面前。
 _LLM_KEY_CANDIDATES = (
     ("DEEPSEEK_API_KEY", "DeepSeek 原厂", "https://api-docs.deepseek.com/"),
@@ -59,7 +59,7 @@ _LLM_KEY_CANDIDATES = (
     ("OPENAI_API_KEY", "OpenAI 原生(降级)", "https://platform.openai.com/"),
 )
 if not any(os.getenv(name) for name, _, _ in _LLM_KEY_CANDIDATES):
-    # 把 stderr 切到 UTF-8,避免 Windows GBK 控制台把中文打成 mojibake
+    # 把标准错误流切换为 UTF-8，避免 Windows GBK 控制台显示乱码
     if hasattr(sys.stderr, "reconfigure"):
         try:
             sys.stderr.reconfigure(encoding="utf-8")
@@ -620,7 +620,7 @@ async def process_research(
             node_name = list(state.keys())[0] if state else "unknown"
             logger.debug(f"节点已完成: {node_name}")
 
-            # 把当前 step 写入 job 状态
+            # 把当前步骤写入任务状态
             job_status[job_id].update(
                 {
                     "status": "processing",
@@ -825,7 +825,7 @@ async def stream_research(job_id: str, request: Request):
 
     async def event_generator():
         try:
-            # 等待 job 入库(最多 5s)
+            # 等待任务入库（最多 5 秒）
             for _ in range(50):
                 if job_id in job_status:
                     break

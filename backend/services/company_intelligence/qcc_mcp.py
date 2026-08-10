@@ -144,7 +144,7 @@ class QccMcpClientPool:
                         raise QccMcpUnavailable(f"MCP 必需工具结构不兼容: {capability}")
             except BaseException as error:
                 # MCP SDK 的 AnyIO 上下文不能携带业务异常退出，否则可能用
-                # ExceptionGroup 覆盖原始 fail-closed 原因；这里先无异常关闭。
+                # ExceptionGroup 可能覆盖原始的默认关闭原因；这里先无异常关闭。
                 try:
                     await stack.aclose()
                 except BaseException:
