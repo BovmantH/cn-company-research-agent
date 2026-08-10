@@ -18,7 +18,7 @@ const values: ResearchFormValues = {
 
 describe('buildResearchRequest', () => {
   it('关闭专业数据时保持旧 JSON 请求体', () => {
-    expect(JSON.parse(JSON.stringify(buildResearchRequest(values, null)))).toEqual({
+    expect(JSON.parse(JSON.stringify(buildResearchRequest(values, null, null)))).toEqual({
       company: '示例科技',
       company_url: 'https://example.com',
       industry: '软件',
@@ -30,6 +30,7 @@ describe('buildResearchRequest', () => {
     const payload = buildResearchRequest(
       { ...values, professionalDataRequested: true },
       'signed.resolution-token',
+      null,
     );
 
     expect(payload.professional_data).toEqual({
@@ -40,9 +41,23 @@ describe('buildResearchRequest', () => {
   });
 
   it('关闭开关时陈旧 Token 也不能开启专业数据', () => {
-    expect(buildResearchRequest(values, 'stale.resolution-token')).not.toHaveProperty(
+    expect(buildResearchRequest(values, 'stale.resolution-token', null)).not.toHaveProperty(
       'professional_data',
     );
+  });
+
+  it('继续基础报告时只提交安全降级原因且不携带 Token', () => {
+    const payload = buildResearchRequest(
+      values,
+      null,
+      'identity_not_found',
+    );
+
+    expect(payload.professional_data).toEqual({
+      enabled: false,
+      fallback_reason: 'identity_not_found',
+    });
+    expect(JSON.stringify(payload)).not.toContain('resolution_token');
   });
 
   it('区分纯基础、专业受理和专业降级响应', () => {
@@ -64,6 +79,18 @@ describe('buildResearchRequest', () => {
       status: 'degraded',
       reason: 'budget_blocked',
     });
+    for (const reason of [
+      'identity_not_found',
+      'identity_unconfirmed',
+      'resolution_in_progress',
+      'provider_unavailable',
+    ]) {
+      expect(parseResearchAcceptedResponse({
+        status: 'accepted',
+        job_id: `job-${reason}`,
+        professional_data: { status: 'degraded', reason },
+      })?.professionalData).toEqual({ status: 'degraded', reason });
+    }
     expect(parseResearchAcceptedResponse({
       status: 'accepted',
       job_id: 'job-invalid',

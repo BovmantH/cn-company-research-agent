@@ -112,7 +112,9 @@ describe('professional data components', () => {
     ['ledger_unavailable', '专业数据服务暂时不可用'],
     ['not_configured', '尚未完成专业数据配置'],
     ['deployment_budget_exhausted', '专业数据额度已用完'],
-    ['identity_unconfirmed', '公司主体确认已失效'],
+    ['identity_not_found', '未找到可确认的公司主体'],
+    ['identity_unconfirmed', '公司主体尚未完成确认'],
+    ['resolution_in_progress', '公司主体解析仍在进行'],
     ['idempotency_conflict', '无法安全重放'],
     ['report_size_limit', '受报告大小限制未完整展开'],
   ])('只把稳定原因码 %s 映射为安全文案', (reason, expected) => {

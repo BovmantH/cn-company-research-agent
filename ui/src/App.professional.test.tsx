@@ -99,7 +99,14 @@ describe('App professional fallback', () => {
       company_url: 'https://example.com',
       industry: '软件',
       hq_location: '上海',
+      professional_data: {
+        enabled: false,
+        fallback_reason: 'provider_unavailable',
+      },
     }]);
+    expect(JSON.stringify(researchBodies)).not.toContain('resolution_token');
+    expect(JSON.stringify(researchBodies)).not.toContain('Authorization');
+    expect(JSON.stringify(researchBodies)).not.toContain('upstream-secret');
     expect(renderer.root.findByType(ResearchForm).props.professionalDataRequested).toBe(false);
     renderer.unmount();
   });

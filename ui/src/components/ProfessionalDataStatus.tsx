@@ -6,6 +6,10 @@ import {
 } from 'lucide-react';
 
 import type { ProfessionalStreamState } from '../research/researchStreamReducer';
+import {
+  isProfessionalFallbackReason,
+  PROFESSIONAL_FALLBACK_REASON_TEXT,
+} from '../research/professionalFallback';
 import { glassStyle } from '../styles';
 
 
@@ -14,9 +18,10 @@ interface ProfessionalDataStatusProps {
 }
 
 const safeDegradationText = (reason: string | null): string => {
+  if (reason && isProfessionalFallbackReason(reason)) {
+    return PROFESSIONAL_FALLBACK_REASON_TEXT[reason];
+  }
   switch (reason) {
-    case 'provider_unavailable':
-      return '专业数据源暂时不可用，基础 Web 报告仍会正常交付。';
     case 'ledger_unavailable':
       return '专业数据服务暂时不可用，基础 Web 报告仍会正常交付。';
     case 'not_configured':
@@ -26,8 +31,6 @@ const safeDegradationText = (reason: string | null): string => {
     case 'deployment_budget_exhausted':
     case 'budget_blocked':
       return '当前部署实例的专业数据额度已用完，基础 Web 报告仍会正常交付。';
-    case 'identity_unconfirmed':
-      return '公司主体确认已失效，基础 Web 报告仍会正常交付。';
     case 'idempotency_conflict':
       return '本次专业数据请求无法安全重放，基础 Web 报告仍会正常交付。';
     case 'report_size_limit':

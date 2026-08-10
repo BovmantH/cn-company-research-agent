@@ -214,6 +214,7 @@ function App() {
   const startResearch = async ({
     values,
     resolutionToken,
+    professionalFallbackReason,
   }: PreparedResearch): Promise<void> => {
     // 关闭已有的 SSE 连接
     if (eventSourceRef.current) {
@@ -228,7 +229,11 @@ function App() {
     try {
       const url = `${API_URL}/research`;
 
-      const requestData = buildResearchRequest(values, resolutionToken);
+      const requestData = buildResearchRequest(
+        values,
+        resolutionToken,
+        professionalFallbackReason,
+      );
 
       const response = await fetch(url, {
         method: "POST",

@@ -1,15 +1,26 @@
 import type { ResearchFormValues } from './model';
+import {
+  PROFESSIONAL_FALLBACK_REASONS,
+  type ProfessionalFallbackReason,
+} from './professionalFallback';
 
+
+export type { ProfessionalFallbackReason } from './professionalFallback';
 
 type ResearchRequestPayload = {
   company: string;
   company_url: string | undefined;
   industry: string | undefined;
   hq_location: string | undefined;
-  professional_data?: {
-    enabled: true;
-    resolution_token: string;
-  };
+  professional_data?:
+    | {
+        enabled: true;
+        resolution_token: string;
+      }
+    | {
+        enabled: false;
+        fallback_reason: ProfessionalFallbackReason;
+      };
 };
 
 export type ProfessionalResearchAcceptance = {
@@ -39,7 +50,7 @@ const PROFESSIONAL_DEGRADED_REASONS = new Set([
   'budget_not_configured',
   'signing_secret_missing',
   'deployment_budget_exhausted',
-  'identity_unconfirmed',
+  ...PROFESSIONAL_FALLBACK_REASONS,
   'idempotency_conflict',
   'budget_blocked',
 ]);
@@ -48,6 +59,7 @@ const PROFESSIONAL_DEGRADED_REASONS = new Set([
 export const buildResearchRequest = (
   values: ResearchFormValues,
   resolutionToken: string | null,
+  professionalFallbackReason: ProfessionalFallbackReason | null,
 ): ResearchRequestPayload => {
   const companyUrl = values.companyUrl
     ? values.companyUrl.startsWith('http://') || values.companyUrl.startsWith('https://')
@@ -66,7 +78,14 @@ export const buildResearchRequest = (
             resolution_token: resolutionToken,
           },
         }
-      : {}),
+      : professionalFallbackReason
+        ? {
+            professional_data: {
+              enabled: false as const,
+              fallback_reason: professionalFallbackReason,
+            },
+          }
+        : {}),
   };
 };
 

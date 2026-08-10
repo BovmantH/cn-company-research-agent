@@ -7,7 +7,10 @@ import {
   type PublicCompanyIdentity,
 } from '../api/companyIntelligence';
 import type { ResearchFormValues } from './model';
-import type { ProfessionalResearchAcceptance } from './researchRequest';
+import type {
+  ProfessionalFallbackReason,
+  ProfessionalResearchAcceptance,
+} from './researchRequest';
 
 
 export type CompanyCandidateView = Omit<
@@ -28,6 +31,7 @@ export type ProfessionalFlowState =
 export type PreparedResearch = {
   values: ResearchFormValues;
   resolutionToken: string | null;
+  professionalFallbackReason: ProfessionalFallbackReason | null;
 };
 
 type PreparationOutcome =
@@ -42,6 +46,18 @@ const normalizeQuery = (query: string): string => query
 const createIdempotencyKey = (): string => `resolve-${crypto.randomUUID()}`;
 const CAPABILITY_TIMEOUT_MS = 8_000;
 const RESOLUTION_TIMEOUT_MS = 30_000;
+
+/** 将私有解析状态收敛为允许写入基础报告的稳定原因码。 */
+const fallbackReasonForFlow = (
+  flow: ProfessionalFlowState,
+): ProfessionalFallbackReason => {
+  if (flow.status === 'candidates') return 'identity_unconfirmed';
+  if (flow.status === 'fallback') {
+    if (flow.reason === 'not_found') return 'identity_not_found';
+    if (flow.reason === 'in_progress') return 'resolution_in_progress';
+  }
+  return 'provider_unavailable';
+};
 
 /**
  * 托管专业数据的异步准备流程。Token、幂等键和表单快照只保存在私有 ref，
@@ -111,7 +127,14 @@ export const useProfessionalResearchFlow = (apiUrl: string) => {
     values: ResearchFormValues,
   ): Promise<PreparationOutcome> => {
     if (!values.professionalDataRequested) {
-      return { kind: 'ready', prepared: { values, resolutionToken: null } };
+      return {
+        kind: 'ready',
+        prepared: {
+          values,
+          resolutionToken: null,
+          professionalFallbackReason: null,
+        },
+      };
     }
     if (inFlightRef.current) return { kind: 'pending' };
 
@@ -160,6 +183,7 @@ export const useProfessionalResearchFlow = (apiUrl: string) => {
           prepared: {
             values,
             resolutionToken: resolution.identity.resolution_token,
+            professionalFallbackReason: null,
           },
         };
       }
@@ -206,7 +230,11 @@ export const useProfessionalResearchFlow = (apiUrl: string) => {
     const values = pendingValuesRef.current;
     const resolutionToken = tokenVaultRef.current.get(viewId);
     if (!values || !resolutionToken) return null;
-    const prepared = { values, resolutionToken };
+    const prepared = {
+      values,
+      resolutionToken,
+      professionalFallbackReason: null,
+    };
     clearPending();
     setFlowState({ status: 'idle' });
     return prepared;
@@ -218,6 +246,7 @@ export const useProfessionalResearchFlow = (apiUrl: string) => {
     const prepared = {
       values: { ...values, professionalDataRequested: false },
       resolutionToken: null,
+      professionalFallbackReason: fallbackReasonForFlow(flowState),
     };
     clearPending();
     setFlowState({ status: 'idle' });

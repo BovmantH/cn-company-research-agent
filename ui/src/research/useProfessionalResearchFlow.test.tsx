@@ -94,7 +94,11 @@ describe('useProfessionalResearchFlow', () => {
 
     expect(outcome).toEqual({
       kind: 'ready',
-      prepared: { values: baseValues, resolutionToken: null },
+      prepared: {
+        values: baseValues,
+        resolutionToken: null,
+        professionalFallbackReason: null,
+      },
     });
     expect(resolveCompanyMock).not.toHaveBeenCalled();
     hook.renderer.unmount();
@@ -225,6 +229,7 @@ describe('useProfessionalResearchFlow', () => {
 
     const selected = hook.current().selectCandidate(state.candidates[1].view_id);
     expect(selected?.resolutionToken).toBe('signed.second-token');
+    expect(selected?.professionalFallbackReason).toBeNull();
     expect(hook.current().selectCandidate(state.candidates[1].view_id)).toBeNull();
     expect(JSON.stringify(hook.current().flowState)).not.toContain('signed.');
     hook.renderer.unmount();
@@ -242,9 +247,96 @@ describe('useProfessionalResearchFlow', () => {
     expect(prepared).toEqual({
       values: { ...values, professionalDataRequested: false },
       resolutionToken: null,
+      professionalFallbackReason: 'identity_not_found',
     });
     expect(hook.current().flowState).toEqual({ status: 'idle' });
     expect(resolveCompanyMock).toHaveBeenCalledTimes(1);
+    hook.renderer.unmount();
+  });
+
+  it('精确主体直接准备专业调研且不携带降级原因', async () => {
+    resolveCompanyMock.mockResolvedValue({
+      kind: 'exact',
+      identity: identity('0', 'signed.exact-token'),
+    });
+    const hook = await renderHook();
+
+    let outcome!: Awaited<ReturnType<HookValue['prepare']>>;
+    await act(async () => {
+      outcome = await hook.current().prepare(values);
+    });
+
+    expect(outcome).toEqual({
+      kind: 'ready',
+      prepared: {
+        values,
+        resolutionToken: 'signed.exact-token',
+        professionalFallbackReason: null,
+      },
+    });
+    expect(JSON.stringify(hook.current().flowState)).not.toContain('signed.');
+    hook.renderer.unmount();
+  });
+
+  it.each([
+    {
+      name: '候选主体未确认',
+      resolution: {
+        kind: 'candidates',
+        candidates: [
+          identity('0', 'signed.first-token'),
+          identity('1', 'signed.second-token'),
+        ],
+      },
+      expected: 'identity_unconfirmed',
+    },
+    {
+      name: '主体解析仍在进行',
+      resolution: { kind: 'blocked', reason: 'resolution_in_progress' },
+      expected: 'resolution_in_progress',
+    },
+    {
+      name: '主体解析被阻止',
+      resolution: { kind: 'blocked', reason: 'budget_blocked' },
+      expected: 'provider_unavailable',
+    },
+  ] as const)('$name 时继续基础报告只传安全降级原因', async ({
+    resolution,
+    expected,
+  }) => {
+    resolveCompanyMock.mockResolvedValue(resolution);
+    const hook = await renderHook();
+
+    await act(async () => {
+      await hook.current().prepare(values);
+    });
+    const prepared = hook.current().continueBasic();
+
+    expect(prepared).toEqual({
+      values: { ...values, professionalDataRequested: false },
+      resolutionToken: null,
+      professionalFallbackReason: expected,
+    });
+    expect(JSON.stringify(prepared)).not.toContain('signed.');
+    hook.renderer.unmount();
+  });
+
+  it('解析服务不可用时继续基础报告只传通用安全原因', async () => {
+    resolveCompanyMock.mockRejectedValue(new Error('Authorization: Bearer secret'));
+    const hook = await renderHook();
+
+    await act(async () => {
+      await hook.current().prepare(values);
+    });
+    const prepared = hook.current().continueBasic();
+
+    expect(prepared).toEqual({
+      values: { ...values, professionalDataRequested: false },
+      resolutionToken: null,
+      professionalFallbackReason: 'provider_unavailable',
+    });
+    expect(JSON.stringify(prepared)).not.toContain('Authorization');
+    expect(JSON.stringify(prepared)).not.toContain('secret');
     hook.renderer.unmount();
   });
 
