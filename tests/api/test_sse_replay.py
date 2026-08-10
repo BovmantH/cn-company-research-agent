@@ -127,7 +127,7 @@ def test_concurrent_event_append_keeps_unique_monotonic_ids() -> None:
     assert [event["event_id"] for event in events] == list(range(1, 101))
 
 
-def test_expired_sse_cursor_returns_explicit_reset_response() -> None:
+def test_expired_sse_cursor_returns_observable_reset_event() -> None:
     job_id = "job-sse-expired"
     events = JobEventLog(max_events=2, max_bytes=1024 * 1024)
     events.extend(
@@ -146,8 +146,14 @@ def test_expired_sse_cursor_returns_explicit_reset_response() -> None:
     finally:
         job_status.pop(job_id, None)
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "event_history_expired"
+    assert response.status_code == 200
+    assert _sse_payloads(response.text) == [
+        {
+            "type": "stream_reset_required",
+            "reason": "event_history_expired",
+            "version": 1,
+        }
+    ]
 
 
 def test_non_terminal_degradation_does_not_hide_later_completion() -> None:

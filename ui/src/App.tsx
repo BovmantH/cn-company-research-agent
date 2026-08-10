@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import {
   Header,
   ResearchStatus,
@@ -8,44 +8,49 @@ import {
   CurationExtraction,
   ResearchBriefings
 } from './components';
-import type { ResearchOutput, ResearchStatusType } from './types';
 import { glassStyle, fadeInAnimation } from './styles';
+import {
+  createInitialResearchStreamState,
+  hasMatchingSseEventId,
+  parseResearchSsePayload,
+  researchStreamReducer,
+} from './research/researchStreamReducer';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 function App() {
-
-  const [isResearching, setIsResearching] = useState(false);
-  const [status, setStatus] = useState<ResearchStatusType | null>(null);
-  const [output, setOutput] = useState<ResearchOutput | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isComplete, setIsComplete] = useState(false);
+  const [researchState, dispatchResearch] = useReducer(
+    researchStreamReducer,
+    undefined,
+    createInitialResearchStreamState,
+  );
+  const {
+    status,
+    output,
+    error,
+    currentPhase,
+    queries,
+    streamingQueries,
+    enrichmentCounts,
+    briefingStatus,
+    isReportStreaming,
+  } = researchState;
+  const isResearching = researchState.lifecycle === 'running';
+  const isComplete = researchState.lifecycle === 'completed';
+  const visibleStatus = researchState.connection === 'reconnecting'
+    ? { step: '连接恢复中', message: '进度连接中断，正在自动重连……' }
+    : status;
   const eventSourceRef = useRef<EventSource | null>(null);
+  const lastHandledEventIdRef = useRef(0);
   const [originalCompanyName, setOriginalCompanyName] = useState<string>("");
-  const [currentPhase, setCurrentPhase] = useState<'search' | 'enrichment' | 'briefing' | 'complete' | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
-  const [queries, setQueries] = useState<Array<{ text: string; number: number; category: string }>>([]);
-  const [streamingQueries, setStreamingQueries] = useState<Record<string, { text: string; number: number; category: string; isComplete: boolean }>>({});
   const [isQueriesExpanded, setIsQueriesExpanded] = useState(true);
-  const [enrichmentCounts, setEnrichmentCounts] = useState<{
-    company: { total: number; enriched: number };
-    industry: { total: number; enriched: number };
-    financial: { total: number; enriched: number };
-    news: { total: number; enriched: number };
-  } | undefined>(undefined);
-  const [briefingStatus, setBriefingStatus] = useState({
-    company: false,
-    industry: false,
-    financial: false,
-    news: false
-  });
   const [isEnrichmentExpanded, setIsEnrichmentExpanded] = useState(true);
   const [isBriefingExpanded, setIsBriefingExpanded] = useState(true);
   const [hasScrolledToStatus, setHasScrolledToStatus] = useState(false);
-  const [isReportStreaming, setIsReportStreaming] = useState(false);
 
   // Add new state for color cycling
   const [loaderColor, setLoaderColor] = useState("#468BFF");
@@ -83,261 +88,76 @@ function App() {
     return () => clearInterval(interval);
   }, [isResearching]);
 
+  useEffect(() => {
+    if (!Object.values(briefingStatus).every(Boolean)) return;
+    const timeoutId = window.setTimeout(() => {
+      setIsBriefingExpanded(false);
+    }, 2000);
+    return () => window.clearTimeout(timeoutId);
+  }, [briefingStatus]);
+
   const resetResearch = () => {
     setIsResetting(true);
-    
-    // Use setTimeout to create a smooth transition
+
     setTimeout(() => {
-      setStatus(null);
-      setOutput(null);
-      setError(null);
-      setIsComplete(false);
-      setCurrentPhase(null);
-      setQueries([]);
-      setStreamingQueries({});
-      setEnrichmentCounts(undefined);
-      setBriefingStatus({
-        company: false,
-        industry: false,
-        financial: false,
-        news: false
-      });
+      dispatchResearch({ type: 'reset' });
       setIsQueriesExpanded(true);
       setIsEnrichmentExpanded(true);
       setIsBriefingExpanded(true);
       setHasScrolledToStatus(false);
-      setIsReportStreaming(false);
       setIsResetting(false);
     }, 300);
   };
 
-  // Stream research results via SSE
+  /** 建立可自动重连的 SSE 连接；业务状态只由 reducer 投影。 */
   const streamResults = (jobId: string) => {
     const eventSource = new EventSource(`${API_URL}/research/${jobId}/stream`);
     eventSourceRef.current = eventSource;
 
+    eventSource.onopen = () => {
+      dispatchResearch({ type: 'connection_open' });
+    };
+
     eventSource.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        
-        // 把后端节点名映射为用户可读的中文阶段名
-        const getStepName = (nodeName: string): string => {
-          const stepMap: Record<string, string> = {
-            'grounding': '检索',
-            'financial_analyst': '检索',
-            'news_scanner': '检索',
-            'industry_analyst': '检索',
-            'company_analyst': '检索',
-            'collector': '检索',
-            'curator': '抽取增强',
-            'enricher': '抽取增强',
-            'briefing': '简报生成',
-            'editor': '收尾整理'
-          };
-          return stepMap[nodeName] || nodeName;
-        };
-
-        // 分类英文 key 与中文显示名映射(key 不能改,后端事件用同样字符串)
-        const CATEGORY_LABELS: Record<string, string> = {
-          company: '公司',
-          industry: '行业',
-          financial: '财务',
-          news: '新闻',
-        };
-        const labelOf = (cat?: string) =>
-          (cat && CATEGORY_LABELS[cat]) || cat || '';
-
-        // 处理后端进度事件(节点切换)
-        if (data.type === 'progress' && data.step) {
-          const stepName = getStepName(data.step);
-          setStatus({
-            step: stepName,
-            message: `正在处理「${data.step}」节点……`
+        const data = parseResearchSsePayload(JSON.parse(event.data) as unknown);
+        if (!data) return;
+        if (data.type === 'stream_reset_required') {
+          dispatchResearch({ type: 'stream_reset_required' });
+          eventSource.close();
+          return;
+        }
+        if (data.type === 'stream_error') {
+          dispatchResearch({ type: 'connection_lost' });
+          return;
+        }
+        if (!hasMatchingSseEventId(event.lastEventId, data)) {
+          dispatchResearch({
+            type: 'stream_reset_required',
+            message: '进度数据校验失败，请重新发起调研',
           });
-          
-          // Update phase based on step
-          if (['grounding', 'financial_analyst', 'news_scanner', 'industry_analyst', 'company_analyst', 'collector'].includes(data.step)) {
-            setCurrentPhase('search');
-          } else if (['curator', 'enricher'].includes(data.step)) {
-            setCurrentPhase('enrichment');
-          } else if (data.step === 'briefing') {
-            setCurrentPhase('briefing');
-          }
-          
+          eventSource.close();
+          return;
+        }
+        if (data.event_id <= lastHandledEventIdRef.current) return;
+        lastHandledEventIdRef.current = data.event_id;
+
+        dispatchResearch({ type: 'event', event: data });
+
+        if (['progress', 'query_generated', 'curation', 'briefing_start'].includes(data.type)) {
           scrollToStatus();
         }
-        
-        // 直接事件 → 阶段映射
-        if (data.type === 'query_generating') {
-          // 显示正在生成的 query,并维护流式 query 列表
-          setCurrentPhase('search');
-          setStatus({
-            step: '检索',
-            message: `第 ${data.query_number} 条 Query：${data.query}`
-          });
-          // 把当前部分 query 写入流式列表
-          const key = `${data.category}_${data.query_number}`;
-          setStreamingQueries(prev => ({
-            ...prev,
-            [key]: {
-              text: data.query,
-              number: data.query_number,
-              category: data.category,
-              isComplete: false
-            }
-          }));
-        } else if (data.type === 'query_generated') {
-          // 显示已完成的 query,并把它移入完成列表
-          setCurrentPhase('search');
-          setStatus({
-            step: '检索',
-            message: `已生成 Query：${data.query}`
-          });
-          // 加入已完成 query 列表
-          setQueries(prev => [...prev, {
-            text: data.query,
-            number: data.query_number,
-            category: data.category
-          }]);
-          // 从流式列表中移除
-          const key = `${data.category}_${data.query_number}`;
-          setStreamingQueries(prev => {
-            const updated = { ...prev };
-            delete updated[key];
-            return updated;
-          });
-          scrollToStatus();
-        } else if (data.type === 'research_init') {
-          // 调研初始化
-          setCurrentPhase('search');
-          setStatus({
-            step: '初始化',
-            message: data.message || `开始调研 ${data.company}`
-          });
-        } else if (data.type === 'crawl_start') {
-          // 网站抓取开始
-          setCurrentPhase('search');
-          setStatus({
-            step: '网站抓取',
-            message: data.message || '正在抓取公司官网……'
-          });
-        } else if (data.type === 'curation') {
-          // 数据筛选 → 切换到抽取增强阶段
-          setCurrentPhase('enrichment');
-          setStatus({
-            step: '数据筛选',
-            message: data.message || `正在筛选「${labelOf(data.category)}」类文档`
-          });
-          // 当某分类的筛选开始时,初始化抽取计数
-          if (data.category) {
-            setEnrichmentCounts(prev => ({
-              ...prev,
-              [data.category]: {
-                total: data.total || 0,
-                enriched: 0
-              }
-            } as typeof enrichmentCounts));
-          }
-          // 进入抽取阶段后折叠 query 区域
+        if (data.type === 'curation') {
           setTimeout(() => {
             setIsQueriesExpanded(false);
           }, 1000);
-          scrollToStatus();
-        } else if (data.type === 'enrichment') {
-          // 抽取增强进度
-          setCurrentPhase('enrichment');
-          setStatus({
-            step: '抽取增强',
-            message: data.message || '正在为文档抽取补充内容'
-          });
-          // 如果带 enriched 字段则更新
-          if (data.category && data.enriched !== undefined) {
-            const category = data.category as 'company' | 'industry' | 'financial' | 'news';
-            setEnrichmentCounts(prev => {
-              if (!prev) return prev;
-              return {
-                ...prev,
-                [category]: {
-                  total: prev[category]?.total || data.total || 0,
-                  enriched: data.enriched
-                }
-              } as typeof enrichmentCounts;
-            });
-          }
-        } else if (data.type === 'briefing_start') {
-          // 简报生成开始
-          setCurrentPhase('briefing');
-          setStatus({
-            step: '简报生成中',
-            message: `基于 ${data.total_docs} 篇文档生成「${labelOf(data.category)}」简报`
-          });
-          // 进入简报阶段后折叠抽取区域
+        }
+        if (data.type === 'briefing_start') {
           setTimeout(() => {
             setIsEnrichmentExpanded(false);
           }, 1000);
-          scrollToStatus();
-        } else if (data.type === 'briefing_complete') {
-          // 简报完成 → 标记该分类为完成
-          setCurrentPhase('briefing');
-          setStatus({
-            step: '简报完成',
-            message: `「${labelOf(data.category)}」简报已生成(${data.content_length} 字符)`
-          });
-          // 标记该分类的简报状态为完成
-          if (data.category) {
-            setBriefingStatus(prev => {
-              const newBriefingStatus = {
-                ...prev,
-                [data.category]: true
-              };
-
-              // 检查是否四份简报全部完成
-              const allBriefingsComplete = Object.values(newBriefingStatus).every(status => status);
-
-              // 如果全部完成则折叠简报区域
-              if (allBriefingsComplete) {
-                setTimeout(() => {
-                  setIsBriefingExpanded(false);
-                }, 2000);
-              }
-
-              return newBriefingStatus;
-            });
-          }
-        } else if (data.type === 'report_compilation') {
-          // 报告编排
-          setCurrentPhase('briefing');
-          setStatus({
-            step: '报告生成中',
-            message: data.message || '正在编排最终报告'
-          });
-        } else if (data.type === 'report_chunk' && data.chunk) {
-          // 流式追加报告内容
-          setIsReportStreaming(true);
-          setOutput((prev) => {
-            const currentReport = prev?.details?.report || '';
-            return {
-              summary: "",
-              details: { report: currentReport + data.chunk },
-            };
-          });
-          setStatus({
-            step: '报告生成中',
-            message: '正在生成最终报告……'
-          });
-        } else if (data.type === 'complete' && data.report) {
-          setIsReportStreaming(false);
-          setOutput({
-            summary: "",
-            details: { report: data.report },
-          });
-          setStatus({ step: "完成", message: "调研已完成" });
-          setIsComplete(true);
-          setIsResearching(false);
-          eventSource.close();
-        } else if (data.type === 'error') {
-          setError(data.error);
-          setIsResearching(false);
+        }
+        if (data.type === 'complete' || data.type === 'error') {
           eventSource.close();
         }
       } catch (err) {
@@ -346,9 +166,14 @@ function App() {
     };
 
     eventSource.onerror = () => {
-      setError('连接已断开或服务端出错');
-      setIsResearching(false);
-      eventSource.close();
+      if (eventSource.readyState === EventSource.CLOSED) {
+        dispatchResearch({
+          type: 'stream_reset_required',
+          message: '进度连接无法恢复，请稍后重试或重新发起调研',
+        });
+      } else {
+        dispatchResearch({ type: 'connection_lost' });
+      }
     };
   };
 
@@ -370,9 +195,6 @@ function App() {
     companyIndustry: string;
   }) => {
 
-    // Clear any existing errors first
-    setError(null);
-
     // If research is complete, reset the UI first
     if (isComplete) {
       resetResearch();
@@ -385,12 +207,9 @@ function App() {
       eventSourceRef.current = null;
     }
 
-    setIsResearching(true);
+    lastHandledEventIdRef.current = 0;
+    dispatchResearch({ type: 'start' });
     setOriginalCompanyName(formData.companyName);
-    setStatus({
-      step: "处理中",
-      message: "正在启动调研……"
-    });
 
     try {
       const url = `${API_URL}/research`;
@@ -432,8 +251,10 @@ function App() {
         throw new Error("未收到任务 ID");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "启动调研失败");
-      setIsResearching(false);
+      dispatchResearch({
+        type: 'submit_failed',
+        message: err instanceof Error ? err.message : "启动调研失败",
+      });
     }
   };
 
@@ -479,7 +300,10 @@ function App() {
 
     } catch (error) {
       console.error('生成 PDF 出错:', error);
-      setError(error instanceof Error ? error.message : '生成 PDF 失败');
+      dispatchResearch({
+        type: 'ui_error',
+        message: error instanceof Error ? error.message : '生成 PDF 失败',
+      });
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -495,7 +319,7 @@ function App() {
       setTimeout(() => setIsCopied(false), 2000); // 2 秒后重置
     } catch (err) {
       console.error('复制失败:', err);
-      setError('复制到剪贴板失败');
+      dispatchResearch({ type: 'ui_error', message: '复制到剪贴板失败' });
     }
   };
 
@@ -526,7 +350,7 @@ function App() {
 
         {/* Status Box */}
         <ResearchStatus
-          status={status}
+          status={visibleStatus}
           error={error}
           isComplete={isComplete}
           currentPhase={currentPhase}

@@ -37,7 +37,6 @@ const ResearchForm = ({
   // Animation states
   const [showExampleSuggestion, setShowExampleSuggestion] = useState(true);
   const [isExampleAnimating, setIsExampleAnimating] = useState(false);
-  const [wasResearching, setWasResearching] = useState(false);
   
   // Refs for form fields for animation
   const formRef = useRef<HTMLDivElement>(null);
@@ -51,29 +50,6 @@ const ResearchForm = ({
       setShowExampleSuggestion(true);
     }
   }, [formData.companyName, isExampleAnimating]);
-
-  // Track research state changes to show example popup when research completes
-  useEffect(() => {
-    // If we were researching and now we're not, research just completed
-    if (wasResearching && !isResearching) {
-      // Add a slight delay to let animations complete
-      setTimeout(() => {
-        // Reset form fields to empty values
-        setFormData({
-          companyName: "",
-          companyUrl: "",
-          companyHq: "",
-          companyIndustry: "",
-        });
-        
-        // Show the example suggestion again
-        setShowExampleSuggestion(true);
-      }, 1000);
-    }
-    
-    // Update tracking state
-    setWasResearching(isResearching);
-  }, [isResearching, wasResearching]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,4 +238,4 @@ const ResearchForm = ({
   );
 };
 
-export default ResearchForm; 
+export default ResearchForm;

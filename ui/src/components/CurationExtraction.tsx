@@ -82,11 +82,11 @@ const CurationExtraction = ({
 
       {!isExpanded && enrichmentCounts && (
         <div className="mt-2 text-sm text-gray-600">
-          已抽取 {Object.values(enrichmentCounts).reduce((acc, curr) => acc + curr.enriched, 0)} / {Object.values(enrichmentCounts).reduce((acc, curr) => acc + curr.total, 0)} 篇文档
+          已抽取 {Object.values(enrichmentCounts).reduce((acc, curr) => acc + (curr?.enriched ?? 0), 0)} / {Object.values(enrichmentCounts).reduce((acc, curr) => acc + (curr?.total ?? 0), 0)} 篇文档
         </div>
       )}
     </div>
   );
 };
 
-export default CurationExtraction; 
+export default CurationExtraction;

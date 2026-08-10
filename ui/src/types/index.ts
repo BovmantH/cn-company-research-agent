@@ -10,12 +10,12 @@ export type ResearchOutput = {
   };
 };
 
-export type EnrichmentCounts = {
-  company: { total: number; enriched: number };
-  industry: { total: number; enriched: number };
-  financial: { total: number; enriched: number };
-  news: { total: number; enriched: number };
-};
+export type ResearchCategory = 'company' | 'industry' | 'financial' | 'news';
+
+export type EnrichmentCounts = Partial<Record<
+  ResearchCategory,
+  { total: number; enriched: number }
+>>;
 
 export type GlassStyle = {
   base: string;
@@ -57,4 +57,4 @@ export type ResearchQueriesProps = {
   onToggleExpand: () => void;
   isResetting: boolean;
   glassStyle: string;
-}; 
+};

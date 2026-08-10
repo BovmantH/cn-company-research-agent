@@ -676,21 +676,6 @@ async def stream_research(job_id: str, request: Request):
         raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
     if initial_event_id < 0:
         raise HTTPException(status_code=400, detail="Last-Event-ID 必须是非负整数")
-    existing = job_status.get(job_id)
-    if existing is not None:
-        existing_events = existing.get("events")
-        if (
-            isinstance(existing_events, JobEventLog)
-            and existing_events.history_expired(initial_event_id)
-        ):
-            return JSONResponse(
-                status_code=409,
-                content={
-                    "detail": "event_history_expired",
-                    "status": existing.get("status", "pending"),
-                },
-            )
-
     async def event_generator():
         try:
             # 等待 job 入库(最多 5s)
