@@ -29,6 +29,10 @@ from backend.services.company_intelligence.collection import (
     ProfessionalPreparation,
 )
 from backend.services.company_intelligence.requester import resolve_client_ip
+from backend.services.company_intelligence.models import ProfessionalEvidence
+from backend.services.company_intelligence.rendering import (
+    render_professional_evidence_markdown,
+)
 from backend.api.company_intelligence import router as company_intelligence_router
 from backend.classes.state import (
     JOB_TERMINAL_TTL_SECONDS,
@@ -93,6 +97,7 @@ app.add_middleware(
 )
 pdf_service = PDFService({"pdf_output_dir": "pdfs"})
 _PROFESSIONAL_COLLECTION_TIMEOUT_SECONDS = 120.0
+_MAX_FINAL_REPORT_EVENT_BYTES = 14 * 1024 * 1024
 
 
 # Pydantic / 请求体解析失败时,FastAPI 默认抛 422 + 英文 detail。
@@ -490,6 +495,65 @@ async def _await_professional_for_job(
     return professional_task
 
 
+def _append_professional_evidence(
+    report_content: str,
+    serialized_evidence: object,
+) -> tuple[str, bool]:
+    """追加专业附录，并保证最终 complete 事件留在持久化大小边界内。"""
+    def complete_event_size(report: str) -> int:
+        probe = {
+            "type": "complete",
+            "report": report,
+            "version": 1,
+            "event_id": 9_999_999_999,
+        }
+        return len(
+            json.dumps(
+                probe,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+
+    def fit_with_notice(report: str, notice: str) -> str:
+        """二分保留尽可能多的基础报告，同时确保终态事件可编码。"""
+        suffix = f"\n\n{notice}"
+        lower = 0
+        upper = len(report)
+        while lower < upper:
+            middle = (lower + upper + 1) // 2
+            candidate_prefix = report[:middle].rstrip()
+            if (
+                complete_event_size(f"{candidate_prefix}{suffix}")
+                <= _MAX_FINAL_REPORT_EVENT_BYTES
+            ):
+                lower = middle
+            else:
+                upper = middle - 1
+        return f"{report[:lower].rstrip()}{suffix}"
+
+    evidence = ProfessionalEvidence.model_validate(serialized_evidence)
+    appendix = render_professional_evidence_markdown(evidence)
+    base_report = report_content.rstrip()
+    candidate = f"{base_report}\n\n{appendix}"
+
+    if complete_event_size(candidate) <= _MAX_FINAL_REPORT_EVENT_BYTES:
+        return candidate, False
+
+    size_notice = (
+        "## 工商与司法专业数据\n\n"
+        "> 专业数据已采集，但因最终报告大小限制未展开；基础 Web 报告不受影响。"
+    )
+    candidate = f"{base_report}\n\n{size_notice}"
+    if complete_event_size(candidate) <= _MAX_FINAL_REPORT_EVENT_BYTES:
+        return candidate, True
+    delivery_notice = (
+        "## 报告交付说明\n\n"
+        "> 基础 Web 报告因超过交付大小限制已截断；专业数据已采集，但未在本报告中展开。"
+    )
+    return fit_with_notice(report_content, delivery_notice), True
+
+
 async def process_research(
     job_id: str,
     data: ResearchRequest,
@@ -566,6 +630,33 @@ async def process_research(
                 professional_task,
                 professional_control,
             )
+
+        serialized_evidence = job_status[job_id].get("professional_evidence")
+        if report_content and serialized_evidence is not None:
+            try:
+                report_content, appendix_omitted = _append_professional_evidence(
+                    report_content,
+                    serialized_evidence,
+                )
+                if appendix_omitted:
+                    job_status[job_id]["events"].append(
+                        {
+                            "type": "professional_data_degraded",
+                            "reason": "report_size_limit",
+                        }
+                    )
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    "专业证据渲染失败，job_id=%s，异常类型=%s",
+                    job_id,
+                    type(exc).__name__,
+                )
+                job_status[job_id]["events"].append(
+                    {
+                        "type": "professional_data_degraded",
+                        "reason": "provider_unavailable",
+                    }
+                )
 
         if report_content:
             logger.info(f"调研完成,报告长度: {len(report_content)} 字符")

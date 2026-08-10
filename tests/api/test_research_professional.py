@@ -11,8 +11,17 @@ from backend.services.company_intelligence.collection import (
     PreparationKind,
     ProfessionalPreparation,
 )
-from backend.services.company_intelligence.config import ProfessionalDataSettings
-from backend.services.company_intelligence.models import CompanyIdentity
+from backend.services.company_intelligence.config import (
+    DATA_CAPABILITIES,
+    ProfessionalDataSettings,
+)
+from backend.services.company_intelligence.models import (
+    CollectionStatus,
+    CompanyIdentity,
+    EvidenceCollection,
+    ProfessionalEvidence,
+    SourceMetadata,
+)
 
 
 @dataclass
@@ -324,6 +333,127 @@ async def test_professional_failure_does_not_block_base_report(
     ]
     assert professional_events[1]["reason"] == "provider_unavailable"
     assert "upstream-secret" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_professional_evidence_is_appended_before_persist_and_complete(
+    monkeypatch,
+) -> None:
+    class GraphStub:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def run(self, thread):
+            assert thread == {}
+            yield {"report": "基础 Web 报告"}
+
+    identity = _identity()
+    collections = {
+        capability: EvidenceCollection(
+            capability=capability,
+            status=CollectionStatus.SUCCEEDED_EMPTY,
+            source=SourceMetadata(
+                server=(
+                    "qcc-company"
+                    if capability.startswith("company.")
+                    else "qcc-risk"
+                ),
+                capability=capability,
+                queried_subject=identity.credit_code,
+                status=CollectionStatus.SUCCEEDED_EMPTY,
+            ),
+        )
+        for capability in DATA_CAPABILITIES
+    }
+    evidence = ProfessionalEvidence(identity=identity, collections=collections)
+
+    class SuccessfulRuntime:
+        settings = ProfessionalDataSettings.from_env({})
+
+        async def collect_professional_research(self, _preparation):
+            return evidence
+
+    class MongoCapture:
+        def __init__(self) -> None:
+            self.report: str | None = None
+
+        def create_job(self, _job_id, _data) -> None:
+            return None
+
+        def update_job(self, **_kwargs) -> None:
+            return None
+
+        def store_report(self, *, job_id, report_data) -> None:
+            assert job_id == "job-professional-rendered"
+            self.report = report_data["report"]
+
+    job_id = "job-professional-rendered"
+    mongo = MongoCapture()
+    original_runtime = application.app.state.company_intelligence
+    monkeypatch.setattr(application, "Graph", GraphStub)
+    monkeypatch.setattr(application.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(application, "mongodb", mongo)
+    application.app.state.company_intelligence = SuccessfulRuntime()
+    application.job_status.pop(job_id, None)
+    try:
+        await application.process_research(
+            job_id,
+            application.ResearchRequest(company="示例科技有限公司"),
+            professional_preparation=ProfessionalPreparation(
+                kind=PreparationKind.READY,
+                job_id=job_id,
+                identity=identity,
+                reservation_id="reservation-1",
+            ),
+        )
+        state = application.job_status[job_id]
+    finally:
+        application.app.state.company_intelligence = original_runtime
+        application.job_status.pop(job_id, None)
+
+    assert state["status"] == "completed"
+    assert state["report"].startswith("基础 Web 报告\n\n## 工商与司法专业数据")
+    assert "查询成功，未发现记录" in state["report"]
+    assert mongo.report == state["report"]
+    complete = next(event for event in state["events"] if event["type"] == "complete")
+    assert complete["report"] == state["report"]
+
+    monkeypatch.setattr(application, "_MAX_FINAL_REPORT_EVENT_BYTES", 512)
+    limited_report, appendix_omitted = application._append_professional_evidence(
+        "基础 Web 报告",
+        evidence.model_dump(mode="json"),
+    )
+    encoded_complete = application.json.dumps(
+        {
+            "type": "complete",
+            "report": limited_report,
+            "version": 1,
+            "event_id": 9_999_999_999,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    assert appendix_omitted is True
+    assert "因最终报告大小限制未展开" in limited_report
+    assert len(encoded_complete) <= 512
+
+    oversized_report, appendix_omitted = application._append_professional_evidence(
+        "基础内容" * 1_000,
+        evidence.model_dump(mode="json"),
+    )
+    oversized_complete = application.json.dumps(
+        {
+            "type": "complete",
+            "report": oversized_report,
+            "version": 1,
+            "event_id": 9_999_999_999,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    assert appendix_omitted is True
+    assert "基础 Web 报告因超过交付大小限制已截断" in oversized_report
+    assert len(oversized_complete) <= 512
 
 
 @pytest.mark.asyncio

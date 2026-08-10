@@ -17,6 +17,10 @@ from .models import (
     ResolveResult,
 )
 from .runtime import CompanyIntelligenceRuntime
+from .rendering import (
+    MAX_PROFESSIONAL_APPENDIX_BYTES,
+    render_professional_evidence_markdown,
+)
 from .tokens import ResolutionTokenService, requester_fingerprint
 
 __all__ = [
@@ -28,6 +32,7 @@ __all__ = [
     "InMemoryUsageLedger",
     "MongoLedgerUnavailable",
     "MongoUsageLedger",
+    "MAX_PROFESSIONAL_APPENDIX_BYTES",
     "ProfessionalDataSettings",
     "ProfessionalEvidence",
     "ProfessionalPreparation",
@@ -37,4 +42,5 @@ __all__ = [
     "ResolveResult",
     "UsageLedger",
     "requester_fingerprint",
+    "render_professional_evidence_markdown",
 ]
