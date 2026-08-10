@@ -41,6 +41,7 @@ class GroundingNode:
         yield event
 
         site_scrape = {}
+        crawl_error_message: str | None = None
 
         # Only attempt extraction if we have a URL
         if url := state.get("company_url"):
@@ -108,6 +109,7 @@ class GroundingNode:
                     type(e).__name__,
                 )
                 error_msg = "⚠️ Website content crawl unavailable"
+                crawl_error_message = error_msg
                 msg += f"\n{error_msg}"
                 yield {
                     "type": "crawl_error",
@@ -145,9 +147,9 @@ class GroundingNode:
             "site_scrape": site_scrape,
         }
 
-        # If there was an error in the initial crawl, store it in the state
-        if "⚠️ Error crawling website content:" in msg:
-            research_state["error"] = error_str
+        # 只保存稳定文案；上游异常正文不能进入 Graph 状态或后续 SSE。
+        if crawl_error_message is not None:
+            research_state["error"] = crawl_error_message
 
         yield {"type": "grounding_complete", "site_pages": len(site_scrape)}
         yield research_state
