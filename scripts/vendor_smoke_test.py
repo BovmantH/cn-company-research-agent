@@ -1,19 +1,19 @@
 #!/usr/bin/env python
-"""Vendor 兼容性 smoke test —— P1 入选门(对应 tasks.md §4)。
+"""供应商兼容性冒烟测试——P1 入选门（对应 tasks.md §4）。
 
-跑三个动作验证某个 vendor 的官方 OpenAI 兼容端点是否真的兼容:
+执行三个动作，验证供应商的官方 OpenAI 兼容端点是否真正兼容：
   1) 普通完成        ── 同步 invoke
   2) 流式完成        ── 异步 astream
   3) max_tokens 限制 ── 验证参数被尊重
 
-任一失败则该 vendor 不符合 P1 入选标准,推迟到后续 phase。
+任一动作失败则该供应商不符合 P1 入选标准，推迟到后续阶段。
 
 用法:
-    # 先 export 对应 vendor 的 key
+    # 先导出对应供应商的 Key
     export ZHIPUAI_API_KEY=sk-...
     python scripts/vendor_smoke_test.py --vendor glm
 
-    # 已在 VENDOR_REGISTRY 里的 vendor 也可以跑一遍回归
+    # 已在 VENDOR_REGISTRY 中的供应商也可以执行回归
     export DEEPSEEK_API_KEY=sk-...
     python scripts/vendor_smoke_test.py --vendor deepseek
 """
@@ -43,14 +43,14 @@ from langchain_openai import ChatOpenAI  # noqa: E402
 
 from backend.services.llm_factory import VENDOR_REGISTRY  # noqa: E402
 
-# 待 smoke test 通过后再合入 VENDOR_REGISTRY 的候选 vendor。
-# 已在 registry 中的 vendor 走 registry 的配置。
+# 待冒烟测试通过后再合入 VENDOR_REGISTRY 的候选供应商。
+# 已在注册表中的供应商使用注册表配置。
 # 这里的 base_url 是各家"官方"OpenAI 兼容端点;实际跑测试时可通过
-# LLM_BASE_URL_<VENDOR> 环境变量覆盖(例如 token plan 之类的镜像端点)。
+# 可通过 LLM_BASE_URL_<VENDOR> 环境变量覆盖，例如令牌套餐对应的镜像端点。
 CANDIDATE_REGISTRY: dict[str, dict[str, str]] = {
     "glm": {
         # 官方 OpenAI 兼容文档: https://docs.bigmodel.cn/cn/guide/develop/openai/introduction
-        # glm-4.7-flash 是免费版(200K 上下文),适合 smoke test
+        # glm-4.7-flash 是免费版（200K 上下文），适合冒烟测试
         "env_key": "ZAI_API_KEY",
         "base_url": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-4.7-flash",
@@ -58,7 +58,7 @@ CANDIDATE_REGISTRY: dict[str, dict[str, str]] = {
     "minimax": {
         # 官方文档: https://platform.minimaxi.com/docs/api-reference/text-openai-api
         # 国内站默认。国际站走 https://api.minimax.io/v1 (key 不通用)。
-        # MiniMax-M2.7-highspeed 是性价比版本,适合 smoke test
+        # MiniMax-M2.7-highspeed 是性价比版本，适合冒烟测试
         "env_key": "MINIMAX_API_KEY",
         "base_url": "https://api.minimaxi.com/v1",
         "model": "MiniMax-M2.7-highspeed",
@@ -76,7 +76,7 @@ class TestResult:
 def _make_client(
     vendor: str, *, streaming: bool, max_tokens: Optional[int] = None
 ) -> tuple[ChatOpenAI, str]:
-    """构造一个 ChatOpenAI(根据 vendor 来源不同,从 registry 或 candidate 取配置)。
+    """构造 ChatOpenAI，根据供应商来源从注册表或候选配置中取值。
 
     若设置了 ``LLM_BASE_URL_<VENDOR>`` 环境变量,则覆盖默认 base_url
     (与 LLMFactory 的优先级保持一致)。
@@ -194,15 +194,15 @@ def main() -> int:
     parser.add_argument(
         "--vendor",
         required=True,
-        help="待测试的 vendor 名:已在 registry 内的(deepseek/qwen/kimi/openrouter/openai)"
-        "或候选 vendor(glm/mimo/minimax)",
+        help="待测试的供应商名称：已在注册表内的 "
+        "deepseek/qwen/kimi/openrouter/openai，或候选 glm/mimo/minimax",
     )
     args = parser.parse_args()
     vendor = args.vendor.strip().lower()
 
-    print(f"\n=== Vendor smoke test: {vendor} ===\n")
+    print(f"\n=== 供应商冒烟测试：{vendor} ===\n")
     _, model = _make_client(vendor, streaming=False)
-    print(f"使用 model={model}\n")
+    print(f"使用模型 model={model}\n")
 
     results = [
         test_basic_invoke(vendor),
@@ -212,14 +212,14 @@ def main() -> int:
 
     print("-" * 60)
     for r in results:
-        flag = "PASS" if r.passed else "FAIL"
+        flag = "通过" if r.passed else "失败"
         print(f"[{flag}] {r.name:<14} {r.detail}")
     print("-" * 60)
 
     if all(r.passed for r in results):
-        print(f"\n[OK] {vendor} 通过全部 smoke test,可纳入 VENDOR_REGISTRY。\n")
+        print(f"\n[OK] {vendor} 通过全部冒烟测试，可纳入 VENDOR_REGISTRY。\n")
         return 0
-    print(f"\n[X] {vendor} 有失败项,不符合 P1 入选标准,推迟到后续 phase。\n")
+    print(f"\n[X] {vendor} 存在失败项，不符合 P1 入选标准，推迟到后续阶段。\n")
     return 1
 
 

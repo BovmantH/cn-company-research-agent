@@ -1,4 +1,4 @@
-# Stage 1: Build Frontend
+# 阶段 1：构建前端
 FROM node:20-slim AS frontend-builder
 WORKDIR /app/ui
 COPY ui/package*.json ./
@@ -6,43 +6,43 @@ RUN npm install
 COPY ui/ ./
 RUN npm run build
 
-# Stage 2: Build Backend
+# 阶段 2：构建后端
 FROM python:3.11-slim AS backend-builder
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Stage 3: Final Image
+# 阶段 3：生成最终镜像
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install system dependencies
+# 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy backend
+# 复制后端代码和依赖
 COPY --from=backend-builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
 COPY backend/ ./backend/
 COPY application.py .
 
-# Copy frontend build
+# 复制前端构建产物
 COPY --from=frontend-builder /app/ui/dist/ ./ui/dist/
 
-# Create reports directory
+# 创建报告目录
 RUN mkdir -p reports
 
-# Set environment variables
+# 设置环境变量
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 
-# Expose the port
+# 暴露服务端口
 EXPOSE 8000
 
-# Create a non-root user
+# 创建非 root 用户
 RUN useradd -m -u 1000 appuser
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# Start command
-CMD ["python", "-m", "uvicorn", "application:app", "--host", "0.0.0.0", "--port", "8000"] 
+# 启动命令
+CMD ["python", "-m", "uvicorn", "application:app", "--host", "0.0.0.0", "--port", "8000"]
