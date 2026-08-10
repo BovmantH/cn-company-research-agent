@@ -70,23 +70,23 @@ class FakeCompanyIntelligenceProvider:
         self, capability: str, identity: CompanyIdentity
     ) -> EvidenceCollection:
         if capability not in self._capabilities or capability == "identity.resolve":
-            raise ValueError(f"capability not allowed: {capability}")
+            raise ValueError(f"不允许调用该能力: {capability}")
         self.call_log.append((capability, identity.credit_code))
         if capability not in self._calls:
-            raise KeyError(f"fake result not configured: {capability}")
+            raise KeyError(f"未配置模拟结果: {capability}")
         result = self._calls[capability]
         if result.capability != capability:
-            raise ValueError("provider result capability mismatch")
+            raise ValueError("数据提供方返回的能力不匹配")
         if result.status not in {
             CollectionStatus.SUCCEEDED_WITH_RECORDS,
             CollectionStatus.SUCCEEDED_EMPTY,
             CollectionStatus.PARTIAL,
             CollectionStatus.FAILED,
         }:
-            raise ValueError("provider returned orchestrator-only status")
+            raise ValueError("数据提供方返回了仅限编排层使用的状态")
         if (
             result.source is None
             or result.source.queried_subject != identity.credit_code
         ):
-            raise ValueError("provider result subject mismatch")
+            raise ValueError("数据提供方返回的主体不匹配")
         return result

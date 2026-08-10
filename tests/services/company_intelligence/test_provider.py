@@ -66,7 +66,7 @@ async def test_fake_provider_never_calls_identity_through_generic_tool_path() ->
     )
     provider = FakeCompanyIntelligenceProvider()
     await provider.initialize()
-    with pytest.raises(ValueError, match="not allowed"):
+    with pytest.raises(ValueError, match="不允许调用"):
         await provider.call("identity.resolve", identity)
 
 
@@ -107,5 +107,5 @@ async def test_fake_provider_rejects_cross_capability_or_subject_result() -> Non
         calls={"company.registration": wrong_capability}
     )
     await provider.initialize()
-    with pytest.raises(ValueError, match="capability mismatch"):
+    with pytest.raises(ValueError, match="能力不匹配"):
         await provider.call("company.registration", identity)

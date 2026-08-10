@@ -302,7 +302,7 @@ class ProfessionalCollectionService:
                         or result.source is None
                         or result.source.queried_subject != identity.credit_code
                     ):
-                        raise ValueError("provider result contract mismatch")
+                        raise ValueError("数据提供方返回结果不符合契约")
                     return result
                 except Exception as exc:
                     logger.warning(

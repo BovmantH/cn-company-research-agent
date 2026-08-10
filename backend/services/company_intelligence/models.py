@@ -277,7 +277,7 @@ class EvidenceCollection(StrictModel):
             CollectionStatus.FAILED,
         }
         if self.status in provider_statuses and self.source is None:
-            raise ValueError("Provider 调用结果必须包含集合级来源元数据")
+            raise ValueError("数据提供方调用结果必须包含集合级来源元数据")
         non_success_statuses = set(CollectionStatus) - {
             CollectionStatus.SUCCEEDED_WITH_RECORDS,
             CollectionStatus.SUCCEEDED_EMPTY,

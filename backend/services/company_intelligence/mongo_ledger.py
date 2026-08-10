@@ -395,7 +395,7 @@ class MongoUsageLedger:
         if updated.modified_count == 1:
             return True
         if self._operations.find_one({"_id": reservation_id}) is None:
-            raise KeyError("unknown reservation")
+            raise KeyError("未知的预算预留")
         return False
 
     def settle(
@@ -403,27 +403,27 @@ class MongoUsageLedger:
     ) -> None:
         """事务化写入不可变实际用量，并释放部署日计数中的预留差额。"""
         if actual_points < 0 or actual_calls < 0:
-            raise ValueError("actual usage must be non-negative")
+            raise ValueError("实际用量不得为负数")
         now = self._now()
 
         def settle_in_transaction(session: Any) -> None:
             session_kwargs = self._session_kwargs(session)
             item = self._operations.find_one({"_id": reservation_id}, **session_kwargs)
             if item is None:
-                raise KeyError("unknown reservation")
+                raise KeyError("未知的预算预留")
             original_points = int(item["original_reserved_points"])
             original_calls = int(item["original_reserved_calls"])
             if actual_points > original_points:
-                raise ValueError("actual points exceed reservation")
+                raise ValueError("实际积分超过预留积分")
             if actual_calls > original_calls:
-                raise ValueError("actual calls exceed reservation")
+                raise ValueError("实际调用次数超过预留次数")
             if bool(item["settled"]):
                 if (
                     int(item["actual_points"]) == actual_points
                     and int(item["actual_calls"]) == actual_calls
                 ):
                     return
-                raise ValueError("reservation already settled with different usage")
+                raise ValueError("预算预留已按不同用量结算")
 
             operation_update: dict[str, Any] = {
                 "accounted_points": actual_points,
@@ -441,7 +441,7 @@ class MongoUsageLedger:
                 **session_kwargs,
             )
             if updated.modified_count != 1:
-                raise RuntimeError("reservation settlement lost atomic race")
+                raise RuntimeError("预算预留结算未能完成原子竞争")
             counter_update = self._usage_counters.update_one(
                 {"_id": f"deployment:{item['day']}"},
                 {
@@ -485,7 +485,7 @@ class MongoUsageLedger:
             sort_keys=True,
         )
         if len(encoded.encode("utf-8")) > 1_000_000:
-            raise ValueError("operation result exceeds size limit")
+            raise ValueError("操作结果超过大小限制")
         return encoded
 
     def complete_operation(self, reservation_id: str, result: dict[str, Any]) -> None:
@@ -510,20 +510,20 @@ class MongoUsageLedger:
             return
         item = self._operations.find_one({"_id": reservation_id})
         if item is None:
-            raise KeyError("unknown reservation")
+            raise KeyError("未知的预算预留")
         if (
             item["operation_status"] == OperationStatus.COMPLETED.value
             and item["operation_result_json"] == encoded
         ):
             return
         if item["operation_status"] == OperationStatus.COMPLETED.value:
-            raise ValueError("operation already completed with different result")
-        raise ValueError("operation is not in progress")
+            raise ValueError("操作已使用不同结果完成")
+        raise ValueError("操作当前不在执行中")
 
     def fail_operation(self, reservation_id: str, safe_reason: str) -> None:
         """原子进入失败终态，只允许稳定原因码与同值幂等重放。"""
         if not re.fullmatch(r"[a-z0-9_]{1,80}", safe_reason):
-            raise ValueError("safe_reason must be a stable reason code")
+            raise ValueError("safe_reason 必须是稳定原因码")
         now = self._now()
         updated = self._operations.update_one(
             {
@@ -543,15 +543,15 @@ class MongoUsageLedger:
             return
         item = self._operations.find_one({"_id": reservation_id})
         if item is None:
-            raise KeyError("unknown reservation")
+            raise KeyError("未知的预算预留")
         if (
             item["operation_status"] == OperationStatus.FAILED.value
             and item["operation_reason"] == safe_reason
         ):
             return
         if item["operation_status"] == OperationStatus.FAILED.value:
-            raise ValueError("operation already failed with different reason")
-        raise ValueError("operation is not in progress")
+            raise ValueError("操作已使用不同原因标记失败")
+        raise ValueError("操作当前不在执行中")
 
     def finalize_operation(
         self,
@@ -568,9 +568,9 @@ class MongoUsageLedger:
         if safe_reason is not None and not re.fullmatch(
             r"[a-z0-9_]{1,80}", safe_reason
         ):
-            raise ValueError("safe_reason must be a stable reason code")
+            raise ValueError("safe_reason 必须是稳定原因码")
         if actual_points < 0 or actual_calls < 0:
-            raise ValueError("actual usage must be non-negative")
+            raise ValueError("实际用量不得为负数")
 
         encoded = self._encode_result(result) if result is not None else None
         desired_status = (
@@ -582,13 +582,13 @@ class MongoUsageLedger:
             session_kwargs = self._session_kwargs(session)
             item = self._operations.find_one({"_id": reservation_id}, **session_kwargs)
             if item is None:
-                raise KeyError("unknown reservation")
+                raise KeyError("未知的预算预留")
             original_points = int(item["original_reserved_points"])
             original_calls = int(item["original_reserved_calls"])
             if actual_points > original_points:
-                raise ValueError("actual points exceed reservation")
+                raise ValueError("实际积分超过预留积分")
             if actual_calls > original_calls:
-                raise ValueError("actual calls exceed reservation")
+                raise ValueError("实际调用次数超过预留次数")
 
             status = OperationStatus(item["operation_status"])
             same_terminal = (
@@ -597,13 +597,13 @@ class MongoUsageLedger:
                 and item["operation_reason"] == safe_reason
             )
             if status != OperationStatus.IN_PROGRESS and not same_terminal:
-                raise ValueError("operation already finalized differently")
+                raise ValueError("操作已按不同终态完成")
             if bool(item["settled"]):
                 if (
                     int(item["actual_points"]) != actual_points
                     or int(item["actual_calls"]) != actual_calls
                 ):
-                    raise ValueError("reservation already settled with different usage")
+                    raise ValueError("预算预留已按不同用量结算")
                 if same_terminal:
                     return
 
@@ -635,7 +635,7 @@ class MongoUsageLedger:
                 **session_kwargs,
             )
             if updated.matched_count != 1:
-                raise RuntimeError("operation finalization lost atomic race")
+                raise RuntimeError("操作终态写入未能完成原子竞争")
             if bool(item["settled"]):
                 return
 

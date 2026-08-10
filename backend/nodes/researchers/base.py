@@ -28,7 +28,7 @@ class BaseResearcher:
     @property
     def analyst_type(self) -> str:
         if not hasattr(self, "_analyst_type"):
-            raise ValueError("Analyst type not set by subclass")
+            raise ValueError("子类未设置分析器类型")
         return self._analyst_type
 
     @analyst_type.setter
@@ -149,7 +149,7 @@ class BaseResearcher:
                 }
 
             if not queries:
-                raise ValueError(f"No queries generated for {company}")
+                raise ValueError(f"未能为 {company} 生成查询词")
 
             queries = queries[:4]  # Limit to 4 queries
             logger.info(f"Final queries for {self.analyst_type}: {queries}")
@@ -165,7 +165,7 @@ class BaseResearcher:
                 "Error generating queries, exception_type=%s",
                 type(e).__name__,
             )
-            raise RuntimeError("Fatal API error - query generation failed") from None
+            raise RuntimeError("严重 API 错误：查询词生成失败") from None
 
     def _get_search_params(self) -> Dict[str, Any]:
         """Get search parameters based on analyst type.

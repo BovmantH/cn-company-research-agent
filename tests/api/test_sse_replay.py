@@ -105,7 +105,7 @@ def test_event_log_is_bounded_read_only_and_reports_expired_cursor() -> None:
     assert not hasattr(events, "pop")
     assert not hasattr(events, "clear")
 
-    with pytest.raises(ValueError, match="exceeds byte limit"):
+    with pytest.raises(ValueError, match="超过字节限制"):
         JobEventLog(max_events=2, max_bytes=32).append(
             {"type": "progress", "step": "x" * 100}
         )

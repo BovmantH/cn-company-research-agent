@@ -238,10 +238,10 @@ def generate_pdf_from_md(markdown_content: str, output_pdf) -> None:
 
     except Exception as exc:
         logger.error(
-            "PDF rendering failed, exception_type=%s",
+            "PDF 渲染失败，异常类型=%s",
             type(exc).__name__,
         )
-        raise RuntimeError("PDF rendering failed") from exc
+        raise RuntimeError("PDF 渲染失败") from exc
 
 
 def convert_markdown_to_pdf_elements(markdown_text: str, custom_styles: Dict) -> List:

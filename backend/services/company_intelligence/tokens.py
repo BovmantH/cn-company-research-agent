@@ -58,7 +58,7 @@ class ResolutionTokenService:
         if len(secret.encode("utf-8")) < 32:
             raise ValueError("APP_SIGNING_SECRET 至少需要 32 字节")
         if ttl_seconds <= 0:
-            raise ValueError("ttl_seconds must be positive")
+            raise ValueError("ttl_seconds 必须为正数")
         self._secret = secret.encode("utf-8")
         self._ledger = ledger
         self._ttl_seconds = ttl_seconds

@@ -183,7 +183,7 @@ def test_settlement_is_persistent_immutable_and_releases_difference(
 
     first_ledger.settle(reservation.reservation_id, actual_points=20, actual_calls=1)
     second_ledger.settle(reservation.reservation_id, actual_points=20, actual_calls=1)
-    with pytest.raises(ValueError, match="already settled"):
+    with pytest.raises(ValueError, match="已按不同用量结算"):
         second_ledger.settle(
             reservation.reservation_id, actual_points=0, actual_calls=0
         )
@@ -195,12 +195,12 @@ def test_settlement_is_persistent_immutable_and_releases_difference(
 
 def test_settlement_rejects_unknown_and_overflow(ledger_pair) -> None:
     first_ledger, _ = ledger_pair
-    with pytest.raises(KeyError, match="unknown reservation"):
+    with pytest.raises(KeyError, match="未知的预算预留"):
         first_ledger.settle("missing", actual_points=0, actual_calls=0)
 
     reservation = first_ledger.reserve(_request("overflow", "job-1"), LIMITS)
     assert reservation.reservation_id
-    with pytest.raises(ValueError, match="points exceed"):
+    with pytest.raises(ValueError, match="积分超过预留"):
         first_ledger.settle(
             reservation.reservation_id,
             actual_points=FULL_PLAN_POINTS + 1,
@@ -239,9 +239,9 @@ def test_terminal_transitions_are_immutable_but_same_retry_is_idempotent(
     result = {"kind": "not_found", "items": []}
     first_ledger.complete_operation(completed.reservation_id, result)
     second_ledger.complete_operation(completed.reservation_id, result)
-    with pytest.raises(ValueError, match="different result"):
+    with pytest.raises(ValueError, match="不同结果完成"):
         second_ledger.complete_operation(completed.reservation_id, {"kind": "blocked"})
-    with pytest.raises(ValueError, match="not in progress"):
+    with pytest.raises(ValueError, match="不在执行中"):
         second_ledger.fail_operation(completed.reservation_id, "provider_unavailable")
 
 

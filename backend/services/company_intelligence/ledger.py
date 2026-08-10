@@ -299,7 +299,7 @@ class InMemoryUsageLedger:
         with self._lock:
             item = self._reservations.get(reservation_id)
             if item is None:
-                raise KeyError("unknown reservation")
+                raise KeyError("未知的预算预留")
             if item["operation_status"] != OperationStatus.IN_PROGRESS.value or bool(
                 item["execution_claimed"]
             ):
@@ -314,20 +314,20 @@ class InMemoryUsageLedger:
         with self._lock:
             item = self._reservations.get(reservation_id)
             if item is None:
-                raise KeyError("unknown reservation")
+                raise KeyError("未知的预算预留")
             if actual_points < 0 or actual_calls < 0:
-                raise ValueError("actual usage must be non-negative")
+                raise ValueError("实际用量不得为负数")
             if actual_points > int(item["original_reserved_points"]):
-                raise ValueError("actual points exceed reservation")
+                raise ValueError("实际积分超过预留积分")
             if actual_calls > int(item["original_reserved_calls"]):
-                raise ValueError("actual calls exceed reservation")
+                raise ValueError("实际调用次数超过预留次数")
             if bool(item["settled"]):
                 if (
                     int(item["actual_points"]) == actual_points
                     and int(item["actual_calls"]) == actual_calls
                 ):
                     return
-                raise ValueError("reservation already settled with different usage")
+                raise ValueError("预算预留已按不同用量结算")
             item["reserved_points"] = actual_points
             item["reserved_calls"] = actual_calls
             item["actual_points"] = actual_points
@@ -351,19 +351,19 @@ class InMemoryUsageLedger:
         # JSON round-trip both verifies persistence compatibility and breaks aliases.
         encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
         if len(encoded.encode("utf-8")) > 1_000_000:
-            raise ValueError("operation result exceeds size limit")
+            raise ValueError("操作结果超过大小限制")
         safe_result = json.loads(encoded)
         with self._lock:
             item = self._reservations.get(reservation_id)
             if item is None:
-                raise KeyError("unknown reservation")
+                raise KeyError("未知的预算预留")
             status = OperationStatus(str(item["operation_status"]))
             if status == OperationStatus.COMPLETED:
                 if item["operation_result"] == safe_result:
                     return
-                raise ValueError("operation already completed with different result")
+                raise ValueError("操作已使用不同结果完成")
             if status != OperationStatus.IN_PROGRESS:
-                raise ValueError("operation is not in progress")
+                raise ValueError("操作当前不在执行中")
             item["operation_result"] = safe_result
             item["operation_reason"] = None
             item["operation_status"] = OperationStatus.COMPLETED.value
@@ -371,18 +371,18 @@ class InMemoryUsageLedger:
     def fail_operation(self, reservation_id: str, safe_reason: str) -> None:
         """把进行中操作置为失败终态，并且只持久化稳定、安全的原因码。"""
         if not re.fullmatch(r"[a-z0-9_]{1,80}", safe_reason):
-            raise ValueError("safe_reason must be a stable reason code")
+            raise ValueError("safe_reason 必须是稳定原因码")
         with self._lock:
             item = self._reservations.get(reservation_id)
             if item is None:
-                raise KeyError("unknown reservation")
+                raise KeyError("未知的预算预留")
             status = OperationStatus(str(item["operation_status"]))
             if status == OperationStatus.FAILED:
                 if item["operation_reason"] == safe_reason:
                     return
-                raise ValueError("operation already failed with different reason")
+                raise ValueError("操作已使用不同原因标记失败")
             if status != OperationStatus.IN_PROGRESS:
-                raise ValueError("operation is not in progress")
+                raise ValueError("操作当前不在执行中")
             item["operation_result"] = None
             item["operation_reason"] = safe_reason
             item["operation_status"] = OperationStatus.FAILED.value
@@ -402,15 +402,15 @@ class InMemoryUsageLedger:
         if safe_reason is not None and not re.fullmatch(
             r"[a-z0-9_]{1,80}", safe_reason
         ):
-            raise ValueError("safe_reason must be a stable reason code")
+            raise ValueError("safe_reason 必须是稳定原因码")
         safe_result: dict[str, Any] | None = None
         if result is not None:
             encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
             if len(encoded.encode("utf-8")) > 1_000_000:
-                raise ValueError("operation result exceeds size limit")
+                raise ValueError("操作结果超过大小限制")
             safe_result = json.loads(encoded)
         if actual_points < 0 or actual_calls < 0:
-            raise ValueError("actual usage must be non-negative")
+            raise ValueError("实际用量不得为负数")
 
         desired_status = (
             OperationStatus.COMPLETED if result is not None else OperationStatus.FAILED
@@ -418,13 +418,13 @@ class InMemoryUsageLedger:
         with self._lock:
             item = self._reservations.get(reservation_id)
             if item is None:
-                raise KeyError("unknown reservation")
+                raise KeyError("未知的预算预留")
             original_points = int(item["original_reserved_points"])
             original_calls = int(item["original_reserved_calls"])
             if actual_points > original_points:
-                raise ValueError("actual points exceed reservation")
+                raise ValueError("实际积分超过预留积分")
             if actual_calls > original_calls:
-                raise ValueError("actual calls exceed reservation")
+                raise ValueError("实际调用次数超过预留次数")
 
             status = OperationStatus(str(item["operation_status"]))
             if status != OperationStatus.IN_PROGRESS:
@@ -434,7 +434,7 @@ class InMemoryUsageLedger:
                     and item["operation_reason"] == safe_reason
                 )
                 if not same_terminal:
-                    raise ValueError("operation already finalized differently")
+                    raise ValueError("操作已按不同终态完成")
             if bool(item["settled"]):
                 if (
                     int(item["actual_points"]) == actual_points
@@ -445,7 +445,7 @@ class InMemoryUsageLedger:
                         item["operation_result"] = safe_result
                         item["operation_reason"] = safe_reason
                     return
-                raise ValueError("reservation already settled with different usage")
+                raise ValueError("预算预留已按不同用量结算")
 
             item["operation_status"] = desired_status.value
             item["operation_result"] = safe_result

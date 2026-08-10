@@ -178,9 +178,7 @@ class Briefing:
                 category,
                 type(e).__name__,
             )
-            raise RuntimeError(
-                f"Fatal API error - {category} briefing generation failed"
-            ) from None
+            raise RuntimeError(f"严重 API 错误：{category} 简报生成失败") from None
 
     async def create_briefings(self, state: ResearchState) -> ResearchState:
         """Create briefings for all categories in parallel."""
@@ -250,9 +248,7 @@ class Briefing:
                             f"Completed {task['data_field']} briefing ({len(result['content'])} characters)"
                         )
                     else:
-                        raise RuntimeError(
-                            f"Empty briefing generated for {task['data_field']}"
-                        )
+                        raise RuntimeError(f"为 {task['data_field']} 生成的简报为空")
 
                     return {
                         "category": task["category"],

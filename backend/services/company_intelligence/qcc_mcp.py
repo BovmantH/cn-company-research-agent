@@ -109,7 +109,7 @@ class QccMcpClientPool:
         """连接两个 Server 并完成全量分页工具发现；初始化本身不调用工具。"""
         async with self._lifecycle_lock:
             if self._closed:
-                raise QccMcpUnavailable("MCP Client Pool 已关闭")
+                raise QccMcpUnavailable("MCP 客户端池已关闭")
             if self._exit_stack is not None:
                 return
             if not self._settings.enabled or not self._settings.api_key:
@@ -139,13 +139,9 @@ class QccMcpClientPool:
                 for capability, binding in CAPABILITY_BINDINGS.items():
                     tool = discovered[binding.server].get(binding.tool)
                     if tool is None:
-                        raise QccMcpUnavailable(
-                            f"MCP Server 缺少必需工具: {capability}"
-                        )
+                        raise QccMcpUnavailable(f"MCP 服务缺少必需工具: {capability}")
                     if not self._accepts_search_key(tool.input_schema):
-                        raise QccMcpUnavailable(
-                            f"MCP 必需工具 Schema 不兼容: {capability}"
-                        )
+                        raise QccMcpUnavailable(f"MCP 必需工具结构不兼容: {capability}")
             except BaseException as error:
                 # MCP SDK 的 AnyIO 上下文不能携带业务异常退出，否则可能用
                 # ExceptionGroup 覆盖原始 fail-closed 原因；这里先无异常关闭。
@@ -172,7 +168,7 @@ class QccMcpClientPool:
             parsed = urlsplit(url)
             port = parsed.port
         except ValueError:
-            raise QccMcpUnavailable("MCP Server URL 不可信") from None
+            raise QccMcpUnavailable("MCP 服务地址不可信") from None
         if (
             parsed.scheme != "https"
             or parsed.hostname not in _TRUSTED_QCC_HOSTS
@@ -180,7 +176,7 @@ class QccMcpClientPool:
             or parsed.username is not None
             or parsed.password is not None
         ):
-            raise QccMcpUnavailable("MCP Server URL 不可信")
+            raise QccMcpUnavailable("MCP 服务地址不可信")
 
     @staticmethod
     async def _discover_tools(client: Any) -> dict[str, Any]:
@@ -200,7 +196,7 @@ class QccMcpClientPool:
             if cursor is None:
                 return tools
             if cursor in seen_cursors:
-                raise QccMcpUnavailable("MCP 工具发现返回循环 cursor")
+                raise QccMcpUnavailable("MCP 工具发现返回循环游标")
             seen_cursors.add(cursor)
         raise QccMcpUnavailable("MCP 工具发现超过安全分页限制")
 
@@ -231,9 +227,9 @@ class QccMcpClientPool:
         """把一个内部能力路由到固定工具；不接受任何上游原始工具名。"""
         binding = CAPABILITY_BINDINGS.get(capability)
         if binding is None:
-            raise ValueError(f"capability not allowed: {capability}")
+            raise ValueError(f"不允许调用该能力: {capability}")
         if not self.ready:
-            raise QccMcpUnavailable("MCP Client 尚未就绪")
+            raise QccMcpUnavailable("MCP 客户端尚未就绪")
         normalized_key = self._validate_search_key(search_key)
         try:
             result = await self._clients[binding.server].call_tool(

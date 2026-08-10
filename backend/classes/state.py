@@ -47,7 +47,7 @@ class JobEventLog(Sequence[dict[str, Any]]):
         max_bytes: int = 16 * 1024 * 1024,
     ) -> None:
         if max_events <= 0 or max_bytes <= 0:
-            raise ValueError("event log limits must be positive")
+            raise ValueError("事件日志限制必须为正数")
         self._events: deque[tuple[dict[str, Any], int]] = deque()
         self._total_bytes = 0
         self._max_events = max_events
@@ -75,7 +75,7 @@ class JobEventLog(Sequence[dict[str, Any]]):
     def append(self, event: dict[str, Any]) -> None:
         """复制调用方事件并覆盖协议字段，避免外部篡改单调序列。"""
         if not isinstance(event, dict):
-            raise TypeError("job event must be a dict")
+            raise TypeError("任务事件必须是字典")
         with self._lock:
             normalized = deepcopy(event)
             normalized["version"] = 1
@@ -88,7 +88,7 @@ class JobEventLog(Sequence[dict[str, Any]]):
                 ).encode("utf-8")
             )
             if encoded_size > self._max_bytes:
-                raise ValueError("single job event exceeds byte limit")
+                raise ValueError("单条任务事件超过字节限制")
             self._next_event_id += 1
             self._events.append((normalized, encoded_size))
             self._total_bytes += encoded_size

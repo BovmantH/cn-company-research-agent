@@ -91,9 +91,9 @@ def test_settlement_cannot_exceed_reservation() -> None:
     try:
         ledger.settle(decision.reservation_id, actual_points=221, actual_calls=11)
     except ValueError as exc:
-        assert "exceed" in str(exc)
+        assert "超过预留" in str(exc)
     else:
-        raise AssertionError("expected settlement overflow to fail")
+        raise AssertionError("预期超出预留的结算会失败")
 
 
 def test_settlement_is_immutable_but_same_retry_is_idempotent() -> None:
@@ -105,9 +105,9 @@ def test_settlement_is_immutable_but_same_retry_is_idempotent() -> None:
     try:
         ledger.settle(decision.reservation_id, actual_points=0, actual_calls=0)
     except ValueError as exc:
-        assert "already settled" in str(exc)
+        assert "已按不同用量结算" in str(exc)
     else:
-        raise AssertionError("conflicting second settlement must fail")
+        raise AssertionError("冲突的二次结算必须失败")
 
 
 def test_call_limit_is_checked_during_reservation() -> None:
@@ -261,7 +261,7 @@ def test_finalize_operation_atomically_sets_terminal_and_usage() -> None:
     replay = ledger.reserve(_request("finalize", "job-2"), LIMITS)
     assert replay.operation_status == OperationStatus.COMPLETED
     assert replay.result == result
-    with pytest.raises(ValueError, match="settled with different usage"):
+    with pytest.raises(ValueError, match="已按不同用量结算"):
         ledger.finalize_operation(
             first.reservation_id,
             result=result,
@@ -355,5 +355,5 @@ def test_operation_can_be_claimed_by_only_one_executor() -> None:
     assert ledger.claim_operation(reservation.reservation_id) is True
     assert ledger.claim_operation(reservation.reservation_id) is False
 
-    with pytest.raises(KeyError, match="unknown reservation"):
+    with pytest.raises(KeyError, match="未知的预算预留"):
         ledger.claim_operation("missing")

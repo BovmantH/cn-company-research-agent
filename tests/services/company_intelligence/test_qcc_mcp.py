@@ -229,7 +229,7 @@ async def test_untrusted_server_url_is_rejected_before_key_is_sent(
     settings = replace(_settings(), company_mcp_url=unsafe_url)
     pool = QccMcpClientPool(settings, client_factory=fail_if_called)
 
-    with pytest.raises(QccMcpUnavailable, match="URL 不可信"):
+    with pytest.raises(QccMcpUnavailable, match="服务地址不可信"):
         await pool.initialize()
 
     assert created == 0
@@ -258,7 +258,7 @@ async def test_wrong_search_key_schema_fails_closed() -> None:
     servers, _ = _servers(wrong_schema_capability="company.registration")
     pool = QccMcpClientPool(_settings(), client_factory=_client_factory(servers))
 
-    with pytest.raises(QccMcpUnavailable, match="Schema"):
+    with pytest.raises(QccMcpUnavailable, match="结构不兼容"):
         await pool.initialize()
     assert pool.ready is False
 
@@ -300,7 +300,7 @@ async def test_call_routes_only_whitelisted_capability() -> None:
         ]
     }
     assert calls == [("risk.enforcement", "91320594MA1N00000X")]
-    with pytest.raises(ValueError, match="capability not allowed"):
+    with pytest.raises(ValueError, match="不允许调用该能力"):
         await pool.call("forbidden.contact", "示例公司")
     await pool.aclose()
 
