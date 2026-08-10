@@ -158,26 +158,35 @@ if [ "$setup_env" = true ]; then
     fi
 
     echo -e "\n请选择一个 LLM 服务商："
-    echo "1) DeepSeek"
-    echo "2) 阿里百炼（Qwen）"
+    echo "1) OpenCode Zen（DeepSeek V4 Flash，限时免费）"
+    echo "2) DeepSeek"
     echo "3) Moonshot（Kimi）"
-    echo "4) 小米 MiMo"
-    echo "5) OpenRouter"
-    echo "6) OpenAI"
+    echo "4) 阿里百炼（Qwen）"
+    echo "5) 智谱 GLM"
+    echo "6) MiniMax"
+    echo "7) 小米 MiMo"
+    echo "8) OpenRouter"
+    echo "9) OpenAI"
     read -r llm_choice
     llm_choice=${llm_choice:-1}
     case "$llm_choice" in
-        1) llm_key_name="DEEPSEEK_API_KEY" ;;
-        2) llm_key_name="DASHSCOPE_API_KEY" ;;
+        1) llm_key_name="OPENCODE_API_KEY" ;;
+        2) llm_key_name="DEEPSEEK_API_KEY" ;;
         3) llm_key_name="MOONSHOT_API_KEY" ;;
-        4) llm_key_name="XIAOMI_API_KEY" ;;
-        5) llm_key_name="OPENROUTER_API_KEY" ;;
-        6) llm_key_name="OPENAI_API_KEY" ;;
+        4) llm_key_name="DASHSCOPE_API_KEY" ;;
+        5) llm_key_name="ZAI_API_KEY" ;;
+        6) llm_key_name="MINIMAX_API_KEY" ;;
+        7) llm_key_name="MIMO_API_KEY" ;;
+        8) llm_key_name="OPENROUTER_API_KEY" ;;
+        9) llm_key_name="OPENAI_API_KEY" ;;
         *)
             echo "❌ LLM 服务商选项无效"
             exit 1
             ;;
     esac
+    if [ "$llm_key_name" = "OPENCODE_API_KEY" ]; then
+        echo -e "${YELLOW}注意：OpenCode Zen 的免费模型为限时免费，请求会发送到美国，免费期间的数据可能用于模型改进。请勿提交个人、机密或受监管的数据。${NC}"
+    fi
     echo -n "${llm_key_name}："
     read -r -s llm_key
     echo
@@ -201,6 +210,7 @@ if [ "$setup_env" = true ]; then
     fi
 
     echo -e "${GREEN}✓ 环境变量已保存到 .env${NC}"
+    echo "如需免费模型不可用时自动付费回退，请按 README 在 .env 中再配置一家或多家付费服务商 Key。"
 fi
 
 # 显示完成说明和服务启动选项
