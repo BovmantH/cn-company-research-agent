@@ -18,8 +18,20 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 
+from backend.api.client_ai import (
+    ClientAIRequest,
+    build_client_research_dependencies,
+    model_catalog_error_response,
+    require_client_model,
+)
+from backend.api.client_ai import router as client_ai_router
 from backend.api.company_intelligence import router as company_intelligence_router
 from backend.classes.state import (
     FINAL_REPORT_EVENT_MAX_BYTES,
@@ -28,7 +40,7 @@ from backend.classes.state import (
     job_status,
     prune_expired_jobs,
 )
-from backend.graph import Graph
+from backend.graph import Graph, ResearchDependencies
 from backend.services.company_intelligence.collection import (
     PreparationKind,
     ProfessionalPreparation,
@@ -41,7 +53,15 @@ from backend.services.company_intelligence.rendering import (
 )
 from backend.services.company_intelligence.requester import resolve_client_ip
 from backend.services.company_intelligence.runtime import CompanyIntelligenceRuntime
-from backend.services.llm_factory import validate_llm_configuration
+from backend.services.llm_factory import (
+    get_llm_credential_candidates,
+    validate_llm_configuration,
+)
+from backend.services.model_catalog import (
+    ModelCatalogCredentialError,
+    ModelCatalogService,
+    ModelCatalogUnavailable,
+)
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 
@@ -57,21 +77,37 @@ console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
 
 
+def _has_server_llm_config() -> bool:
+    """判断部署者是否声明了服务端模型配置，不读取或返回密钥内容。"""
+    return bool(
+        os.getenv("LLM_VENDOR", "").strip()
+        or os.getenv("LLM_VENDOR_PRIORITY", "").strip()
+        or any(
+            os.getenv(key_name) for key_name, _, _ in get_llm_credential_candidates()
+        )
+    )
+
+
 @asynccontextmanager
 async def _application_lifespan(_: FastAPI):
     """在服务真正启动时校验 LLM 配置，保持模块导入可测试、可复用。"""
-    try:
-        validate_llm_configuration()
-    except RuntimeError as exc:
-        raise RuntimeError(
-            f"LLM 启动配置无效：{exc}\n参考 .env.example 配置服务端凭证。"
-        ) from None
+    if _has_server_llm_config():
+        try:
+            validate_llm_configuration()
+        except RuntimeError as exc:
+            raise RuntimeError(
+                f"LLM 启动配置无效：{exc}\n参考 .env.example 配置服务端凭证。"
+            ) from None
+    else:
+        logger.warning("未配置服务端 LLM Key，仅接受用户在本次任务中提供的 Key")
     yield
 
 
 app = FastAPI(title="公司调研助手 API", lifespan=_application_lifespan)
 app.state.company_intelligence = CompanyIntelligenceRuntime.from_env()
+app.state.model_catalog = ModelCatalogService()
 app.state.research_tasks = set()
+app.include_router(client_ai_router)
 app.include_router(company_intelligence_router)
 
 app.add_middleware(
@@ -93,6 +129,10 @@ _PYDANTIC_MSG_ZH = {
     "type_error": "字段类型不正确",
     "string_type": "字段必须是字符串",
     "json_invalid": "请求体不是合法的 JSON",
+    "extra_forbidden": "包含不允许的字段",
+    "literal_error": "字段取值不在允许范围内",
+    "string_too_short": "字段内容过短",
+    "string_too_long": "字段内容过长",
 }
 
 
@@ -107,6 +147,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422,
         content={"detail": f"请求参数有误: {summary}", "errors": errors},
+        headers=(
+            {"Cache-Control": "no-store"}
+            if request.url.path in {"/ai/models", "/research"}
+            else None
+        ),
     )
 
 
@@ -162,7 +207,7 @@ MAX_REPORT_CONTENT_LENGTH = 2_000_000
 
 
 class ResearchRequest(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     company: str = Field(min_length=1, max_length=MAX_COMPANY_NAME_LENGTH)
     company_url: str | None = Field(default=None, max_length=MAX_COMPANY_URL_LENGTH)
@@ -172,6 +217,18 @@ class ResearchRequest(BaseModel):
         max_length=MAX_RESEARCH_CONTEXT_LENGTH,
     )
     professional_data: ProfessionalDataRequest | None = None
+    ai: ClientAIRequest | None = None
+
+
+def _persistent_research_input(data: ResearchRequest) -> dict[str, str]:
+    """只持久化基础公开字段，显式排除凭证、Token 和未来敏感扩展。"""
+    fields = {
+        "company": data.company,
+        "company_url": data.company_url,
+        "industry": data.industry,
+        "hq_location": data.hq_location,
+    }
+    return {key: value for key, value in fields.items() if value is not None}
 
 
 class PDFGenerationRequest(BaseModel):
@@ -253,9 +310,28 @@ def _schedule_research(
 @app.post("/research")
 async def research(data: ResearchRequest, request: Request):
     """受理基础调研；专业分支只在显式请求且原子准入成功后启动。"""
+    response_headers = {"Cache-Control": "no-store"} if data.ai else None
     try:
         prune_expired_jobs()
         logger.info(f"收到调研请求: {data.company}")
+        if data.ai is None and not _has_server_llm_config():
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "当前部署未配置服务端模型，请填写本次任务的 API Key"
+                },
+            )
+        if data.ai is not None:
+            try:
+                selected_model = await require_client_model(data.ai, request)
+            except (
+                ModelCatalogCredentialError,
+                ModelCatalogUnavailable,
+                ValueError,
+            ) as exc:
+                return model_catalog_error_response(exc)
+        else:
+            selected_model = None
         job_id = str(uuid.uuid4())
         preparation: ProfessionalPreparation | None = None
         blocked_reason: str | None = None
@@ -290,7 +366,8 @@ async def research(data: ResearchRequest, request: Request):
                     content=_research_accepted_response(
                         replayed_job_id,
                         {"status": state, "reason": None},
-                    )
+                    ),
+                    headers=response_headers,
                 )
             if preparation.kind == PreparationKind.BLOCKED:
                 blocked_reason = preparation.reason_code or "provider_unavailable"
@@ -320,8 +397,14 @@ async def research(data: ResearchRequest, request: Request):
                 "reason": blocked_reason,
             }
 
-        # Token 已在准入阶段消费；后台任务和 Mongo 只接收基础字段。
-        sanitized_update = {"professional_data": None}
+        research_dependencies = (
+            build_client_research_dependencies(data.ai, selected_model)
+            if data.ai is not None and selected_model is not None
+            else None
+        )
+
+        # Token 与用户 Key 都只存在于路由局部变量和任务依赖，不进入基础数据。
+        sanitized_update = {"professional_data": None, "ai": None}
         if preparation is not None and preparation.identity is not None:
             # 专业 Evidence 与基础报告必须使用 Token 内同一规范主体，不能信任
             # 客户端在确认主体后再次提交的 company 文本。
@@ -333,6 +416,7 @@ async def research(data: ResearchRequest, request: Request):
                 sanitized_data,
                 professional_preparation=preparation,
                 professional_blocked_reason=blocked_reason,
+                research_dependencies=research_dependencies,
             ),
             runtime=runtime,
             preparation=preparation,
@@ -340,7 +424,8 @@ async def research(data: ResearchRequest, request: Request):
         scheduled = True
 
         return JSONResponse(
-            content=_research_accepted_response(job_id, professional_response)
+            content=_research_accepted_response(job_id, professional_response),
+            headers=response_headers,
         )
 
     except Exception as exc:
@@ -361,7 +446,11 @@ async def research(data: ResearchRequest, request: Request):
             "启动调研任务失败，异常类型=%s",
             type(exc).__name__,
         )
-        raise HTTPException(status_code=500, detail="启动调研任务失败") from exc
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "启动调研任务失败"},
+            headers=response_headers,
+        )
 
 
 async def _collect_professional_for_job(
@@ -568,6 +657,7 @@ async def process_research(
     *,
     professional_preparation: ProfessionalPreparation | None = None,
     professional_blocked_reason: str | None = None,
+    research_dependencies: ResearchDependencies | None = None,
 ):
     """异步执行调研任务,把结果写入 job_status / MongoDB。"""
     professional_task: asyncio.Task[None] | None = None
@@ -579,7 +669,7 @@ async def process_research(
         if mongodb:
             mongodb.create_job(
                 job_id,
-                data.model_dump(exclude={"professional_data"}),
+                _persistent_research_input(data),
             )
 
         if professional_blocked_reason:
@@ -609,6 +699,7 @@ async def process_research(
             industry=data.industry,
             hq_location=data.hq_location,
             job_id=job_id,
+            dependencies=research_dependencies,
         )
 
         final_state = {}

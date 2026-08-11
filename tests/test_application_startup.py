@@ -34,10 +34,11 @@ def test_application_can_be_imported_without_llm_key() -> None:
     assert completed.returncode == 0, completed.stderr
 
 
-def test_application_startup_rejects_missing_llm_key() -> None:
-    with pytest.raises(RuntimeError, match="未配置任何 LLM 服务商凭证"):
-        with TestClient(application.app):
-            pass
+def test_application_startup_allows_client_byok_without_server_llm_key() -> None:
+    with TestClient(application.app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
 
 
 def test_application_startup_accepts_configured_llm_key(

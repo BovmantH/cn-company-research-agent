@@ -156,10 +156,16 @@ async def test_catalog_marks_vendors_without_official_api_as_curated(
         raise AssertionError("没有官方目录的厂商不得调用未文档化端点")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        result = await ModelCatalogService(client=client).list_models(vendor, "sk-test")
+        result = await ModelCatalogService(client=client).list_models(vendor, "")
 
     assert result.source == "curated"
     assert [model.id for model in result.models] == expected_ids
+
+
+@pytest.mark.asyncio
+async def test_dynamic_catalog_requires_user_key_before_request() -> None:
+    with pytest.raises(ValueError, match="需要 API Key"):
+        await ModelCatalogService().list_models("kimi", "")
 
 
 @pytest.mark.asyncio

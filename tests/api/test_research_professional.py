@@ -24,6 +24,12 @@ from backend.services.company_intelligence.models import (
 )
 
 
+@pytest.fixture(autouse=True)
+def configure_legacy_server_research(monkeypatch: pytest.MonkeyPatch) -> None:
+    """专业分支测试继续覆盖部署者模型配置下的旧请求契约。"""
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+
+
 @dataclass
 class RuntimeStub:
     preparation: ProfessionalPreparation

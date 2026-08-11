@@ -193,9 +193,6 @@ class ModelCatalogService:
 
     async def list_models(self, vendor: str, api_key: str) -> ModelCatalog:
         """读取模型目录；错误只抛稳定中文类型，不透传 Key 或响应正文。"""
-        normalized_key = api_key.strip()
-        if not normalized_key:
-            raise ValueError("用户 API Key 不能为空")
         normalized_vendor = vendor.strip().lower()
         if normalized_vendor not in CLIENT_MODEL_VENDORS:
             raise ValueError(f"不支持的模型供应商：{normalized_vendor!r}")
@@ -209,6 +206,9 @@ class ModelCatalogService:
                 ),
             )
 
+        normalized_key = api_key.strip()
+        if not normalized_key:
+            raise ValueError("读取该厂商的官方模型目录需要 API Key")
         url = official_model_catalog_url(normalized_vendor)
         request_failed = False
         try:
