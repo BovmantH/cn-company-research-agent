@@ -8,9 +8,11 @@ import httpx
 import pytest
 
 from backend.services.client_model import CLIENT_MODEL_VENDORS
+from backend.services.llm_factory import VENDOR_REGISTRY
 from backend.services.model_catalog import (
     CURATED_MODEL_OPTIONS,
     DYNAMIC_MODEL_VENDORS,
+    OFFICIAL_MODEL_CATALOG_URLS,
     ModelCatalogCredentialError,
     ModelCatalogService,
     ModelCatalogUnavailable,
@@ -45,6 +47,20 @@ def test_every_client_vendor_has_exactly_one_catalog_source() -> None:
         set(DYNAMIC_MODEL_VENDORS) | set(CURATED_MODEL_OPTIONS)
     )
     assert not set(DYNAMIC_MODEL_VENDORS) & set(CURATED_MODEL_OPTIONS)
+
+
+def test_vendor_registry_owns_catalog_metadata() -> None:
+    assert CLIENT_MODEL_VENDORS == tuple(VENDOR_REGISTRY)
+    assert OFFICIAL_MODEL_CATALOG_URLS == {
+        vendor: config.model_catalog_url
+        for vendor, config in VENDOR_REGISTRY.items()
+        if config.model_catalog_url is not None
+    }
+    assert set(CURATED_MODEL_OPTIONS) == {
+        vendor
+        for vendor, config in VENDOR_REGISTRY.items()
+        if config.catalog_source == "curated"
+    }
 
 
 @pytest.mark.asyncio

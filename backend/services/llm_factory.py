@@ -48,7 +48,6 @@ import logging
 import math
 import os
 from collections.abc import AsyncIterator, Iterator, Mapping
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -68,196 +67,15 @@ from openai import (
 
 from .client_model import (
     CLIENT_MODEL_ID_PATTERN,
-    CLIENT_MODEL_VENDORS,
     SelectedModel,
 )
+from .provider_registry import CLIENT_MODEL_VENDORS, VENDOR_REGISTRY
 
 logger = logging.getLogger(__name__)
 
 
-# === Vendor 注册表 ===
-
-
-@dataclass(frozen=True)
-class VendorConfig:
-    """单个供应商的连接配置。
-
-    属性:
-        display_name: 用于启动错误提示的供应商名称。
-        short_name: 用于空间受限界面的供应商短名称。
-        description: 可公开展示的稳定中文说明。
-        api_console_url: 用户获取或管理通用 API Key 的官方 HTTPS 控制台入口。
-        env_keys: 按优先级排列的环境变量名，也是 ``api_key`` 的来源。
-        base_url: 该供应商的 OpenAI 协议兼容端点。
-        default_models: ``角色 -> 默认模型标识`` 映射（未设 ``LLM_MODEL_<ROLE>`` 时兜底）。
-        docs_url: 文档地址,用户排错用。
-        strip_role_prefix: 是否自动剥离模型中的供应商前缀。
-            OpenRouter 依赖前缀路由，必须保留；其余供应商均剥离。
-    """
-
-    display_name: str
-    short_name: str
-    description: str
-    api_console_url: str
-    env_keys: tuple[str, ...]
-    base_url: str
-    default_models: dict[str, str]
-    docs_url: str = ""
-    strip_role_prefix: bool = True
-
-    def default_model(self, role: str) -> str:
-        """获取指定角色的默认模型标识；角色缺失时使用 ``default_models`` 第一项兜底。"""
-        return self.default_models.get(role, next(iter(self.default_models.values())))
-
-
-# 供应商注册表是连接信息、Key 名称和角色默认模型的唯一事实来源。
-VENDOR_REGISTRY: dict[str, VendorConfig] = {
-    "opencode": VendorConfig(
-        display_name="OpenCode Zen 免费线路",
-        short_name="OpenCode Zen",
-        description="OpenCode Zen 提供的免费优先线路，模型范围和免费政策可能调整。",
-        api_console_url="https://opencode.ai/auth",
-        env_keys=("OPENCODE_API_KEY",),
-        base_url="https://opencode.ai/zen/v1",
-        default_models={
-            "researcher": "deepseek-v4-flash-free",
-            "briefing": "deepseek-v4-flash-free",
-            "editor": "deepseek-v4-flash-free",
-        },
-        docs_url="https://opencode.ai/docs/zen",
-    ),
-    "deepseek": VendorConfig(
-        display_name="DeepSeek 原厂",
-        short_name="DeepSeek",
-        description="DeepSeek 原厂模型服务，使用用户在原厂申请的 API Key。",
-        api_console_url="https://platform.deepseek.com/api_keys",
-        env_keys=("DEEPSEEK_API_KEY",),
-        base_url="https://api.deepseek.com",
-        default_models={
-            "researcher": "deepseek-v4-flash",
-            "briefing": "deepseek-v4-flash",
-            "editor": "deepseek-v4-pro",
-        },
-        docs_url="https://api-docs.deepseek.com/",
-    ),
-    "qwen": VendorConfig(
-        display_name="阿里百炼（Qwen）",
-        short_name="Qwen",
-        description="阿里云百炼提供的通义千问模型服务。",
-        api_console_url=(
-            "https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key"
-        ),
-        env_keys=("DASHSCOPE_API_KEY",),
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        default_models={
-            "researcher": "qwen3.7-flash",
-            "briefing": "qwen3.7-plus",
-            "editor": "qwen3.7-max",
-        },
-        docs_url=(
-            "https://help.aliyun.com/zh/model-studio/"
-            "compatibility-of-openai-with-dashscope"
-        ),
-    ),
-    "kimi": VendorConfig(
-        display_name="Moonshot（Kimi）",
-        short_name="Kimi",
-        description="Moonshot AI 提供的 Kimi 模型服务。",
-        api_console_url="https://platform.kimi.com/console/api-keys",
-        env_keys=("MOONSHOT_API_KEY",),
-        base_url="https://api.moonshot.cn/v1",
-        default_models={
-            "researcher": "kimi-k3",
-            "briefing": "kimi-k3",
-            "editor": "kimi-k3",
-        },
-        docs_url="https://platform.kimi.com/docs/models",
-    ),
-    "glm": VendorConfig(
-        display_name="智谱 GLM",
-        short_name="智谱 GLM",
-        description="智谱 AI 提供的 GLM 模型服务。",
-        api_console_url="https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
-        env_keys=("ZAI_API_KEY",),
-        base_url="https://open.bigmodel.cn/api/paas/v4/",
-        default_models={
-            "researcher": "glm-4.7-flash",
-            "briefing": "glm-4.7",
-            "editor": "glm-5.2",
-        },
-        docs_url="https://docs.bigmodel.cn/cn/guide/develop/openai/introduction",
-    ),
-    "minimax": VendorConfig(
-        display_name="MiniMax",
-        short_name="MiniMax",
-        description="MiniMax 提供的原厂模型服务。",
-        api_console_url="https://platform.minimaxi.com/console/access?tab=api-keys",
-        env_keys=("MINIMAX_API_KEY",),
-        base_url="https://api.minimaxi.com/v1",
-        default_models={
-            "researcher": "MiniMax-M3",
-            "briefing": "MiniMax-M3",
-            "editor": "MiniMax-M3",
-        },
-        docs_url="https://platform.minimaxi.com/docs/api-reference/text-openai-api",
-    ),
-    "mimo": VendorConfig(
-        display_name="小米 MiMo",
-        short_name="小米 MiMo",
-        description="小米提供的 MiMo 模型服务。",
-        api_console_url="https://platform.xiaomimimo.com/",
-        env_keys=("MIMO_API_KEY", "XIAOMI_API_KEY"),
-        base_url="https://api.xiaomimimo.com/v1",
-        default_models={
-            "researcher": "mimo-v2.5",
-            "briefing": "mimo-v2.5",
-            "editor": "mimo-v2.5-pro",
-        },
-        docs_url="https://mimo.mi.com/docs/zh-CN/quick-start/summary/model",
-    ),
-    "openrouter": VendorConfig(
-        display_name="OpenRouter 聚合",
-        short_name="OpenRouter",
-        description="OpenRouter 聚合模型线路，可使用账号下有权访问的模型。",
-        api_console_url="https://openrouter.ai/settings/keys",
-        env_keys=("OPENROUTER_API_KEY",),
-        base_url="https://openrouter.ai/api/v1",
-        default_models={
-            "researcher": "deepseek/deepseek-v4-flash",
-            "briefing": "qwen/qwen3.7-plus",
-            "editor": "moonshotai/kimi-k3",
-        },
-        docs_url="https://openrouter.ai/docs",
-        strip_role_prefix=False,
-    ),
-    "openai": VendorConfig(
-        display_name="OpenAI 原生兜底",
-        short_name="OpenAI",
-        description="OpenAI 原生模型服务，作为兼容兜底入口。",
-        api_console_url="https://platform.openai.com/api-keys",
-        env_keys=("OPENAI_API_KEY",),
-        base_url="https://api.openai.com/v1",
-        default_models={
-            "researcher": "gpt-5.6-luna",
-            "briefing": "gpt-5.6-terra",
-            "editor": "gpt-5.6-sol",
-        },
-        docs_url="https://developers.openai.com/api/docs/models",
-    ),
-}
-
 # 默认探测顺序：Zen 免费线路 → 国内原厂 → OpenRouter → OpenAI。
-DEFAULT_VENDOR_PRIORITY: list[str] = [
-    "opencode",
-    "deepseek",
-    "kimi",
-    "qwen",
-    "glm",
-    "minimax",
-    "mimo",
-    "openrouter",
-    "openai",
-]
+DEFAULT_VENDOR_PRIORITY: list[str] = list(VENDOR_REGISTRY)
 
 VALID_ROLES = frozenset({"researcher", "briefing", "editor"})
 

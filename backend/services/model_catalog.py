@@ -11,12 +11,12 @@ from pydantic import BaseModel, ConfigDict
 
 from .client_model import (
     CLIENT_MODEL_ID_PATTERN,
-    CLIENT_MODEL_VENDORS,
     MIMO_WEB_SEARCH_MODELS,
     OPENAI_RESPONSES_WEB_SEARCH_MODELS,
     QWEN_RESPONSES_WEB_SEARCH_MODELS,
     SelectedModel,
 )
+from .provider_registry import CLIENT_MODEL_VENDORS, VENDOR_REGISTRY
 
 MODEL_CATALOG_TIMEOUT_SECONDS = 15.0
 MAX_MODEL_CATALOG_BYTES = 2_000_000
@@ -36,13 +36,9 @@ NON_TEXT_MODEL_MARKERS = (
     "realtime",
 )
 OFFICIAL_MODEL_CATALOG_URLS: dict[str, str] = {
-    "opencode": "https://opencode.ai/zen/v1/models",
-    "deepseek": "https://api.deepseek.com/models",
-    "kimi": "https://api.moonshot.cn/v1/models",
-    "minimax": "https://api.minimaxi.com/v1/models",
-    "mimo": "https://api.xiaomimimo.com/v1/models",
-    "openrouter": "https://openrouter.ai/api/v1/models/user",
-    "openai": "https://api.openai.com/v1/models",
+    vendor: config.model_catalog_url
+    for vendor, config in VENDOR_REGISTRY.items()
+    if config.model_catalog_url is not None
 }
 DYNAMIC_MODEL_VENDORS = frozenset(OFFICIAL_MODEL_CATALOG_URLS)
 # 千问按量推理和智谱当前没有文档化的模型目录接口。这里仅集中保留经过

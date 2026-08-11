@@ -12,7 +12,7 @@ from ..client_model import (
     QWEN_RESPONSES_WEB_SEARCH_MODELS,
     SelectedModel,
 )
-from ..llm_factory import VENDOR_REGISTRY
+from ..provider_registry import VENDOR_REGISTRY
 from . import CrawledPage, SearchResult, UnsupportedSearchOperation
 from .native_utils import is_public_web_url, ranked_source_score
 

@@ -5,17 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-CLIENT_MODEL_VENDORS: tuple[str, ...] = (
-    "opencode",
-    "deepseek",
-    "kimi",
-    "qwen",
-    "glm",
-    "minimax",
-    "mimo",
-    "openrouter",
-    "openai",
-)
+from .provider_registry import CLIENT_MODEL_VENDORS
+
 CLIENT_MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 QWEN_RESPONSES_WEB_SEARCH_MODELS = ("qwen3.7-plus", "qwen3.7-max")
 MIMO_WEB_SEARCH_MODELS = ("mimo-v2.5", "mimo-v2.5-pro")

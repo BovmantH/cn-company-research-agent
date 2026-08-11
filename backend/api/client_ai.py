@@ -21,12 +21,12 @@ from backend.services.client_model import (
     CLIENT_MODEL_VENDORS,
     SelectedModel,
 )
-from backend.services.llm_factory import VENDOR_REGISTRY, build_client_llm
+from backend.services.llm_factory import build_client_llm
 from backend.services.model_catalog import (
-    CURATED_MODEL_OPTIONS,
     ModelCatalogCredentialError,
     ModelCatalogUnavailable,
 )
+from backend.services.provider_registry import VENDOR_REGISTRY
 from backend.services.search import SearchProvider
 from backend.services.search.glm_provider import GlmWebSearchProvider
 from backend.services.search.mimo_provider import MiMoNativeSearchProvider
@@ -194,10 +194,10 @@ async def list_client_model_providers():
             "short_name": VENDOR_REGISTRY[vendor].short_name,
             "description": VENDOR_REGISTRY[vendor].description,
             "api_console_url": VENDOR_REGISTRY[vendor].api_console_url,
-            "catalog_source": (
-                "curated" if vendor in CURATED_MODEL_OPTIONS else "official_api"
+            "catalog_source": VENDOR_REGISTRY[vendor].catalog_source,
+            "requires_key_to_list": (
+                VENDOR_REGISTRY[vendor].catalog_source == "official_api"
             ),
-            "requires_key_to_list": vendor not in CURATED_MODEL_OPTIONS,
             "available_for_research": vendor in CLIENT_WEB_SEARCH_VENDORS,
         }
         for vendor in CLIENT_MODEL_VENDORS
