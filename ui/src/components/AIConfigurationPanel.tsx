@@ -7,7 +7,17 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, Eye, EyeOff, Info, KeyRound, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import {
+  Check,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Info,
+  KeyRound,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 
 import {
   loadClientModels as loadClientModelsDefault,
@@ -281,6 +291,22 @@ const AIConfigurationPanel = forwardRef<
             );
           })}
         </div>
+
+        {selectedProvider?.apiConsoleUrl && (
+          <p className="text-sm text-slate-600">
+            没有 API Key？{' '}
+            <a
+              aria-label={`前往${selectedProvider.shortName} API平台`}
+              href={selectedProvider.apiConsoleUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-blue-700 transition hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              前往 {selectedProvider.shortName} API 平台
+              <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+            </a>
+          </p>
+        )}
 
         {isLoadingProviders && (
           <p className="flex items-center gap-2 text-sm text-slate-500" role="status">

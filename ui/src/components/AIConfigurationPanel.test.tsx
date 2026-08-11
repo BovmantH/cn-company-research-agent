@@ -173,6 +173,73 @@ describe('AIConfigurationPanel', () => {
     renderer.unmount();
   });
 
+  it('只显示所选厂商的官方 API 平台入口，且不携带用户 Key', async () => {
+    const inputNode = { value: 'sk-browser-sentinel' };
+    let renderer!: ReactTestRenderer;
+
+    await act(async () => {
+      renderer = create(
+        <AIConfigurationPanel
+          apiUrl=""
+          disabled={false}
+          loadProviders={async () => providers}
+          loadModels={async () => qwenCatalog}
+        />,
+        {
+          createNodeMock: (element) => (
+            element.type === 'input' && element.props.id === 'client-api-key'
+              ? inputNode
+              : null
+          ),
+        },
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const qwenLink = renderer.root.findByProps({ 'aria-label': '前往Qwen API平台' });
+    expect(qwenLink.props.href)
+      .toBe('https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key');
+    expect(qwenLink.props.target).toBe('_blank');
+    expect(qwenLink.props.rel).toBe('noopener noreferrer');
+    expect(qwenLink.props.href).not.toContain('sk-browser-sentinel');
+
+    const providerButtons = renderer.root
+      .findByProps({ 'aria-label': '模型厂商' })
+      .findAllByProps({ role: 'radio' });
+    await act(async () => providerButtons[1].props.onClick());
+
+    const kimiLink = renderer.root.findByProps({ 'aria-label': '前往Kimi API平台' });
+    expect(kimiLink.props.href).toBe('https://platform.kimi.com/console/api-keys');
+    expect(renderer.root.findAllByProps({ 'aria-label': '前往Qwen API平台' })).toHaveLength(0);
+    renderer.unmount();
+  });
+
+  it('旧后端未提供安全平台地址时仍显示厂商但隐藏入口', async () => {
+    const providerWithoutLink: ClientAIProvider = {
+      ...providers[0],
+      apiConsoleUrl: null,
+    };
+    let renderer!: ReactTestRenderer;
+
+    await act(async () => {
+      renderer = create(
+        <AIConfigurationPanel
+          apiUrl=""
+          disabled={false}
+          loadProviders={async () => [providerWithoutLink]}
+          loadModels={async () => qwenCatalog}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(renderer.root.findAllByProps({ 'aria-label': '前往Qwen API平台' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ children: 'Qwen' })).toHaveLength(1);
+    renderer.unmount();
+  });
+
   it('允许显式选择部署者配置并提交旧请求模式', async () => {
     const panelRef = { current: null as AIConfigurationPanelHandle | null };
     let renderer!: ReactTestRenderer;
