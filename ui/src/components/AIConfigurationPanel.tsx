@@ -12,7 +12,6 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  Info,
   KeyRound,
   Loader2,
   RefreshCw,
@@ -64,7 +63,6 @@ const AIConfigurationPanel = forwardRef<
   const [loadedCatalogSource, setLoadedCatalogSource] = useState<
     'official_api' | 'curated' | null
   >(null);
-  const [openProviderDescription, setOpenProviderDescription] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const secretInputRef = useRef<HTMLInputElement>(null);
   const modelRequestRef = useRef<AbortController | null>(null);
@@ -72,6 +70,18 @@ const AIConfigurationPanel = forwardRef<
   const selectedProvider = useMemo(
     () => providers.find((provider) => provider.id === selectedVendor) ?? null,
     [providers, selectedVendor],
+  );
+
+  const orderedProviders = useMemo(
+    () => providers
+      .map((provider, index) => ({ provider, index }))
+      .sort((left, right) => (
+        Number(right.provider.availableForResearch)
+        - Number(left.provider.availableForResearch)
+        || left.index - right.index
+      ))
+      .map(({ provider }) => provider),
+    [providers],
   );
 
   const clearSecret = useCallback(() => {
@@ -241,31 +251,14 @@ const AIConfigurationPanel = forwardRef<
           aria-label="模型厂商"
           className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3"
         >
-          {providers.map((provider) => {
+          {orderedProviders.map((provider) => {
             const selected = provider.id === selectedVendor;
             const descriptionId = `provider-description-${provider.id}`;
-            const tooltipId = `provider-tooltip-${provider.id}`;
-            const descriptionOpen = openProviderDescription === provider.id;
             return (
               <div
                 key={provider.id}
                 data-provider-id={provider.id}
                 className="relative min-w-0"
-                onMouseEnter={() => setOpenProviderDescription(provider.id)}
-                onMouseLeave={() => setOpenProviderDescription((current) => (
-                  current === provider.id ? null : current
-                ))}
-                onBlurCapture={(event) => {
-                  if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-                  setOpenProviderDescription((current) => (
-                    current === provider.id ? null : current
-                  ));
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Escape') return;
-                  setOpenProviderDescription(null);
-                  event.stopPropagation();
-                }}
               >
                 <button
                   type="button"
@@ -273,7 +266,7 @@ const AIConfigurationPanel = forwardRef<
                   aria-checked={selected}
                   aria-describedby={descriptionId}
                   onClick={() => selectVendor(provider)}
-                  className={`relative min-h-12 w-full rounded-xl border px-3 py-2 pr-10 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`relative min-h-12 w-full rounded-xl border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     selected
                       ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm'
                       : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
@@ -294,28 +287,7 @@ const AIConfigurationPanel = forwardRef<
                     />
                   )}
                 </button>
-                <button
-                  type="button"
-                  aria-label={`查看${provider.shortName}说明`}
-                  aria-controls={tooltipId}
-                  aria-expanded={descriptionOpen}
-                  aria-describedby={descriptionOpen ? tooltipId : undefined}
-                  onClick={() => setOpenProviderDescription(provider.id)}
-                  onFocus={() => setOpenProviderDescription(provider.id)}
-                  className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                >
-                  <Info aria-hidden="true" className="h-4 w-4" />
-                </button>
                 <span id={descriptionId} className="sr-only">{provider.description}</span>
-                {descriptionOpen && (
-                  <span
-                    id={tooltipId}
-                    role="tooltip"
-                    className="mt-2 block w-full break-words rounded-xl border border-blue-100 bg-slate-950 px-3 py-2 text-xs leading-5 text-white shadow-lg"
-                  >
-                    {provider.description}
-                  </span>
-                )}
               </div>
             );
           })}
