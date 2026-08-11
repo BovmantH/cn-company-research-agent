@@ -10,3 +10,4 @@ export { default as ExamplePopup } from './ExamplePopup';
 export { default as CompanyResolutionPanel } from './CompanyResolutionPanel';
 export { default as ProfessionalDataStatus } from './ProfessionalDataStatus';
 export { default as AIConfigurationPanel } from './AIConfigurationPanel';
+export { default as OfficialVerificationPanel } from './OfficialVerificationPanel';

@@ -370,11 +370,34 @@ function App() {
 
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-gray-50 to-white p-8 relative">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(70,139,255,0.35)_1px,transparent_0)] bg-[length:24px_24px] bg-center"></div>
-      <div className="max-w-5xl mx-auto space-y-8 relative">
-        {/* 页头 */}
-        <Header glassStyle={glassStyle.card} />
+    <div className="research-shell min-h-screen">
+      <svg
+        aria-hidden="true"
+        className="research-network pointer-events-none absolute inset-x-0 top-16 h-[900px] w-full"
+        viewBox="0 0 1600 900"
+        preserveAspectRatio="none"
+      >
+        <g fill="none" stroke="currentColor" strokeWidth="1.2">
+          <path d="M-100 180 C180 18 360 90 560 250 S940 500 1200 250 1530 120 1710 220" />
+          <path d="M-80 360 C220 220 420 265 630 420 S1020 620 1280 400 1540 300 1690 360" />
+          <path d="M-120 650 C220 470 500 540 720 700 S1120 850 1420 630 1640 560 1740 610" />
+          <path d="M80 -40 C210 210 180 470 20 760" />
+          <path d="M1510 -60 C1390 210 1420 520 1600 780" />
+        </g>
+        <g fill="currentColor">
+          <circle cx="145" cy="106" r="4" />
+          <circle cx="360" cy="124" r="3" />
+          <circle cx="1190" cy="255" r="4" />
+          <circle cx="1455" cy="195" r="3" />
+          <circle cx="1320" cy="430" r="4" />
+          <circle cx="190" cy="515" r="3" />
+          <circle cx="1520" cy="675" r="4" />
+        </g>
+      </svg>
+
+      <Header />
+
+      <main id="main-content" className="relative z-10 mx-auto max-w-[1380px] px-4 pb-16 sm:px-6 xl:px-8">
 
         {/* 调研表单 */}
         <ResearchForm 
@@ -385,9 +408,10 @@ function App() {
           capabilityState={professionalFlow.capabilityState}
           professionalDataRequested={professionalDataRequested}
           onProfessionalDataChange={setProfessionalDataRequested}
-          glassStyle={glassStyle}
           loaderColor={loaderColor}
         />
+
+        <div className="mx-auto mt-10 max-w-6xl space-y-8">
 
         {needsCompanyDecision && (
           <CompanyResolutionPanel
@@ -474,7 +498,8 @@ function App() {
             glassStyle={glassStyle.card}
           />
         )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

@@ -97,7 +97,7 @@ const ResearchReport = ({
                 return (
                   <div>
                     <h1 
-                      className={`font-bold text-gray-900 break-words whitespace-pre-wrap ${isFirstH1 ? 'text-5xl mb-10 mt-4 max-w-[calc(100%-8rem)]' : 'text-3xl mb-6'}`} 
+                      className={`font-bold text-gray-900 break-words whitespace-pre-wrap ${isFirstH1 ? 'mb-10 mt-4 max-w-none text-3xl sm:text-4xl lg:max-w-[calc(100%-8rem)] lg:text-5xl' : 'mb-6 text-2xl sm:text-3xl'}`}
                       {...props} 
                     >
                       {children}
