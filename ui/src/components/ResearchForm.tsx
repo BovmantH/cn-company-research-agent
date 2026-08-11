@@ -6,9 +6,17 @@ import type { ExampleCompany } from './exampleCompanies';
 import ProfessionalDataOption from './ProfessionalDataOption';
 import type { CapabilityLoadState } from '../api/companyIntelligence';
 import type { ResearchFormValues } from '../research/model';
+import AIConfigurationPanel, {
+  type AIConfigurationPanelHandle,
+} from './AIConfigurationPanel';
+import type { ClientAISelection } from '../api/clientAI';
 
 interface ResearchFormProps {
-  onSubmit: (formData: ResearchFormValues) => Promise<void>;
+  onSubmit: (
+    formData: ResearchFormValues,
+    clientAI?: ClientAISelection,
+  ) => Promise<void>;
+  apiUrl: string;
   isBusy: boolean;
   busyLabel: string;
   capabilityState: CapabilityLoadState;
@@ -23,6 +31,7 @@ interface ResearchFormProps {
 
 const ResearchForm = ({
   onSubmit,
+  apiUrl,
   isBusy,
   busyLabel,
   capabilityState,
@@ -44,10 +53,12 @@ const ResearchForm = ({
   // 动画状态
   const [showExampleSuggestion, setShowExampleSuggestion] = useState(true);
   const [isExampleAnimating, setIsExampleAnimating] = useState(false);
+  const [aiError, setAIError] = useState<string | null>(null);
   
   // 动画所需的表单节点引用
   const formRef = useRef<HTMLDivElement>(null);
   const exampleRef = useRef<HTMLDivElement>(null);
+  const aiPanelRef = useRef<AIConfigurationPanelHandle>(null);
   
   // 填写公司名称后隐藏示例建议
   useEffect(() => {
@@ -72,7 +83,20 @@ const ResearchForm = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit({ ...formData, professionalDataRequested });
+    const aiSubmission = aiPanelRef.current?.getSubmission() ?? null;
+    if (!aiSubmission) {
+      setAIError('请选择已开放联网调研的厂商、模型，并填写 API Key');
+      return;
+    }
+    setAIError(null);
+    try {
+      await onSubmit(
+        { ...formData, professionalDataRequested },
+        aiSubmission.mode === 'client' ? aiSubmission.selection : undefined,
+      );
+    } finally {
+      aiPanelRef.current?.clearSecret();
+    }
   };
   
   const fillExampleData = (example: ExampleCompany) => {
@@ -106,11 +130,6 @@ const ResearchForm = ({
       // 更新表单数据
       setFormData(newFormData);
       
-      // 当前空闲时自动开始调研
-      if (!isBusy) {
-        onSubmit({ ...newFormData, professionalDataRequested });
-      }
-      
       setIsExampleAnimating(false);
     }, 500);
   };
@@ -128,6 +147,14 @@ const ResearchForm = ({
       {/* 主表单 */}
       <div className={`${glassStyle.card} backdrop-blur-2xl bg-white/90 border-gray-200/50 shadow-xl`}>
         <form onSubmit={handleSubmit} className="space-y-6">
+          <AIConfigurationPanel
+            ref={aiPanelRef}
+            apiUrl={apiUrl}
+            disabled={isBusy}
+          />
+          {aiError && (
+            <p role="alert" className="text-sm text-red-600">{aiError}</p>
+          )}
           <fieldset disabled={isBusy} className="space-y-6 disabled:opacity-75">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* 公司名称 */}

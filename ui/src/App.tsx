@@ -18,6 +18,7 @@ import {
   researchStreamReducer,
 } from './research/researchStreamReducer';
 import type { ResearchFormValues } from './research/model';
+import type { ClientAISelection } from './api/clientAI';
 import {
   buildResearchRequest,
   parseResearchAcceptedResponse,
@@ -63,6 +64,7 @@ function App() {
     ? { step: '连接恢复中', message: '进度连接中断，正在自动重连……' }
     : status;
   const eventSourceRef = useRef<EventSource | null>(null);
+  const pendingClientAIRef = useRef<ClientAISelection | null>(null);
   const lastHandledEventIdRef = useRef(0);
   const [originalCompanyName, setOriginalCompanyName] = useState<string>("");
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -203,6 +205,7 @@ function App() {
   // 组件卸载时关闭 SSE 连接
   useEffect(() => {
     return () => {
+      pendingClientAIRef.current = null;
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -233,6 +236,7 @@ function App() {
         values,
         resolutionToken,
         professionalFallbackReason,
+        pendingClientAIRef.current ?? undefined,
       );
 
       const response = await fetch(url, {
@@ -263,16 +267,20 @@ function App() {
         type: 'submit_failed',
         message: err instanceof Error ? err.message : "启动调研失败",
       });
+    } finally {
+      pendingClientAIRef.current = null;
     }
   };
 
   const handleFormSubmit = async (
     formData: ResearchFormValues,
+    clientAI?: ClientAISelection,
   ): Promise<void> => {
     if (isComplete) {
       resetResearch();
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
+    pendingClientAIRef.current = clientAI ?? null;
     const outcome = await professionalFlow.prepare(formData);
     if (outcome.kind === 'ready') await startResearch(outcome.prepared);
   };
@@ -288,6 +296,11 @@ function App() {
       setProfessionalDataRequested(false);
       void startResearch(prepared);
     }
+  };
+
+  const handleResolutionCancel = () => {
+    pendingClientAIRef.current = null;
+    professionalFlow.cancel();
   };
 
   // 生成并下载 PDF 报告
@@ -366,6 +379,7 @@ function App() {
         {/* 调研表单 */}
         <ResearchForm 
           onSubmit={handleFormSubmit}
+          apiUrl={API_URL}
           isBusy={isFormBusy}
           busyLabel={formBusyLabel}
           capabilityState={professionalFlow.capabilityState}
@@ -380,7 +394,7 @@ function App() {
             flow={professionalFlow.flowState}
             onSelect={handleCandidateSelect}
             onContinueBasic={handleContinueBasic}
-            onCancel={professionalFlow.cancel}
+            onCancel={handleResolutionCancel}
           />
         )}
 

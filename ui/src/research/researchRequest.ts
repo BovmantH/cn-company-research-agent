@@ -1,4 +1,5 @@
 import type { ResearchFormValues } from './model';
+import type { ClientAISelection } from '../api/clientAI';
 import {
   PROFESSIONAL_FALLBACK_REASONS,
   type ProfessionalFallbackReason,
@@ -12,6 +13,12 @@ type ResearchRequestPayload = {
   company_url: string | undefined;
   industry: string | undefined;
   hq_location: string | undefined;
+  ai?: {
+    vendor: string;
+    model: string;
+    api_key: string;
+    web_search: true;
+  };
   professional_data?:
     | {
         enabled: true;
@@ -60,6 +67,7 @@ export const buildResearchRequest = (
   values: ResearchFormValues,
   resolutionToken: string | null,
   professionalFallbackReason: ProfessionalFallbackReason | null,
+  clientAI?: ClientAISelection,
 ): ResearchRequestPayload => {
   const companyUrl = values.companyUrl
     ? values.companyUrl.startsWith('http://') || values.companyUrl.startsWith('https://')
@@ -71,6 +79,16 @@ export const buildResearchRequest = (
     company_url: companyUrl,
     industry: values.companyIndustry || undefined,
     hq_location: values.companyHq || undefined,
+    ...(clientAI
+      ? {
+          ai: {
+            vendor: clientAI.vendor,
+            model: clientAI.model,
+            api_key: clientAI.apiKey,
+            web_search: true as const,
+          },
+        }
+      : {}),
     ...(values.professionalDataRequested && resolutionToken
       ? {
           professional_data: {

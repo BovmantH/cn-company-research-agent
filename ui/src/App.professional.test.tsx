@@ -5,6 +5,7 @@ import App from './App';
 import CompanyResolutionPanel from './components/CompanyResolutionPanel';
 import ResearchForm from './components/ResearchForm';
 import type { ResearchFormValues } from './research/model';
+import type { ClientAISelection } from './api/clientAI';
 
 
 vi.mock('./components/LocationInput', () => ({ default: () => null }));
@@ -33,6 +34,11 @@ const values: ResearchFormValues = {
   companyIndustry: '软件',
   professionalDataRequested: true,
 };
+const clientAI: ClientAISelection = {
+  vendor: 'qwen',
+  model: 'qwen3.7-plus',
+  apiKey: 'sk-browser-sentinel',
+};
 
 
 describe('App professional fallback', () => {
@@ -46,6 +52,25 @@ describe('App professional fallback', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       requestedUrls.push(url);
+      if (url.endsWith('/ai/providers')) {
+        return new Response(JSON.stringify({
+          providers: [{
+            id: 'qwen',
+            name: '通义千问',
+            catalog_source: 'curated',
+            requires_key_to_list: false,
+            available_for_research: true,
+          }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/ai/models')) {
+        return new Response(JSON.stringify({
+          vendor: 'qwen',
+          source: 'curated',
+          available_for_research: true,
+          models: [{ id: 'qwen3.7-plus', name: 'qwen3.7-plus' }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
       if (url.endsWith('/capabilities')) {
         return new Response(JSON.stringify({
           professional_company_data: {
@@ -81,7 +106,7 @@ describe('App professional fallback', () => {
     });
 
     await act(async () => {
-      await renderer.root.findByType(ResearchForm).props.onSubmit(values);
+      await renderer.root.findByType(ResearchForm).props.onSubmit(values, clientAI);
     });
     const prompt = renderer.root.findByType(CompanyResolutionPanel);
     expect(prompt.props.flow).toMatchObject({
@@ -101,6 +126,12 @@ describe('App professional fallback', () => {
       company_url: 'https://example.com',
       industry: '软件',
       hq_location: '上海',
+      ai: {
+        vendor: 'qwen',
+        model: 'qwen3.7-plus',
+        api_key: 'sk-browser-sentinel',
+        web_search: true,
+      },
       professional_data: {
         enabled: false,
         fallback_reason: 'provider_unavailable',

@@ -5,6 +5,7 @@ import {
   buildResearchRequest,
   parseResearchAcceptedResponse,
 } from './researchRequest';
+import type { ClientAISelection } from '../api/clientAI';
 
 
 const values: ResearchFormValues = {
@@ -13,6 +14,11 @@ const values: ResearchFormValues = {
   companyHq: '上海',
   companyIndustry: '软件',
   professionalDataRequested: false,
+};
+const clientAI: ClientAISelection = {
+  vendor: 'qwen',
+  model: 'qwen3.7-plus',
+  apiKey: 'sk-browser-sentinel',
 };
 
 
@@ -24,6 +30,18 @@ describe('buildResearchRequest', () => {
       industry: '软件',
       hq_location: '上海',
     });
+  });
+
+  it('用户选择模型时只增加固定 AI 字段且不允许自定义端点', () => {
+    const payload = buildResearchRequest(values, null, null, clientAI);
+
+    expect(payload.ai).toEqual({
+      vendor: 'qwen',
+      model: 'qwen3.7-plus',
+      api_key: 'sk-browser-sentinel',
+      web_search: true,
+    });
+    expect(JSON.stringify(payload)).not.toContain('base_url');
   });
 
   it('开启后只增加服务端签发的 Token，不提交信用代码', () => {
