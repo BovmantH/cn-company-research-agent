@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: cn-company-research-agent
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
