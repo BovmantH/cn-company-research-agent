@@ -2,6 +2,8 @@
 
 > 🙏 **本项目基于 [guy-hartstein/company-research-agent](https://github.com/guy-hartstein/company-research-agent)（Apache License 2.0）改造，由 Guy Hartstein 创作。**
 >
+> **本项目最初基于 Company Research Agent 演进，现已重构为面向中国公司的开源深度调研 Web 服务。**除保留上游归属和部分技术起点外，当前项目已经形成完全不同的产品定位、业务闭环、模型与检索接入、专业数据边界、安全策略、前后端交互和部署体系，不再是原项目的简单汉化或同功能复刻。
+>
 > 主要差异：
 >
 > - 🇨🇳 **国产原厂直连** —— 服务端支持 DeepSeek、Kimi、Qwen、GLM、MiniMax、MiMo，无需经过聚合平台
