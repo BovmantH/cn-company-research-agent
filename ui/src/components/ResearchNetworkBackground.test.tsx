@@ -3,22 +3,22 @@ import { describe, expect, it } from 'vitest';
 
 import ResearchNetworkBackground from './ResearchNetworkBackground';
 
-
 describe('ResearchNetworkBackground', () => {
-  it('以装饰性 SVG 渲染三档流速路径与呼吸节点', () => {
+  it('以装饰性 SVG 渲染三层信息流光、方向轨迹与移动光点', () => {
     const renderer = create(<ResearchNetworkBackground />);
     const network = renderer.root.findByType('svg');
+    const paths = network.findAllByType('path');
+    const sparks = network.findAllByProps({ className: 'research-flow-spark' });
 
     expect(network.props['aria-hidden']).toBe('true');
-    expect(network.findAllByType('path').slice(0, 3).map((path) => path.props.className))
-      .toEqual([
-        'research-network-flow research-network-flow-slow',
-        'research-network-flow research-network-flow-medium',
-        'research-network-flow research-network-flow-fast',
-      ]);
-    expect(network.findAllByType('circle').every(
-      (node) => node.props.className === 'research-network-node',
-    )).toBe(true);
+    expect(network.props.className).toContain('research-flow-background');
+    expect(paths.filter((path) => path.props.className.includes('research-flow-ribbon')))
+      .toHaveLength(3);
+    expect(paths.filter((path) => path.props.className.includes('research-flow-trace')))
+      .toHaveLength(3);
+    expect(sparks).toHaveLength(3);
+    expect(sparks.every((spark) => spark.findAllByType('animateMotion').length === 1))
+      .toBe(true);
 
     renderer.unmount();
   });

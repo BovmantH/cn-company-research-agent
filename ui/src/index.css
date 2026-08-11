@@ -39,10 +39,10 @@ textarea {
     overflow-x: hidden;
     isolation: isolate;
     background:
-      radial-gradient(circle at 8% 7%, rgb(189 215 255 / 72%), transparent 27%),
-      radial-gradient(circle at 93% 84%, rgb(102 174 255 / 50%), transparent 30%),
-      radial-gradient(circle at 74% 22%, rgb(255 255 255 / 92%), transparent 28%),
-      linear-gradient(145deg, #edf5ff 0%, #fbfdff 48%, #e7f3ff 100%);
+      radial-gradient(circle at 4% 8%, rgb(147 197 253 / 48%), transparent 28%),
+      radial-gradient(circle at 96% 88%, rgb(56 189 248 / 34%), transparent 30%),
+      radial-gradient(circle at 68% 18%, rgb(255 255 255 / 96%), transparent 30%),
+      linear-gradient(145deg, #eaf3ff 0%, #fcfeff 47%, #e3f1ff 100%);
   }
 
   .research-shell::before {
@@ -50,66 +50,81 @@ textarea {
     inset: 64px 0 0;
     z-index: -2;
     content: "";
-    background-image:
-      linear-gradient(rgb(37 99 235 / 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(37 99 235 / 0.035) 1px, transparent 1px);
-    background-size: 56px 56px;
-    mask-image: linear-gradient(to bottom, black, transparent 85%);
+    background:
+      linear-gradient(118deg, transparent 0 27%, rgb(96 165 250 / 10%) 34%, transparent 43%),
+      linear-gradient(118deg, transparent 0 58%, rgb(34 211 238 / 8%) 66%, transparent 74%);
+    background-size: 145% 145%;
+    animation: research-flow-sheen 22s ease-in-out infinite alternate;
+    mask-image: linear-gradient(to bottom, black 0%, rgb(0 0 0 / 82%) 65%, transparent 100%);
   }
 
-  .research-network {
+  .research-flow-background {
     z-index: -1;
-    color: rgb(52 132 246 / 18%);
-    filter: drop-shadow(0 0 12px rgb(59 130 246 / 15%));
+    overflow: visible;
+    color: rgb(37 99 235 / 62%);
   }
 
-  .research-network-flow {
+  .research-flow-ribbon {
+    stroke-width: 54;
+    opacity: 0.64;
+    transform-box: view-box;
+    transform-origin: center;
+    animation: research-flow-ribbon-drift 18s ease-in-out infinite alternate;
+  }
+
+  .research-flow-ribbon-secondary {
+    stroke-width: 42;
+    opacity: 0.5;
+    animation-duration: 22s;
+    animation-direction: alternate-reverse;
+  }
+
+  .research-flow-ribbon-tertiary {
+    stroke-width: 34;
+    opacity: 0.42;
+    animation-duration: 25s;
+  }
+
+  .research-flow-trace {
+    fill: none;
+    stroke: rgb(37 99 235 / 48%);
+    stroke-width: 1.7;
     stroke-linecap: round;
-    stroke-dasharray: 2 18;
-    animation: research-network-flow 21s linear infinite;
+    stroke-dasharray: 2 14;
+    filter: drop-shadow(0 0 5px rgb(14 165 233 / 48%));
+    animation: research-flow-trace 18s linear infinite;
   }
 
-  .research-network-flow-slow {
-    animation-duration: 24s;
-  }
-
-  .research-network-flow-medium {
+  .research-flow-trace-secondary {
     animation-duration: 21s;
   }
 
-  .research-network-flow-fast {
-    animation-duration: 18s;
+  .research-flow-trace-tertiary {
+    animation-duration: 24s;
   }
 
-  .research-network-node {
+  .research-flow-halo {
     transform-box: fill-box;
     transform-origin: center;
-    animation: research-network-node 5.4s ease-in-out infinite;
-    animation-delay: -0.45s;
+    animation: research-flow-halo 16s ease-in-out infinite alternate;
   }
 
-  .research-network-node:nth-child(2) {
-    animation-delay: -1.2s;
+  .research-flow-halo-end {
+    animation-delay: -8s;
+    animation-direction: alternate-reverse;
   }
 
-  .research-network-node:nth-child(3) {
-    animation-delay: -1.95s;
+  .research-flow-particle {
+    transform-box: fill-box;
+    transform-origin: center;
+    filter: drop-shadow(0 0 6px rgb(14 165 233 / 72%));
+    animation: research-flow-particle 5.8s ease-in-out infinite;
   }
 
-  .research-network-node:nth-child(4) {
-    animation-delay: -2.7s;
-  }
-
-  .research-network-node:nth-child(5) {
-    animation-delay: -3.45s;
-  }
-
-  .research-network-node:nth-child(6) {
-    animation-delay: -4.2s;
-  }
-
-  .research-network-node:nth-child(7) {
-    animation-delay: -4.95s;
+  .research-flow-spark {
+    fill: #fff;
+    stroke: #38bdf8;
+    stroke-width: 2;
   }
 
   .research-card {
@@ -147,22 +162,65 @@ textarea {
   }
 }
 
-@keyframes research-network-flow {
+@keyframes research-flow-sheen {
+  from {
+    background-position: 10% 0%;
+  }
+
   to {
-    stroke-dashoffset: -80;
+    background-position: 85% 100%;
   }
 }
 
-@keyframes research-network-node {
+@keyframes research-flow-ribbon-drift {
+  from {
+    transform: translate3d(-24px, -8px, 0) scale(1.015);
+  }
+
+  to {
+    transform: translate3d(30px, 12px, 0) scale(1.045);
+  }
+}
+
+@keyframes research-flow-trace {
+  to {
+    stroke-dashoffset: -128;
+  }
+}
+
+@keyframes research-flow-halo {
+  from {
+    opacity: 0.45;
+    transform: translate3d(-16px, -8px, 0) scale(0.94);
+  }
+
+  to {
+    opacity: 0.8;
+    transform: translate3d(22px, 12px, 0) scale(1.08);
+  }
+}
+
+@keyframes research-flow-particle {
   0%,
   100% {
-    opacity: 0.5;
-    transform: scale(0.9);
+    opacity: 0.36;
+    transform: translateY(4px) scale(0.8);
   }
 
   50% {
     opacity: 1;
-    transform: scale(1.18);
+    transform: translateY(-5px) scale(1.3);
+  }
+}
+
+@media (width <= 767px) {
+  .research-flow-background {
+    opacity: 0.74;
+  }
+
+  .research-flow-ribbon-secondary,
+  .research-flow-trace-secondary {
+    opacity: 0.28;
   }
 }
 
@@ -180,8 +238,15 @@ textarea {
     transition-duration: 0.01ms !important;
   }
 
-  .research-network-flow,
-  .research-network-node {
+  .research-shell::before,
+  .research-flow-ribbon,
+  .research-flow-trace,
+  .research-flow-halo,
+  .research-flow-particle {
     animation: none !important;
+  }
+
+  .research-flow-spark {
+    display: none;
   }
 }
