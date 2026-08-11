@@ -341,7 +341,7 @@ DEEPSEEK_API_KEY=sk-...
 MOONSHOT_API_KEY=sk-...
 ```
 
-当前内置配置（核对日期：2026-08-11，以 `backend/services/llm_factory.py` 中的 `VENDOR_REGISTRY` 为准）：
+当前内置配置（核对日期：2026-08-11，以 `backend/services/provider_registry.py` 中的 `VENDOR_REGISTRY` 为准）：
 
 | 供应商 | 服务端环境变量 | 端点 | 默认模型标识 |
 | --- | --- | --- | --- |
