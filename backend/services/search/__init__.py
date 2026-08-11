@@ -56,6 +56,10 @@ class CrawledPage:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
+class UnsupportedSearchOperation(RuntimeError):
+    """数据提供方不支持当前抓取或正文抽取操作。"""
+
+
 @runtime_checkable
 class SearchProvider(Protocol):
     """检索数据提供方接口。
@@ -130,5 +134,6 @@ __all__ = [
     "SearchProvider",
     "SearchResult",
     "CrawledPage",
+    "UnsupportedSearchOperation",
     "get_search_provider",
 ]
