@@ -63,6 +63,54 @@ textarea {
     filter: drop-shadow(0 0 12px rgb(59 130 246 / 15%));
   }
 
+  .research-network-flow {
+    stroke-linecap: round;
+    stroke-dasharray: 2 18;
+    animation: research-network-flow 21s linear infinite;
+  }
+
+  .research-network-flow-slow {
+    animation-duration: 24s;
+  }
+
+  .research-network-flow-medium {
+    animation-duration: 21s;
+  }
+
+  .research-network-flow-fast {
+    animation-duration: 18s;
+  }
+
+  .research-network-node {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: research-network-node 5.4s ease-in-out infinite;
+  }
+
+  .research-network-node:nth-child(2) {
+    animation-delay: -0.9s;
+  }
+
+  .research-network-node:nth-child(3) {
+    animation-delay: -1.8s;
+  }
+
+  .research-network-node:nth-child(4) {
+    animation-delay: -2.7s;
+  }
+
+  .research-network-node:nth-child(5) {
+    animation-delay: -3.6s;
+  }
+
+  .research-network-node:nth-child(6) {
+    animation-delay: -4.5s;
+  }
+
+  .research-network-node:nth-child(7) {
+    animation-delay: -5.4s;
+  }
+
   .research-card {
     border: 1px solid rgb(191 211 236 / 82%);
     border-radius: 18px;
@@ -98,6 +146,25 @@ textarea {
   }
 }
 
+@keyframes research-network-flow {
+  to {
+    stroke-dashoffset: -80;
+  }
+}
+
+@keyframes research-network-node {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -110,5 +177,10 @@ textarea {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .research-network-flow,
+  .research-network-node {
+    animation: none !important;
   }
 }

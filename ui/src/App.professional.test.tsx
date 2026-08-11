@@ -107,6 +107,21 @@ describe('App professional fallback', () => {
       await Promise.resolve();
     });
 
+    const network = renderer.root.findAllByType('svg').find(
+      (node) => String(node.props.className).includes('research-network'),
+    );
+    expect(network).toBeDefined();
+    expect(network?.props['aria-hidden']).toBe('true');
+    expect(network?.findAllByType('path').slice(0, 3).map((path) => path.props.className))
+      .toEqual([
+        'research-network-flow research-network-flow-slow',
+        'research-network-flow research-network-flow-medium',
+        'research-network-flow research-network-flow-fast',
+      ]);
+    expect(network?.findAllByType('circle').every(
+      (node) => String(node.props.className).includes('research-network-node'),
+    )).toBe(true);
+
     await act(async () => {
       await renderer.root.findByType(ResearchForm).props.onSubmit(values, clientAI);
     });
