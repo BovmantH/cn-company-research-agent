@@ -377,7 +377,7 @@ function App() {
 
       <Header />
 
-      <main id="main-content" className="relative z-10 mx-auto max-w-[1380px] px-4 pb-16 sm:px-6 xl:px-8">
+      <main id="main-content" className="relative z-10 mx-auto max-w-[1380px] px-4 pb-8 sm:px-6 sm:pb-10 xl:px-8">
 
         {/* 调研表单 */}
         <ResearchForm 
@@ -391,7 +391,7 @@ function App() {
           loaderColor={loaderColor}
         />
 
-        <div className="mx-auto mt-10 max-w-6xl space-y-8">
+        <div className="research-results mx-auto mt-10 max-w-6xl space-y-8 empty:mt-0">
 
         {needsCompanyDecision && (
           <CompanyResolutionPanel
