@@ -7,7 +7,11 @@ from typing import Any
 
 import httpx
 
-from ..client_model import CLIENT_MODEL_ID_PATTERN, SelectedModel
+from ..client_model import (
+    CLIENT_MODEL_ID_PATTERN,
+    GLM_WEB_SEARCH_MODELS,
+    SelectedModel,
+)
 from . import CrawledPage, SearchResult, UnsupportedSearchOperation
 from .native_http import NativeSearchResponseInvalid, post_native_search_json
 from .native_utils import is_public_web_url, ranked_source_score, safe_string
@@ -43,6 +47,8 @@ class GlmWebSearchProvider:
         normalized_model = selection.model.strip()
         if not CLIENT_MODEL_ID_PATTERN.fullmatch(normalized_model):
             raise ValueError("智谱模型标识格式不合法")
+        if normalized_model not in GLM_WEB_SEARCH_MODELS:
+            raise ValueError("该智谱模型当前不支持原生联网检索")
         self._authorization = f"Bearer {normalized_key}"
         self._client = client
 

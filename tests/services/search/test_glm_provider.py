@@ -181,6 +181,11 @@ async def test_glm_provider_explicitly_rejects_page_operations() -> None:
             SelectedModel(vendor="qwen", model="qwen3.7-plus"),
             "只能使用智谱模型选择",
         ),
+        (
+            SENTINEL_KEY,
+            SelectedModel(vendor="glm", model="glm-unverified"),
+            "当前不支持原生联网检索",
+        ),
     ],
 )
 def test_glm_provider_rejects_invalid_configuration(

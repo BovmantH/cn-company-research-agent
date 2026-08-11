@@ -7,7 +7,7 @@ import json
 import httpx
 import pytest
 
-from backend.services.client_model import CLIENT_MODEL_VENDORS
+from backend.services.client_model import CLIENT_MODEL_VENDORS, GLM_WEB_SEARCH_MODELS
 from backend.services.llm_factory import VENDOR_REGISTRY
 from backend.services.model_catalog import (
     CURATED_MODEL_OPTIONS,
@@ -47,6 +47,15 @@ def test_every_client_vendor_has_exactly_one_catalog_source() -> None:
         set(DYNAMIC_MODEL_VENDORS) | set(CURATED_MODEL_OPTIONS)
     )
     assert not set(DYNAMIC_MODEL_VENDORS) & set(CURATED_MODEL_OPTIONS)
+
+
+def test_glm_curated_catalog_reuses_web_search_allowlist() -> None:
+    assert tuple(model_id for model_id, _name in CURATED_MODEL_OPTIONS["glm"]) == (
+        GLM_WEB_SEARCH_MODELS
+    )
+    assert set(VENDOR_REGISTRY["glm"].default_models.values()) <= set(
+        GLM_WEB_SEARCH_MODELS
+    )
 
 
 def test_vendor_registry_owns_catalog_metadata() -> None:

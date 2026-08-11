@@ -11,9 +11,9 @@ from pydantic import BaseModel, ConfigDict
 
 from .client_model import (
     CLIENT_MODEL_ID_PATTERN,
-    MIMO_WEB_SEARCH_MODELS,
-    OPENAI_RESPONSES_WEB_SEARCH_MODELS,
+    GLM_WEB_SEARCH_MODELS,
     QWEN_RESPONSES_WEB_SEARCH_MODELS,
+    WEB_SEARCH_MODEL_ALLOWLISTS,
     SelectedModel,
 )
 from .provider_registry import CLIENT_MODEL_VENDORS, VENDOR_REGISTRY
@@ -48,10 +48,12 @@ CURATED_MODEL_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
         (model_id, model_id.replace("qwen", "Qwen").replace("-", " ").title())
         for model_id in QWEN_RESPONSES_WEB_SEARCH_MODELS
     ),
-    "glm": (
-        ("glm-4.7", "GLM-4.7"),
-        ("glm-5.2", "GLM-5.2"),
-        ("glm-4.7-flash", "GLM-4.7 Flash"),
+    "glm": tuple(
+        (
+            model_id,
+            model_id.replace("glm-", "GLM-").replace("-flash", " Flash"),
+        )
+        for model_id in GLM_WEB_SEARCH_MODELS
     ),
 }
 
@@ -122,6 +124,7 @@ def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
 
     options: list[ModelOption] = []
     seen: set[str] = set()
+    model_allowlist = WEB_SEARCH_MODEL_ALLOWLISTS.get(vendor)
     for record in records[:MAX_MODEL_COUNT]:
         if not isinstance(record, Mapping) or not _has_text_output(record):
             continue
@@ -132,9 +135,7 @@ def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
             or model_id in seen
         ):
             continue
-        if vendor == "mimo" and model_id not in MIMO_WEB_SEARCH_MODELS:
-            continue
-        if vendor == "openai" and model_id not in OPENAI_RESPONSES_WEB_SEARCH_MODELS:
+        if model_allowlist is not None and model_id not in model_allowlist:
             continue
         if vendor == "openrouter":
             supported_parameters = record.get("supported_parameters")
