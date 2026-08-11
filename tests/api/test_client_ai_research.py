@@ -9,7 +9,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 import application
+from backend.services.client_model import SelectedModel
 from backend.services.model_catalog import ModelCatalogService
+from backend.services.search.glm_provider import GlmWebSearchProvider
+from backend.services.search.mimo_provider import MiMoNativeSearchProvider
 from backend.services.search.qwen_provider import QwenNativeSearchProvider
 
 SENTINEL_KEY = "sk-user-secret-sentinel"
@@ -96,6 +99,8 @@ def test_provider_options_come_from_backend_capability_registry() -> None:
     assert providers["kimi"]["catalog_source"] == "official_api"
     assert providers["kimi"]["requires_key_to_list"] is True
     assert providers["kimi"]["available_for_research"] is False
+    assert providers["glm"]["available_for_research"] is True
+    assert providers["mimo"]["available_for_research"] is True
 
 
 def test_provider_options_expose_safe_official_api_console_urls() -> None:
@@ -181,6 +186,79 @@ def test_research_uses_ephemeral_qwen_dependencies_without_exposing_key(
     assert dependencies.editor_llm.model_name == "qwen3.7-plus"
     assert SENTINEL_KEY not in repr(dependencies)
     assert SENTINEL_KEY not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("vendor", "model", "expected_provider"),
+    [
+        ("glm", "glm-5.2", GlmWebSearchProvider),
+        ("mimo", "mimo-v2.5", MiMoNativeSearchProvider),
+    ],
+)
+def test_research_builds_selected_native_search_provider(
+    vendor: str,
+    model: str,
+    expected_provider: type[object],
+    capture_research: dict[str, Any],
+) -> None:
+    class StubCatalog:
+        async def require_model(self, **_kwargs: Any) -> SelectedModel:
+            return SelectedModel(vendor=vendor, model=model)
+
+    application.app.state.model_catalog = StubCatalog()
+
+    response = TestClient(application.app).post(
+        "/research",
+        json=_payload(vendor=vendor, model=model),
+    )
+
+    assert response.status_code == 200
+    dependencies = capture_research["kwargs"]["research_dependencies"]
+    assert isinstance(dependencies.search, expected_provider)
+    assert dependencies.researcher_llm.model_name == model
+    assert SENTINEL_KEY not in response.text
+    assert SENTINEL_KEY not in repr(dependencies)
+
+
+def test_mimo_token_plan_key_is_rejected_before_model_catalog_request() -> None:
+    class FailIfCalledCatalog:
+        async def require_model(self, **_kwargs: Any) -> SelectedModel:
+            raise AssertionError("Token Plan Key 不得发送到普通 API 模型目录")
+
+    application.app.state.model_catalog = FailIfCalledCatalog()
+
+    response = TestClient(application.app).post(
+        "/research",
+        json=_payload(
+            vendor="mimo",
+            model="mimo-v2.5",
+            api_key="tp-offline-sentinel",
+        ),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "请求参数有误: 字段取值不合法"
+    assert "tp-offline-sentinel" not in response.text
+
+
+def test_mimo_token_plan_key_is_rejected_before_listing_models() -> None:
+    class FailIfCalledCatalog:
+        async def list_models(self, *_args: Any, **_kwargs: Any) -> None:
+            raise AssertionError("Token Plan Key 不得发送到普通 API 模型目录")
+
+    application.app.state.model_catalog = FailIfCalledCatalog()
+
+    response = TestClient(application.app).post(
+        "/ai/models",
+        json={
+            "vendor": "mimo",
+            "api_key": "tp-offline-catalog-sentinel",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "请求参数有误: 字段取值不合法"
+    assert "tp-offline-catalog-sentinel" not in response.text
 
 
 @pytest.mark.parametrize(

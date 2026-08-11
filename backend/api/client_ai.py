@@ -27,13 +27,21 @@ from backend.services.model_catalog import (
     ModelCatalogCredentialError,
     ModelCatalogUnavailable,
 )
+from backend.services.search import SearchProvider
+from backend.services.search.glm_provider import GlmWebSearchProvider
+from backend.services.search.mimo_provider import MiMoNativeSearchProvider
 from backend.services.search.qwen_provider import QwenNativeSearchProvider
 
 router = APIRouter(prefix="/ai", tags=["任务级模型"])
 
 MIN_CLIENT_API_KEY_LENGTH = 8
 MAX_CLIENT_API_KEY_LENGTH = 4_096
-CLIENT_WEB_SEARCH_VENDORS = frozenset({"qwen"})
+CLIENT_SEARCH_PROVIDER_TYPES: dict[str, type[SearchProvider]] = {
+    "qwen": QwenNativeSearchProvider,
+    "glm": GlmWebSearchProvider,
+    "mimo": MiMoNativeSearchProvider,
+}
+CLIENT_WEB_SEARCH_VENDORS = frozenset(CLIENT_SEARCH_PROVIDER_TYPES)
 
 
 def _validate_client_api_key(value: str) -> str:
@@ -66,6 +74,17 @@ class ModelCatalogRequest(BaseModel):
             return value
         return _validate_client_api_key(value)
 
+    @model_validator(mode="after")
+    def reject_mimo_token_plan_key(self) -> ModelCatalogRequest:
+        """普通 MiMo 模型目录不能接收使用独立端点的 Token Plan Key。"""
+        if (
+            self.vendor == "mimo"
+            and self.api_key is not None
+            and self.api_key.get_secret_value().startswith("tp-")
+        ):
+            raise ValueError("当前按量 API 端点不支持 Token Plan Key")
+        return self
+
 
 class ClientAIRequest(BaseModel):
     """Web 用户为单次调研提交的模型与联网配置。"""
@@ -95,6 +114,8 @@ class ClientAIRequest(BaseModel):
     def validate_client_selection(self) -> ClientAIRequest:
         if self.vendor not in CLIENT_WEB_SEARCH_VENDORS:
             raise ValueError("当前尚未开放该厂商的用户自带 Key 联网调研")
+        if self.vendor == "mimo" and self.api_key.get_secret_value().startswith("tp-"):
+            raise ValueError("当前按量 API 端点不支持 Token Plan Key")
         if not CLIENT_MODEL_ID_PATTERN.fullmatch(self.model):
             raise ValueError("模型标识格式不合法")
         return self
@@ -107,8 +128,11 @@ def build_client_research_dependencies(
     """构造与当前请求绑定的模型和联网实例，不读取服务端厂商选择。"""
     api_key = config.api_key.get_secret_value()
     common = {"selection": selection, "api_key": api_key}
+    provider_type = CLIENT_SEARCH_PROVIDER_TYPES.get(selection.vendor)
+    if provider_type is None:
+        raise ValueError("当前尚未开放该厂商的用户自带 Key 联网调研")
     return ResearchDependencies(
-        search=QwenNativeSearchProvider(api_key=api_key, selection=selection),
+        search=provider_type(api_key=api_key, selection=selection),
         researcher_llm=build_client_llm(
             role="researcher",
             streaming=True,

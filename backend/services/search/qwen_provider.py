@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from typing import Any
-from urllib.parse import urlsplit
 
 from openai import AsyncOpenAI
 
@@ -15,6 +14,7 @@ from ..client_model import (
 )
 from ..llm_factory import VENDOR_REGISTRY
 from . import CrawledPage, SearchResult, UnsupportedSearchOperation
+from .native_utils import is_public_web_url, ranked_source_score
 
 MAX_SEARCH_QUERY_LENGTH = 500
 MAX_SEARCH_RESULTS = 10
@@ -134,7 +134,7 @@ def _citation_results(
         nested = item.get("url_citation")
         citation = nested if isinstance(nested, Mapping) else item
         url = citation.get("url")
-        if not isinstance(url, str) or not _is_public_web_url(url) or url in seen_urls:
+        if not isinstance(url, str) or not is_public_web_url(url) or url in seen_urls:
             continue
         title = citation.get("title")
         normalized_content = _citation_content(citation, summary)
@@ -146,7 +146,7 @@ def _citation_results(
                 url=url,
                 title=title.strip() if isinstance(title, str) else "",
                 content=normalized_content[:MAX_RESULT_CONTENT_LENGTH],
-                score=max(0.0, 1.0 - len(results) * 0.05),
+                score=ranked_source_score(len(results)),
                 raw={
                     "type": "url_citation",
                     "url": url,
@@ -180,11 +180,6 @@ def _walk_mappings(value: Any) -> Iterable[Mapping[str, Any]]:
     elif isinstance(value, list | tuple):
         for nested in value:
             yield from _walk_mappings(nested)
-
-
-def _is_public_web_url(url: str) -> bool:
-    parsed = urlsplit(url)
-    return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
 
 
 __all__ = ["QwenNativeSearchProvider"]

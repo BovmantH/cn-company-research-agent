@@ -18,6 +18,7 @@ CLIENT_MODEL_VENDORS: tuple[str, ...] = (
 )
 CLIENT_MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 QWEN_RESPONSES_WEB_SEARCH_MODELS = ("qwen3.7-plus", "qwen3.7-max")
+MIMO_WEB_SEARCH_MODELS = ("mimo-v2.5", "mimo-v2.5-pro")
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class SelectedModel:
 __all__ = [
     "CLIENT_MODEL_ID_PATTERN",
     "CLIENT_MODEL_VENDORS",
+    "MIMO_WEB_SEARCH_MODELS",
     "QWEN_RESPONSES_WEB_SEARCH_MODELS",
     "SelectedModel",
 ]

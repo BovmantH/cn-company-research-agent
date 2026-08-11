@@ -160,6 +160,49 @@ async def test_search_drops_citation_without_content_or_text_range() -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_drops_non_public_citation_urls() -> None:
+    client = _client_with_response(
+        {
+            "output_text": "公开来源摘要",
+            "output": [
+                {
+                    "type": "output_text",
+                    "text": "公开来源摘要",
+                    "annotations": [
+                        {
+                            "type": "url_citation",
+                            "url": "http://localhost/internal",
+                            "content": "本地主机来源",
+                        },
+                        {
+                            "type": "url_citation",
+                            "url": "http://10.0.0.1/internal",
+                            "content": "私网来源",
+                        },
+                        {
+                            "type": "url_citation",
+                            "url": "https://example.cn/public",
+                            "content": "公开来源摘要",
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+    provider = QwenNativeSearchProvider(
+        api_key="sk-user-qwen",
+        selection=SelectedModel(vendor="qwen", model="qwen3.7-plus"),
+        client=client,
+    )
+
+    results = await provider.search("示例公司")
+
+    assert [(result.url, result.content) for result in results] == [
+        ("https://example.cn/public", "公开来源摘要")
+    ]
+
+
+@pytest.mark.asyncio
 async def test_search_without_verifiable_citation_returns_no_documents() -> None:
     client = _client_with_response({"output_text": "没有附带来源的回答", "output": []})
     provider = QwenNativeSearchProvider(

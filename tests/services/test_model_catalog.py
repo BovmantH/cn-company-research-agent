@@ -125,6 +125,30 @@ async def test_catalog_keeps_only_safe_text_model_fields() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mimo_catalog_only_exposes_models_with_confirmed_web_search() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "mimo-v2.5"},
+                    {"id": "mimo-v2.5-pro"},
+                    {"id": "mimo-v2"},
+                    {"id": "mimo-audio"},
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelCatalogService(client=client).list_models(
+            "mimo",
+            "sk-test",
+        )
+
+    assert [model.id for model in result.models] == ["mimo-v2.5", "mimo-v2.5-pro"]
+
+
+@pytest.mark.asyncio
 async def test_openrouter_uses_user_filtered_text_catalog() -> None:
     requests: list[httpx.Request] = []
 

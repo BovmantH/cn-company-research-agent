@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from .client_model import (
     CLIENT_MODEL_ID_PATTERN,
     CLIENT_MODEL_VENDORS,
+    MIMO_WEB_SEARCH_MODELS,
     QWEN_RESPONSES_WEB_SEARCH_MODELS,
     SelectedModel,
 )
@@ -114,7 +115,7 @@ def _has_text_output(record: Mapping[str, Any]) -> bool:
     return not any(marker in normalized_id for marker in NON_TEXT_MODEL_MARKERS)
 
 
-def _parse_model_options(payload: object) -> list[ModelOption]:
+def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
     """将 OpenAI 兼容目录收窄为无敏感字段的文本模型列表。"""
     if not isinstance(payload, Mapping):
         raise ModelCatalogUnavailable("官方模型目录暂时不可用")
@@ -133,6 +134,8 @@ def _parse_model_options(payload: object) -> list[ModelOption]:
             or not CLIENT_MODEL_ID_PATTERN.fullmatch(model_id)
             or model_id in seen
         ):
+            continue
+        if vendor == "mimo" and model_id not in MIMO_WEB_SEARCH_MODELS:
             continue
         raw_name = record.get("name")
         name = raw_name.strip() if isinstance(raw_name, str) else model_id
@@ -238,7 +241,7 @@ class ModelCatalogService:
         return ModelCatalog(
             vendor=normalized_vendor,
             source="official_api",
-            models=tuple(_parse_model_options(payload)),
+            models=tuple(_parse_model_options(payload, normalized_vendor)),
         )
 
     async def require_model(
