@@ -332,7 +332,9 @@ MOONSHOT_API_KEY=sk-...
 
 - OpenCode Zen、DeepSeek、Kimi、MiniMax、MiMo、OpenRouter、OpenAI:通过各厂商的官方模型列表 API 动态读取,前端不写死模型列表。
 - Qwen、GLM:当前没有适合普通按量推理选择器的可靠官方模型目录 API,因此后端集中维护推荐清单,界面明确标为“项目维护的推荐清单”。
-- 动态目录只说明 Key 能读取哪些模型,不自动证明模型适合本项目的联网和引用契约。当前 Web 用户单 Key 联网任务仅开放 Qwen `qwen3.7-plus` / `qwen3.7-max`;其余厂商会展示目录,但标记为“待接入联网”。
+- 动态目录只说明 Key 能读取哪些模型,不自动证明模型适合本项目的联网和引用契约。当前 Web 用户单 Key 联网已开放 Qwen、GLM、MiMo、OpenRouter 和 OpenAI；后端会按厂商能力清单过滤可提交模型。
+- OpenCode Zen、DeepSeek、Kimi 和 MiniMax 当前只开放模型目录查看,界面统一标记为“暂未开放联网调研”。项目不会把模型生成的链接冒充可验证来源。
+- 用户 Key 同时承担所选厂商的模型生成和原生联网费用。GLM 联网检索、MiMo Web Search 插件、OpenRouter Server Tool 和 OpenAI Web Search 均可能单独计费；MiMo 还需先在原厂控制台开通 Web Search 插件。价格和可用政策以厂商实时说明为准。
 - 选择“使用部署者配置”时继续使用服务端 LLM 与 `SearchProvider`;在默认配置下,部署者仍需分别承担 LLM 和 Tavily 检索费用。
 
 OpenCode Zen 的免费型号是**限时免费**，服务托管在美国，免费期间提交的数据可能用于模型改进。不要发送个人、机密或受合同/监管限制的数据；部署前请复核 [Zen 官方说明](https://opencode.ai/docs/zen)。如果启用付费回退,请在对应平台设置预算、月度限额，并谨慎配置或关闭自动充值。

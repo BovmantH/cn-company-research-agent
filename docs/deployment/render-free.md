@@ -6,7 +6,7 @@
 
 - 访问地址：<https://cn-company-research-agent.onrender.com>
 - 验证日期：2026-08-11
-- 验证结果：首页、健康接口和 9 家模型厂商目录均已通过无付费调用验收
+- 验证结果：首页、健康接口和 9 家模型厂商目录均已通过无付费调用验收；Qwen、GLM、MiMo、OpenRouter、OpenAI 显示为可用于联网调研
 
 ## 一键部署
 
@@ -44,8 +44,8 @@
 2. 确认页面只创建一个 Docker Web Service，套餐为 Free，区域为 Singapore。
 3. 确认没有数据库、持久盘、付费实例或 Secret，然后创建服务。
 4. 等待 Docker 构建完成；Render 的健康检查必须通过 `/health`。
-5. 打开 Render 分配的 HTTPS 地址，确认首页能显示完整的 9 家模型厂商。
-6. 分别访问 `/health` 和 `/ai/providers`；前者应返回服务正常，后者应返回 9 家厂商。
+5. 打开 Render 分配的 HTTPS 地址，确认首页能显示完整的 9 家模型厂商，其中 Qwen、GLM、MiMo、OpenRouter、OpenAI 标记为可用于联网调研。
+6. 分别访问 `/health` 和 `/ai/providers`；前者应返回服务正常，后者应返回 9 家厂商且上述 5 家的 `available_for_research` 为 `true`。
 
 验收过程不要填写真实 Key，也不要启动调研任务，避免产生模型或联网检索费用。
 
