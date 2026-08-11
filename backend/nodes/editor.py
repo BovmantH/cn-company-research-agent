@@ -1,8 +1,10 @@
 import logging
+from typing import Any
 
 from langchain_core.messages import AIMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
 
 from ..classes import ResearchState
 from ..classes.state import job_status
@@ -21,12 +23,12 @@ logger = logging.getLogger(__name__)
 class Editor:
     """将各章节简报编排为完整的最终报告。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, llm: Runnable[Any, Any] | None = None) -> None:
         # LLM 通过统一工厂获取，供应商和当前默认模型由服务端注册表决定。
         # 部署者可通过 LLM_MODEL_EDITOR 环境变量覆盖单供应商模型。
         # 编辑器阶段需要把报告文本块流式推送到前端 SSE，这里显式打开流式模式
         # 以避免 LLM_STREAMING=false 时整篇报告变成一次性返回。
-        self.llm = get_llm("editor", streaming=True)
+        self.llm = llm if llm is not None else get_llm("editor", streaming=True)
 
         # 初始化报告上下文
         self.context = {

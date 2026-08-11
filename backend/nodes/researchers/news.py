@@ -1,15 +1,22 @@
 from typing import Any
 
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import Runnable
 
 from ...classes import ResearchState
 from ...prompts import NEWS_SCANNER_QUERY_PROMPT
+from ...services.search import SearchProvider
 from .base import BaseResearcher
 
 
 class NewsScanner(BaseResearcher):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        *,
+        search: SearchProvider | None = None,
+        llm: Runnable[Any, Any] | None = None,
+    ) -> None:
+        super().__init__(search=search, llm=llm)
         self.analyst_type = "news_analyzer"
 
     async def analyze(self, state: ResearchState):

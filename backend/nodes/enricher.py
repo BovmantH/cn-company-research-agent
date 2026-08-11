@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage
 
 from ..classes import ResearchState
 from ..classes.state import job_status
-from ..services.search import get_search_provider
+from ..services.search import SearchProvider, get_search_provider
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 class Enricher:
     """使用正文内容增强筛选后的文档。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, search: SearchProvider | None = None) -> None:
         # 默认 TavilyProvider,API key 由 provider 内部校验
-        self.search = get_search_provider()
+        self.search = search if search is not None else get_search_provider()
         self.batch_size = 20
 
     async def fetch_single_content(self, url: str) -> dict[str, str]:

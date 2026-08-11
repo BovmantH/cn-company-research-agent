@@ -4,7 +4,7 @@ from langchain_core.messages import AIMessage
 
 from ..classes import InputState, ResearchState
 from ..classes.state import job_status
-from ..services.search import get_search_provider
+from ..services.search import SearchProvider, get_search_provider
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 class GroundingNode:
     """收集公司的初始背景数据。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, search: SearchProvider | None = None) -> None:
         # 通过统一的 SearchProvider 调用,默认走 Tavily,可由
         # SEARCH_PROVIDER 环境变量切换为其他实现（第二阶段）。
-        self.search = get_search_provider()
+        self.search = search if search is not None else get_search_provider()
 
     async def initial_search(self, state: InputState):
         """执行初始搜索并持续产出事件。"""

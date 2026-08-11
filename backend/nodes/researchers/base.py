@@ -4,25 +4,31 @@ from datetime import datetime
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
 
 from ...classes import ResearchState
 from ...classes.state import job_status
 from ...prompts import QUERY_FORMAT_GUIDELINES
 from ...services.llm_factory import get_llm
-from ...services.search import SearchResult, get_search_provider
+from ...services.search import SearchProvider, SearchResult, get_search_provider
 from ...utils.references import clean_title
 
 logger = logging.getLogger(__name__)
 
 
 class BaseResearcher:
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        search: SearchProvider | None = None,
+        llm: Runnable[Any, Any] | None = None,
+    ) -> None:
         # 检索通过统一 SearchProvider 调用,默认 Tavily;
         # API key 校验由 provider 内部完成,缺失时会抛 RuntimeError。
-        self.search = get_search_provider()
+        self.search = search if search is not None else get_search_provider()
         # LLM 通过统一工厂获取，Zen 免费线路优先，失败时按服务端配置回退。
         # 模型可通过 LLM_MODEL_RESEARCHER 环境变量覆盖。
-        self.llm = get_llm("researcher")
+        self.llm = llm if llm is not None else get_llm("researcher")
         self.analyst_type = "base_researcher"
 
     @property

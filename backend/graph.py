@@ -1,8 +1,10 @@
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.messages import SystemMessage
+from langchain_core.runnables import Runnable
 from langgraph.graph import StateGraph
 
 from .classes.state import InputState
@@ -18,13 +20,41 @@ from .nodes.researchers import (
     IndustryAnalyzer,
     NewsScanner,
 )
+from .services.llm_factory import get_llm
+from .services.search import SearchProvider, get_search_provider
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class ResearchDependencies:
+    """封装单次调研使用的模型与检索实例，避免跨任务共享密钥配置。"""
+
+    search: SearchProvider
+    researcher_llm: Runnable[Any, Any]
+    briefing_llm: Runnable[Any, Any]
+    editor_llm: Runnable[Any, Any]
+
+    @classmethod
+    def from_server_config(cls) -> "ResearchDependencies":
+        """使用部署者的服务端配置构造默认依赖，保持旧调用方式兼容。"""
+        return cls(
+            search=get_search_provider(),
+            researcher_llm=get_llm("researcher"),
+            briefing_llm=get_llm("briefing", streaming=False),
+            editor_llm=get_llm("editor", streaming=True),
+        )
+
+
 class Graph:
     def __init__(
-        self, company=None, url=None, hq_location=None, industry=None, job_id=None
+        self,
+        company=None,
+        url=None,
+        hq_location=None,
+        industry=None,
+        job_id=None,
+        dependencies: ResearchDependencies | None = None,
     ):
         # 初始化图输入状态
         self.input_state = InputState(
@@ -36,22 +66,35 @@ class Graph:
             messages=[SystemMessage(content="资深调研员开始调查")],
         )
 
-        # 初始化工作流节点
+        # 依赖属于当前调研任务；用户自带 Key 后不会写入进程环境变量。
+        self.dependencies = dependencies or ResearchDependencies.from_server_config()
         self._init_nodes()
         self._build_workflow()
 
     def _init_nodes(self):
         """初始化全部工作流节点。"""
-        self.ground = GroundingNode()
-        self.financial_analyst = FinancialAnalyst()
-        self.news_scanner = NewsScanner()
-        self.industry_analyst = IndustryAnalyzer()
-        self.company_analyst = CompanyAnalyzer()
+        self.ground = GroundingNode(search=self.dependencies.search)
+        self.financial_analyst = FinancialAnalyst(
+            search=self.dependencies.search,
+            llm=self.dependencies.researcher_llm,
+        )
+        self.news_scanner = NewsScanner(
+            search=self.dependencies.search,
+            llm=self.dependencies.researcher_llm,
+        )
+        self.industry_analyst = IndustryAnalyzer(
+            search=self.dependencies.search,
+            llm=self.dependencies.researcher_llm,
+        )
+        self.company_analyst = CompanyAnalyzer(
+            search=self.dependencies.search,
+            llm=self.dependencies.researcher_llm,
+        )
         self.collector = Collector()
         self.curator = Curator()
-        self.enricher = Enricher()
-        self.briefing = Briefing()
-        self.editor = Editor()
+        self.enricher = Enricher(search=self.dependencies.search)
+        self.briefing = Briefing(llm=self.dependencies.briefing_llm)
+        self.editor = Editor(llm=self.dependencies.editor_llm)
 
     def _build_workflow(self):
         """配置状态图工作流。"""

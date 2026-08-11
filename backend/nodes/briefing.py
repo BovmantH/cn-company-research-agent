@@ -4,6 +4,7 @@ from typing import Any
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
 
 from ..classes import ResearchState
 from ..classes.state import job_status
@@ -22,12 +23,12 @@ logger = logging.getLogger(__name__)
 class Briefing:
     """为每个调研类别生成简报并更新 ResearchState。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, llm: Runnable[Any, Any] | None = None) -> None:
         self.max_doc_length = 8000  # 单份文档正文的最大长度
         # LLM 通过统一工厂获取，供应商和当前默认模型由服务端注册表决定。
         # 部署者可通过 LLM_MODEL_BRIEFING 环境变量覆盖单供应商模型。
         # 简报阶段不需要流式输出,关掉以减少与上游的连接开销。
-        self.llm = get_llm("briefing", streaming=False)
+        self.llm = llm if llm is not None else get_llm("briefing", streaming=False)
 
     def _get_category_prompt(self, category: str) -> str:
         """获取指定类别的提示模板。"""
