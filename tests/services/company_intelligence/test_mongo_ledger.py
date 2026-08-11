@@ -31,7 +31,10 @@ pytestmark = pytest.mark.filterwarnings(
 )
 FULL_PLAN = tuple(DATA_CAPABILITIES)
 FULL_PLAN_POINTS = sum(TOOL_COST_CATALOG[name] for name in FULL_PLAN)
-NOW = datetime(2026, 8, 9, 12, tzinfo=UTC)
+# 使用远离现实运行日期的固定时间，避免 mongomock 的 TTL 线程把夹具当成过期数据。
+NOW = datetime(2099, 1, 1, 12, tzinfo=UTC)
+TEST_DAY = NOW.date().isoformat()
+TOKEN_EXPIRES_AT = int((NOW + timedelta(hours=1)).timestamp())
 LIMITS = BudgetLimits(
     max_points_per_job=220,
     max_calls_per_job=11,
@@ -102,7 +105,7 @@ def test_two_ledger_instances_cannot_overspend_daily_budget(ledger_pair) -> None
         decisions = list(executor.map(reserve, range(8)))
 
     assert sum(decisions) == 2
-    counter = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
+    counter = first_ledger._usage_counters.find_one({"_id": f"deployment:{TEST_DAY}"})
     assert counter["job_count"] == 2
     assert counter["accounted_points"] == FULL_PLAN_POINTS * 2
 
@@ -120,7 +123,7 @@ def test_same_key_from_two_instances_counts_once(ledger_pair) -> None:
 
     assert first.reservation_id == second.reservation_id
     assert sum((first.replayed, second.replayed)) == 1
-    counter = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
+    counter = first_ledger._usage_counters.find_one({"_id": f"deployment:{TEST_DAY}"})
     assert counter["job_count"] == 1
     assert counter["accounted_points"] == FULL_PLAN_POINTS
 
@@ -189,7 +192,7 @@ def test_settlement_is_persistent_immutable_and_releases_difference(
             reservation.reservation_id, actual_points=0, actual_calls=0
         )
 
-    counter = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
+    counter = first_ledger._usage_counters.find_one({"_id": f"deployment:{TEST_DAY}"})
     assert counter["accounted_points"] == 20
     assert counter["accounted_calls"] == 1
 
@@ -274,7 +277,7 @@ def test_finalize_atomically_persists_terminal_and_actual_usage(
     assert stored["settled"] is True
     assert stored["actual_points"] == 20
     assert stored["expires_at"] == NOW + timedelta(hours=48)
-    counter = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
+    counter = first_ledger._usage_counters.find_one({"_id": f"deployment:{TEST_DAY}"})
     assert counter["accounted_points"] == 20
     assert counter["accounted_calls"] == 1
 
@@ -291,9 +294,11 @@ def test_only_requester_counter_expires_after_48_hours(ledger_pair) -> None:
     first_ledger, _ = ledger_pair
     assert first_ledger.reserve(_request("retention", "job-1"), LIMITS).allowed
 
-    deployment = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
+    deployment = first_ledger._usage_counters.find_one(
+        {"_id": f"deployment:{TEST_DAY}"}
+    )
     requester = first_ledger._usage_counters.find_one(
-        {"_id": "requester:2026-08-09:requester-a"}
+        {"_id": f"requester:{TEST_DAY}:requester-a"}
     )
     assert "expires_at" not in deployment
     assert requester["expires_at"] == NOW + timedelta(hours=48)
@@ -301,7 +306,7 @@ def test_only_requester_counter_expires_after_48_hours(ledger_pair) -> None:
 
 def test_token_is_consumed_once_across_instances(ledger_pair) -> None:
     first_ledger, second_ledger = ledger_pair
-    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
+    expires_at = TOKEN_EXPIRES_AT
 
     assert first_ledger.consume_token("token-id", expires_at) is True
     assert second_ledger.consume_token("token-id", expires_at) is False
@@ -312,7 +317,7 @@ def test_reserve_with_token_is_atomic_and_replayable_across_instances(
 ) -> None:
     first_ledger, second_ledger = ledger_pair
     token_id = "d" * 32
-    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
+    expires_at = TOKEN_EXPIRES_AT
 
     first = first_ledger.reserve_with_token(
         _request("professional-token", "job-1"),
@@ -337,7 +342,7 @@ def test_reserve_with_token_is_atomic_and_replayable_across_instances(
 def test_same_token_cannot_reserve_two_jobs_across_instances(ledger_pair) -> None:
     first_ledger, second_ledger = ledger_pair
     token_id = "e" * 32
-    expires_at = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
+    expires_at = TOKEN_EXPIRES_AT
     barrier = threading.Barrier(2)
 
     def reserve(index: int):
@@ -357,7 +362,7 @@ def test_same_token_cannot_reserve_two_jobs_across_instances(ledger_pair) -> Non
     assert {decision.reason for decision in decisions if not decision.allowed} == {
         "token_already_used"
     }
-    counter = first_ledger._usage_counters.find_one({"_id": "deployment:2026-08-09"})
+    counter = first_ledger._usage_counters.find_one({"_id": f"deployment:{TEST_DAY}"})
     assert counter["job_count"] == 1
     assert counter["accounted_points"] == FULL_PLAN_POINTS
     assert first_ledger._consumed_tokens.count_documents({}) == 1
