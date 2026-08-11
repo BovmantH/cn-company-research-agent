@@ -32,8 +32,9 @@ from langchain_openai import ChatOpenAI
 from openai import APIConnectionError, APIError, BadRequestError
 
 import backend.services.llm_factory as llm_factory
+from backend.services.client_model import SelectedModel
 from backend.services.llm_factory import (
-    CLIENT_VENDOR_MODELS,
+    CLIENT_MODEL_VENDORS,
     DEFAULT_MODELS,
     DEFAULT_VENDOR_PRIORITY,
     FALLBACK_EXCEPTIONS,
@@ -106,8 +107,7 @@ def test_client_llm_uses_selected_vendor_model_and_official_endpoint(
 
     llm = build_client_llm(
         role="researcher",
-        vendor="qwen",
-        model="qwen3.7-plus",
+        selection=SelectedModel(vendor="qwen", model="qwen3.7-plus"),
         api_key="sk-user-qwen",
         streaming=True,
     )
@@ -121,37 +121,42 @@ def test_client_llm_uses_selected_vendor_model_and_official_endpoint(
     assert "sk-user-qwen" not in repr(llm)
 
 
-def test_client_llm_rejects_unknown_vendor_or_mismatched_model() -> None:
+def test_client_llm_rejects_unknown_vendor() -> None:
     with pytest.raises(ValueError, match="不支持的用户模型供应商"):
         build_client_llm(
             role="researcher",
-            vendor="deepseek",
-            model="deepseek-v4-flash",
-            api_key="sk-test",
-            streaming=True,
-        )
-
-    with pytest.raises(ValueError, match="不支持模型"):
-        build_client_llm(
-            role="researcher",
-            vendor="qwen",
-            model="gpt-5.6-terra",
+            selection=SelectedModel(
+                vendor="custom",
+                model="deepseek-v4-flash",
+            ),
             api_key="sk-test",
             streaming=True,
         )
 
 
-def test_client_vendor_models_match_confirmed_web_form_options() -> None:
-    assert tuple(CLIENT_VENDOR_MODELS) == (
+def test_client_llm_preserves_dynamically_validated_model_id() -> None:
+    llm = build_client_llm(
+        role="editor",
+        selection=SelectedModel(vendor="qwen", model="namespace/report-model"),
+        api_key="sk-test",
+        streaming=True,
+    )
+
+    assert llm.model_name == "namespace/report-model"
+
+
+def test_client_model_vendors_match_fixed_official_hosts() -> None:
+    assert CLIENT_MODEL_VENDORS == (
+        "opencode",
+        "deepseek",
+        "kimi",
         "qwen",
         "glm",
-        "mimo",
         "minimax",
-        "kimi",
+        "mimo",
         "openrouter",
         "openai",
     )
-    assert CLIENT_VENDOR_MODELS["qwen"][0] == "qwen3.7-plus"
 
 
 # === OpenCode Zen 免费优先 ===

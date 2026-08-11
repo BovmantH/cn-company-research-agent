@@ -8,7 +8,12 @@ from urllib.parse import urlsplit
 
 from openai import AsyncOpenAI
 
-from ..llm_factory import CLIENT_VENDOR_MODELS, VENDOR_REGISTRY
+from ..client_model import (
+    CLIENT_MODEL_ID_PATTERN,
+    QWEN_RESPONSES_WEB_SEARCH_MODELS,
+    SelectedModel,
+)
+from ..llm_factory import VENDOR_REGISTRY
 from . import CrawledPage, SearchResult, UnsupportedSearchOperation
 
 MAX_SEARCH_QUERY_LENGTH = 500
@@ -23,15 +28,19 @@ class QwenNativeSearchProvider:
         self,
         *,
         api_key: str,
-        model: str,
+        selection: SelectedModel,
         client: Any | None = None,
     ) -> None:
         normalized_key = api_key.strip()
         if not normalized_key:
             raise ValueError("千问 API Key 不能为空")
-        normalized_model = model.strip()
-        if normalized_model not in CLIENT_VENDOR_MODELS["qwen"]:
-            raise ValueError(f"千问原生联网不支持模型 {normalized_model!r}")
+        if selection.vendor != "qwen":
+            raise ValueError("千问联网检索只能使用千问模型选择")
+        normalized_model = selection.model.strip()
+        if not CLIENT_MODEL_ID_PATTERN.fullmatch(normalized_model):
+            raise ValueError("千问模型标识格式不合法")
+        if normalized_model not in QWEN_RESPONSES_WEB_SEARCH_MODELS:
+            raise ValueError("该千问模型当前不支持 Responses 原生联网检索")
         self._model = normalized_model
         self._client = client or AsyncOpenAI(
             api_key=normalized_key,
@@ -128,10 +137,7 @@ def _citation_results(
         if not isinstance(url, str) or not _is_public_web_url(url) or url in seen_urls:
             continue
         title = citation.get("title")
-        content = citation.get("content")
-        normalized_content = (
-            content.strip() if isinstance(content, str) and content.strip() else summary
-        )
+        normalized_content = _citation_content(citation, summary)
         if not normalized_content:
             continue
         seen_urls.add(url)
@@ -151,6 +157,18 @@ def _citation_results(
         if len(results) >= limit:
             break
     return results
+
+
+def _citation_content(citation: Mapping[str, Any], summary: str) -> str:
+    """只采用来源自带正文或明确文本区间，禁止把综合摘要归给单一来源。"""
+    content = citation.get("content")
+    if isinstance(content, str) and content.strip():
+        return content.strip()
+    start = citation.get("start_index")
+    end = citation.get("end_index")
+    if type(start) is int and type(end) is int and 0 <= start < end <= len(summary):
+        return summary[start:end].strip()
+    return ""
 
 
 def _walk_mappings(value: Any) -> Iterable[Mapping[str, Any]]:
