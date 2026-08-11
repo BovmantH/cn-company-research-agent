@@ -164,6 +164,8 @@ async def list_client_model_providers():
         {
             "id": vendor,
             "name": VENDOR_REGISTRY[vendor].display_name,
+            "short_name": VENDOR_REGISTRY[vendor].short_name,
+            "description": VENDOR_REGISTRY[vendor].description,
             "catalog_source": (
                 "curated" if vendor in CURATED_MODEL_OPTIONS else "official_api"
             ),

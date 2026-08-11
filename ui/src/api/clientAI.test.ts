@@ -14,6 +14,8 @@ describe('client AI contracts', () => {
       providers: [{
         id: 'qwen',
         name: '阿里百炼（Qwen）',
+        short_name: 'Qwen',
+        description: '阿里云百炼提供的通义千问模型服务。',
         catalog_source: 'curated',
         requires_key_to_list: false,
         available_for_research: true,
@@ -21,6 +23,8 @@ describe('client AI contracts', () => {
     })).toEqual([{
       id: 'qwen',
       name: '阿里百炼（Qwen）',
+      shortName: 'Qwen',
+      description: '阿里云百炼提供的通义千问模型服务。',
       catalogSource: 'curated',
       requiresKeyToList: false,
       availableForResearch: true,
@@ -29,10 +33,22 @@ describe('client AI contracts', () => {
       providers: [{
         id: 'qwen',
         name: '千问',
+        short_name: 'Qwen',
+        description: '阿里云百炼提供的通义千问模型服务。',
         catalog_source: 'curated',
         requires_key_to_list: false,
         available_for_research: true,
         base_url: 'https://attacker.invalid',
+      }],
+    })).toBeNull();
+    expect(parseClientProviders({
+      providers: [{
+        id: 'qwen',
+        name: '阿里百炼（Qwen）',
+        short_name: 'Qwen',
+        catalog_source: 'curated',
+        requires_key_to_list: false,
+        available_for_research: true,
       }],
     })).toBeNull();
   });

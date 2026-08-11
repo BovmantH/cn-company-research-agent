@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, Eye, EyeOff, KeyRound, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Check, Eye, EyeOff, Info, KeyRound, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 
 import {
   loadClientModels as loadClientModelsDefault,
@@ -232,29 +232,52 @@ const AIConfigurationPanel = forwardRef<
         >
           {providers.map((provider) => {
             const selected = provider.id === selectedVendor;
+            const descriptionId = `provider-description-${provider.id}`;
             return (
-              <button
-                key={provider.id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => selectVendor(provider)}
-                className={`min-h-12 rounded-xl border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  selected
-                    ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
-                }`}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium">{provider.name}</span>
-                  {selected && <Check aria-hidden="true" className="h-4 w-4 shrink-0" />}
+              <div key={provider.id} className="group relative">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-describedby={descriptionId}
+                  onClick={() => selectVendor(provider)}
+                  className={`relative min-h-12 w-full rounded-xl border px-3 py-2 pr-10 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    selected
+                      ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                  }`}
+                >
+                  <span className="block truncate text-sm font-medium">
+                    {provider.shortName}
+                  </span>
+                  <span className={`mt-1 block pr-4 text-xs ${
+                    provider.availableForResearch ? 'text-emerald-700' : 'text-amber-700'
+                  }`}>
+                    {provider.availableForResearch ? '可用于联网调研' : '可查看模型目录'}
+                  </span>
+                  {selected && (
+                    <Check
+                      aria-hidden="true"
+                      className="absolute bottom-2.5 right-3 h-4 w-4"
+                    />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`查看${provider.shortName}说明`}
+                  aria-describedby={descriptionId}
+                  className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <Info aria-hidden="true" className="h-4 w-4" />
+                </button>
+                <span
+                  id={descriptionId}
+                  role="tooltip"
+                  className="pointer-events-none invisible absolute left-0 top-[calc(100%+0.4rem)] z-30 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-blue-100 bg-slate-950 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                >
+                  {provider.description}
                 </span>
-                <span className={`mt-1 block text-xs ${
-                  provider.availableForResearch ? 'text-emerald-700' : 'text-amber-700'
-                }`}>
-                  {provider.availableForResearch ? '可用于联网调研' : '可查看模型目录'}
-                </span>
-              </button>
+              </div>
             );
           })}
         </div>

@@ -10,6 +10,8 @@ const providers: ClientAIProvider[] = [
   {
     id: 'qwen',
     name: '通义千问',
+    shortName: 'Qwen',
+    description: '阿里云百炼提供的通义千问模型服务。',
     catalogSource: 'curated',
     requiresKeyToList: false,
     availableForResearch: true,
@@ -17,6 +19,8 @@ const providers: ClientAIProvider[] = [
   {
     id: 'kimi',
     name: 'Kimi',
+    shortName: 'Kimi',
+    description: 'Moonshot AI 提供的 Kimi 模型服务。',
     catalogSource: 'official_api',
     requiresKeyToList: true,
     availableForResearch: false,
@@ -94,11 +98,18 @@ describe('AIConfigurationPanel', () => {
       await Promise.resolve();
     });
 
-    expect(
-      renderer.root
-        .findByProps({ 'aria-label': '模型厂商' })
-        .findAllByProps({ role: 'radio' }),
-    ).toHaveLength(2);
+    const providerButtons = renderer.root
+      .findByProps({ 'aria-label': '模型厂商' })
+      .findAllByProps({ role: 'radio' });
+    expect(providerButtons).toHaveLength(2);
+    expect(providerButtons[0].props['aria-describedby'])
+      .toBe('provider-description-qwen');
+    expect(renderer.root.findByProps({ 'aria-label': '查看Qwen说明' })
+      .props['aria-describedby']).toBe('provider-description-qwen');
+    expect(renderer.root.findByProps({
+      id: 'provider-description-qwen',
+      role: 'tooltip',
+    }).props.children).toBe('阿里云百炼提供的通义千问模型服务。');
     expect(renderer.root.findAllByProps({ children: '可用于联网调研' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ children: '可查看模型目录' })).toHaveLength(1);
     expect(JSON.stringify(renderer.toJSON())).toContain('项目维护的推荐清单');

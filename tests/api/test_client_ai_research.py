@@ -81,10 +81,14 @@ def test_provider_options_come_from_backend_capability_registry() -> None:
     assert providers["qwen"] == {
         "id": "qwen",
         "name": "阿里百炼（Qwen）",
+        "short_name": "Qwen",
+        "description": "阿里云百炼提供的通义千问模型服务。",
         "catalog_source": "curated",
         "requires_key_to_list": False,
         "available_for_research": True,
     }
+    assert all(provider["short_name"] for provider in providers.values())
+    assert all(provider["description"] for provider in providers.values())
     assert providers["kimi"]["catalog_source"] == "official_api"
     assert providers["kimi"]["requires_key_to_list"] is True
     assert providers["kimi"]["available_for_research"] is False

@@ -7,6 +7,8 @@ export type ClientAISelection = {
 export type ClientAIProvider = {
   id: string;
   name: string;
+  shortName: string;
+  description: string;
   catalogSource: 'official_api' | 'curated';
   requiresKeyToList: boolean;
   availableForResearch: boolean;
@@ -29,6 +31,8 @@ type FetchLike = typeof fetch;
 const PROVIDER_KEYS = new Set([
   'id',
   'name',
+  'short_name',
+  'description',
   'catalog_source',
   'requires_key_to_list',
   'available_for_research',
@@ -67,6 +71,10 @@ export const parseClientProviders = (value: unknown): ClientAIProvider[] | null 
       || provider.id.length === 0
       || typeof provider.name !== 'string'
       || provider.name.length === 0
+      || typeof provider.short_name !== 'string'
+      || provider.short_name.length === 0
+      || typeof provider.description !== 'string'
+      || provider.description.length === 0
       || !catalogSource(provider.catalog_source)
       || typeof provider.requires_key_to_list !== 'boolean'
       || typeof provider.available_for_research !== 'boolean'
@@ -74,6 +82,8 @@ export const parseClientProviders = (value: unknown): ClientAIProvider[] | null 
     providers.push({
       id: provider.id,
       name: provider.name,
+      shortName: provider.short_name,
+      description: provider.description,
       catalogSource: provider.catalog_source,
       requiresKeyToList: provider.requires_key_to_list,
       availableForResearch: provider.available_for_research,

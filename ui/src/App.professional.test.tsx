@@ -57,6 +57,8 @@ describe('App professional fallback', () => {
           providers: [{
             id: 'qwen',
             name: '通义千问',
+            short_name: 'Qwen',
+            description: '阿里云百炼提供的通义千问模型服务。',
             catalog_source: 'curated',
             requires_key_to_list: false,
             available_for_research: true,
