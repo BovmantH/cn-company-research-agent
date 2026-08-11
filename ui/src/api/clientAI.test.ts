@@ -16,6 +16,7 @@ describe('client AI contracts', () => {
         name: '阿里百炼（Qwen）',
         short_name: 'Qwen',
         description: '阿里云百炼提供的通义千问模型服务。',
+        api_console_url: 'https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key',
         catalog_source: 'curated',
         requires_key_to_list: false,
         available_for_research: true,
@@ -25,6 +26,7 @@ describe('client AI contracts', () => {
       name: '阿里百炼（Qwen）',
       shortName: 'Qwen',
       description: '阿里云百炼提供的通义千问模型服务。',
+      apiConsoleUrl: 'https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key',
       catalogSource: 'curated',
       requiresKeyToList: false,
       availableForResearch: true,
@@ -90,6 +92,28 @@ describe('client AI contracts', () => {
     expect(parseClientProviders({
       providers: [{ ...provider, description: 7 }],
     })).toBeNull();
+  });
+
+  it.each([
+    ['缺失', undefined],
+    ['空值', null],
+    ['类型错误', 7],
+    ['非 HTTPS', 'http://platform.example/api-keys'],
+    ['包含凭据', 'https://user:secret@platform.example/api-keys'],
+  ])('控制台链接%s时保留厂商但隐藏入口', (_label, apiConsoleUrl) => {
+    const provider: Record<string, unknown> = {
+      id: 'qwen',
+      name: '阿里百炼（Qwen）',
+      short_name: 'Qwen',
+      description: '阿里云百炼提供的通义千问模型服务。',
+      catalog_source: 'curated',
+      requires_key_to_list: false,
+      available_for_research: true,
+    };
+    if (apiConsoleUrl !== undefined) provider.api_console_url = apiConsoleUrl;
+
+    expect(parseClientProviders({ providers: [provider] }))
+      .toMatchObject([{ id: 'qwen', apiConsoleUrl: null }]);
   });
 
   it('加载动态目录时只把 Key 发给部署实例后端', async () => {

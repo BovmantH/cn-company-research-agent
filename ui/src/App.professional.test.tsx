@@ -59,6 +59,7 @@ describe('App professional fallback', () => {
             name: '通义千问',
             short_name: 'Qwen',
             description: '阿里云百炼提供的通义千问模型服务。',
+            api_console_url: 'https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key',
             catalog_source: 'curated',
             requires_key_to_list: false,
             available_for_research: true,

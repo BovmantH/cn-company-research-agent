@@ -9,6 +9,7 @@ export type ClientAIProvider = {
   name: string;
   shortName: string;
   description: string;
+  apiConsoleUrl: string | null;
   catalogSource: 'official_api' | 'curated';
   requiresKeyToList: boolean;
   availableForResearch: boolean;
@@ -33,6 +34,7 @@ const PROVIDER_KEYS = new Set([
   'name',
   'short_name',
   'description',
+  'api_console_url',
   'catalog_source',
   'requires_key_to_list',
   'available_for_research',
@@ -53,6 +55,18 @@ const hasExactKeys = (value: Record<string, unknown>, allowed: Set<string>) =>
 
 const catalogSource = (value: unknown): value is 'official_api' | 'curated' =>
   value === 'official_api' || value === 'curated';
+
+/** 仅保留不会携带内嵌凭据的 HTTPS 控制台地址。 */
+const safeApiConsoleUrl = (value: unknown): string | null => {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return null;
+    return value;
+  } catch {
+    return null;
+  }
+};
 
 /** 严格解析厂商能力，避免把服务端端点或其他敏感字段带入前端状态。 */
 export const parseClientProviders = (value: unknown): ClientAIProvider[] | null => {
@@ -84,6 +98,7 @@ export const parseClientProviders = (value: unknown): ClientAIProvider[] | null 
       name: provider.name,
       shortName: provider.short_name,
       description: provider.description,
+      apiConsoleUrl: safeApiConsoleUrl(provider.api_console_url),
       catalogSource: provider.catalog_source,
       requiresKeyToList: provider.requires_key_to_list,
       availableForResearch: provider.available_for_research,

@@ -86,6 +86,7 @@ class VendorConfig:
         display_name: 用于启动错误提示的供应商名称。
         short_name: 用于空间受限界面的供应商短名称。
         description: 可公开展示的稳定中文说明。
+        api_console_url: 用户获取或管理通用 API Key 的官方 HTTPS 控制台入口。
         env_keys: 按优先级排列的环境变量名，也是 ``api_key`` 的来源。
         base_url: 该供应商的 OpenAI 协议兼容端点。
         default_models: ``角色 -> 默认模型标识`` 映射（未设 ``LLM_MODEL_<ROLE>`` 时兜底）。
@@ -97,6 +98,7 @@ class VendorConfig:
     display_name: str
     short_name: str
     description: str
+    api_console_url: str
     env_keys: tuple[str, ...]
     base_url: str
     default_models: dict[str, str]
@@ -114,6 +116,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="OpenCode Zen 免费线路",
         short_name="OpenCode Zen",
         description="OpenCode Zen 提供的免费优先线路，模型范围和免费政策可能调整。",
+        api_console_url="https://opencode.ai/auth",
         env_keys=("OPENCODE_API_KEY",),
         base_url="https://opencode.ai/zen/v1",
         default_models={
@@ -127,6 +130,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="DeepSeek 原厂",
         short_name="DeepSeek",
         description="DeepSeek 原厂模型服务，使用用户在原厂申请的 API Key。",
+        api_console_url="https://platform.deepseek.com/api_keys",
         env_keys=("DEEPSEEK_API_KEY",),
         base_url="https://api.deepseek.com",
         default_models={
@@ -140,6 +144,9 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="阿里百炼（Qwen）",
         short_name="Qwen",
         description="阿里云百炼提供的通义千问模型服务。",
+        api_console_url=(
+            "https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key"
+        ),
         env_keys=("DASHSCOPE_API_KEY",),
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         default_models={
@@ -156,6 +163,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="Moonshot（Kimi）",
         short_name="Kimi",
         description="Moonshot AI 提供的 Kimi 模型服务。",
+        api_console_url="https://platform.kimi.com/console/api-keys",
         env_keys=("MOONSHOT_API_KEY",),
         base_url="https://api.moonshot.cn/v1",
         default_models={
@@ -169,6 +177,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="智谱 GLM",
         short_name="智谱 GLM",
         description="智谱 AI 提供的 GLM 模型服务。",
+        api_console_url="https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
         env_keys=("ZAI_API_KEY",),
         base_url="https://open.bigmodel.cn/api/paas/v4/",
         default_models={
@@ -182,6 +191,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="MiniMax",
         short_name="MiniMax",
         description="MiniMax 提供的原厂模型服务。",
+        api_console_url="https://platform.minimaxi.com/console/access?tab=api-keys",
         env_keys=("MINIMAX_API_KEY",),
         base_url="https://api.minimaxi.com/v1",
         default_models={
@@ -195,6 +205,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="小米 MiMo",
         short_name="小米 MiMo",
         description="小米提供的 MiMo 模型服务。",
+        api_console_url="https://platform.xiaomimimo.com/",
         env_keys=("MIMO_API_KEY", "XIAOMI_API_KEY"),
         base_url="https://api.xiaomimimo.com/v1",
         default_models={
@@ -208,6 +219,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="OpenRouter 聚合",
         short_name="OpenRouter",
         description="OpenRouter 聚合模型线路，可使用账号下有权访问的模型。",
+        api_console_url="https://openrouter.ai/settings/keys",
         env_keys=("OPENROUTER_API_KEY",),
         base_url="https://openrouter.ai/api/v1",
         default_models={
@@ -222,6 +234,7 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
         display_name="OpenAI 原生兜底",
         short_name="OpenAI",
         description="OpenAI 原生模型服务，作为兼容兜底入口。",
+        api_console_url="https://platform.openai.com/api-keys",
         env_keys=("OPENAI_API_KEY",),
         base_url="https://api.openai.com/v1",
         default_models={

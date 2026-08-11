@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -83,6 +84,9 @@ def test_provider_options_come_from_backend_capability_registry() -> None:
         "name": "阿里百炼（Qwen）",
         "short_name": "Qwen",
         "description": "阿里云百炼提供的通义千问模型服务。",
+        "api_console_url": (
+            "https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key"
+        ),
         "catalog_source": "curated",
         "requires_key_to_list": False,
         "available_for_research": True,
@@ -92,6 +96,30 @@ def test_provider_options_come_from_backend_capability_registry() -> None:
     assert providers["kimi"]["catalog_source"] == "official_api"
     assert providers["kimi"]["requires_key_to_list"] is True
     assert providers["kimi"]["available_for_research"] is False
+
+
+def test_provider_options_expose_safe_official_api_console_urls() -> None:
+    response = TestClient(application.app).get("/ai/providers")
+    providers = {provider["id"]: provider for provider in response.json()["providers"]}
+    expected = {
+        "opencode": "https://opencode.ai/auth",
+        "deepseek": "https://platform.deepseek.com/api_keys",
+        "kimi": "https://platform.kimi.com/console/api-keys",
+        "qwen": "https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key",
+        "glm": "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+        "minimax": "https://platform.minimaxi.com/console/access?tab=api-keys",
+        "mimo": "https://platform.xiaomimimo.com/",
+        "openrouter": "https://openrouter.ai/settings/keys",
+        "openai": "https://platform.openai.com/api-keys",
+    }
+
+    assert {key: item["api_console_url"] for key, item in providers.items()} == expected
+    for item in providers.values():
+        parsed = urlsplit(item["api_console_url"])
+        assert parsed.scheme == "https"
+        assert parsed.hostname
+        assert parsed.username is None
+        assert parsed.password is None
 
 
 def test_dynamic_model_catalog_requires_key_without_scheduling_work() -> None:
