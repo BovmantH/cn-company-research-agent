@@ -14,6 +14,7 @@ from backend.services.model_catalog import ModelCatalogService
 from backend.services.search.glm_provider import GlmWebSearchProvider
 from backend.services.search.mimo_provider import MiMoNativeSearchProvider
 from backend.services.search.qwen_provider import QwenNativeSearchProvider
+from backend.services.search.responses_provider import ResponsesNativeSearchProvider
 
 SENTINEL_KEY = "sk-user-secret-sentinel"
 
@@ -101,6 +102,8 @@ def test_provider_options_come_from_backend_capability_registry() -> None:
     assert providers["kimi"]["available_for_research"] is False
     assert providers["glm"]["available_for_research"] is True
     assert providers["mimo"]["available_for_research"] is True
+    assert providers["openrouter"]["available_for_research"] is True
+    assert providers["openai"]["available_for_research"] is True
 
 
 def test_provider_options_expose_safe_official_api_console_urls() -> None:
@@ -193,6 +196,8 @@ def test_research_uses_ephemeral_qwen_dependencies_without_exposing_key(
     [
         ("glm", "glm-5.2", GlmWebSearchProvider),
         ("mimo", "mimo-v2.5", MiMoNativeSearchProvider),
+        ("openrouter", "vendor/report-model", ResponsesNativeSearchProvider),
+        ("openai", "gpt-5.6-terra", ResponsesNativeSearchProvider),
     ],
 )
 def test_research_builds_selected_native_search_provider(

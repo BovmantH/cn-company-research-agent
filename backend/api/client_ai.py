@@ -31,6 +31,7 @@ from backend.services.search import SearchProvider
 from backend.services.search.glm_provider import GlmWebSearchProvider
 from backend.services.search.mimo_provider import MiMoNativeSearchProvider
 from backend.services.search.qwen_provider import QwenNativeSearchProvider
+from backend.services.search.responses_provider import ResponsesNativeSearchProvider
 
 router = APIRouter(prefix="/ai", tags=["任务级模型"])
 
@@ -40,6 +41,8 @@ CLIENT_SEARCH_PROVIDER_TYPES: dict[str, type[SearchProvider]] = {
     "qwen": QwenNativeSearchProvider,
     "glm": GlmWebSearchProvider,
     "mimo": MiMoNativeSearchProvider,
+    "openrouter": ResponsesNativeSearchProvider,
+    "openai": ResponsesNativeSearchProvider,
 }
 CLIENT_WEB_SEARCH_VENDORS = frozenset(CLIENT_SEARCH_PROVIDER_TYPES)
 

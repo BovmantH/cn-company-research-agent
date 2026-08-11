@@ -13,6 +13,7 @@ from .client_model import (
     CLIENT_MODEL_ID_PATTERN,
     CLIENT_MODEL_VENDORS,
     MIMO_WEB_SEARCH_MODELS,
+    OPENAI_RESPONSES_WEB_SEARCH_MODELS,
     QWEN_RESPONSES_WEB_SEARCH_MODELS,
     SelectedModel,
 )
@@ -137,6 +138,15 @@ def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
             continue
         if vendor == "mimo" and model_id not in MIMO_WEB_SEARCH_MODELS:
             continue
+        if vendor == "openai" and model_id not in OPENAI_RESPONSES_WEB_SEARCH_MODELS:
+            continue
+        if vendor == "openrouter":
+            supported_parameters = record.get("supported_parameters")
+            if not isinstance(supported_parameters, list) or not {
+                "tools",
+                "tool_choice",
+            }.issubset(supported_parameters):
+                continue
         raw_name = record.get("name")
         name = raw_name.strip() if isinstance(raw_name, str) else model_id
         if not name or any(ord(char) < 32 or ord(char) == 127 for char in name):

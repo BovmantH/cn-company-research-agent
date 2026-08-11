@@ -86,6 +86,7 @@ async def test_catalog_keeps_only_safe_text_model_fields() -> None:
                 "name": "报告模型",
                 "description": "不应传给前端的上游说明",
                 "architecture": {"output_modalities": ["text"]},
+                "supported_parameters": ["tools", "tool_choice"],
             },
             {
                 "id": "vendor/report-chat",
@@ -100,6 +101,7 @@ async def test_catalog_keeps_only_safe_text_model_fields() -> None:
                 "id": "vendor/image-understanding-chat",
                 "name": "视觉理解模型",
                 "architecture": {"output_modalities": ["text"]},
+                "supported_parameters": ["tools", "tool_choice"],
             },
             {"id": "text-embedding-4", "name": "向量模型"},
             {"id": "包含 空格", "name": "非法标识"},
@@ -154,7 +156,18 @@ async def test_openrouter_uses_user_filtered_text_catalog() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        return httpx.Response(200, json={"data": [{"id": "vendor/chat"}]})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "vendor/chat",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": ["tools", "tool_choice"],
+                    }
+                ]
+            },
+        )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         await ModelCatalogService(client=client).list_models("openrouter", "sk-test")
@@ -162,6 +175,68 @@ async def test_openrouter_uses_user_filtered_text_catalog() -> None:
     assert requests[0].url == httpx.URL(
         "https://openrouter.ai/api/v1/models/user?output_modalities=text"
     )
+
+
+@pytest.mark.asyncio
+async def test_openrouter_catalog_requires_forced_tool_capability() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "vendor/search-ready",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": ["tools", "tool_choice"],
+                    },
+                    {
+                        "id": "vendor/tools-only",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": ["tools"],
+                    },
+                    {
+                        "id": "vendor/no-tools",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": [],
+                    },
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelCatalogService(client=client).list_models(
+            "openrouter",
+            "sk-test",
+        )
+
+    assert [model.id for model in result.models] == ["vendor/search-ready"]
+
+
+@pytest.mark.asyncio
+async def test_openai_catalog_intersects_dynamic_ids_with_web_search_models() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "gpt-5.6-luna"},
+                    {"id": "gpt-5.6-terra"},
+                    {"id": "gpt-4o"},
+                    {"id": "text-embedding-4"},
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelCatalogService(client=client).list_models(
+            "openai",
+            "sk-test",
+        )
+
+    assert [model.id for model in result.models] == [
+        "gpt-5.6-luna",
+        "gpt-5.6-terra",
+    ]
 
 
 @pytest.mark.asyncio
