@@ -140,11 +140,11 @@ describe('AIConfigurationPanel', () => {
     });
     expect(renderer.root.findAllByProps({ role: 'tooltip' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ children: '可用于联网调研' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ children: '暂未开放联网调研' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ children: '缺少可验证来源接口' })).toHaveLength(1);
     expect(JSON.stringify(renderer.toJSON())).toContain('项目维护的推荐清单');
     await act(async () => providerButtons[1].props.onClick());
     expect(JSON.stringify(renderer.toJSON())).toContain(
-      '本项目尚未开放它的逐来源引用联网适配',
+      '该厂商普通 API 当前未提供本项目调研所需的可验证逐来源引用联网接口',
     );
     renderer.unmount();
   });

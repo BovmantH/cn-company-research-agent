@@ -285,7 +285,7 @@ const AIConfigurationPanel = forwardRef<
                   <span className={`mt-1 block pr-4 text-xs ${
                     provider.availableForResearch ? 'text-emerald-700' : 'text-amber-700'
                   }`}>
-                    {provider.availableForResearch ? '可用于联网调研' : '暂未开放联网调研'}
+                    {provider.availableForResearch ? '可用于联网调研' : '缺少可验证来源接口'}
                   </span>
                   {selected && (
                     <Check
@@ -438,7 +438,7 @@ const AIConfigurationPanel = forwardRef<
       <div aria-live="polite">
         {configurationMode === 'client' && selectedProvider && !selectedProvider.availableForResearch && (
           <p className="text-sm text-amber-700">
-            该厂商当前可查看模型目录，但本项目尚未开放它的逐来源引用联网适配，暂不能提交调研。
+            该厂商普通 API 当前未提供本项目调研所需的可验证逐来源引用联网接口，因此仅可查看模型目录，暂不能提交调研。
           </p>
         )}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}

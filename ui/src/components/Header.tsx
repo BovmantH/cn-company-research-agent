@@ -1,4 +1,4 @@
-import { BookOpen, Github, Waypoints } from 'lucide-react';
+import { BookOpen, Star, Waypoints } from 'lucide-react';
 
 import { PROJECT_README_URL, PROJECT_REPOSITORY_URL } from '../constants/project';
 
@@ -27,13 +27,23 @@ const Header = () => (
             <span className="hidden sm:inline">使用说明</span>
           </a>
           <a
+            aria-label="前往 GitHub 为项目点 Star"
             href={PROJECT_REPOSITORY_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-base"
+            className="inline-flex min-h-11 items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50/80 px-3 text-left text-slate-700 transition hover:border-blue-400 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            <Github aria-hidden="true" className="h-5 w-5" />
-            <span className="hidden sm:inline">GitHub</span>
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <Star aria-hidden="true" className="h-4 w-4" />
+            </span>
+            <span className="hidden leading-tight md:block">
+              <span className="block text-xs font-semibold text-slate-900">
+                这个项目对你有帮助？
+              </span>
+              <span className="mt-0.5 block text-[11px] font-medium text-blue-700">
+                去 GitHub 点个 Star
+              </span>
+            </span>
           </a>
         </nav>
       </div>
