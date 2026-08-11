@@ -205,6 +205,24 @@ VENDOR_REGISTRY: dict[str, VendorConfig] = {
     ),
 }
 
+# Web 用户只可选择经过项目核对的固定厂商与模型；顺序同时用于前端展示。
+# 用户不能提交 base_url，避免把 Key 发送到任意主机。
+CLIENT_VENDOR_MODELS: dict[str, tuple[str, ...]] = {
+    "qwen": ("qwen3.7-plus", "qwen3.7-max", "qwen3.7-flash"),
+    "glm": ("glm-4.7", "glm-5.2", "glm-4.7-flash"),
+    "mimo": ("mimo-v2.5", "mimo-v2.5-pro"),
+    "minimax": ("MiniMax-M3",),
+    "kimi": ("kimi-k3", "kimi-k2.6"),
+    "openrouter": (
+        "qwen/qwen3.7-plus",
+        "z-ai/glm-5.2",
+        "xiaomi/mimo-v2.5-pro",
+        "moonshotai/kimi-k3",
+        "openai/gpt-5.6-terra",
+    ),
+    "openai": ("gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"),
+}
+
 # 默认探测顺序：Zen 免费线路 → 国内原厂 → OpenRouter → OpenAI。
 DEFAULT_VENDOR_PRIORITY: list[str] = [
     "opencode",
@@ -541,9 +559,10 @@ def _build_chat_model(
     model_override: str | None,
     use_role_env: bool,
     overrides: dict[str, Any],
+    fixed_base_url: str | None = None,
 ) -> BaseChatModel:
     """构造一个供应商隔离的聊天模型实例，防止 Key 或模型串线。"""
-    base_url = _resolve_base_url(vendor)
+    base_url = fixed_base_url or _resolve_base_url(vendor)
     model = _resolve_model(
         role,
         vendor,
@@ -600,6 +619,44 @@ def _build_chat_model(
         kwargs["streaming"],
     )
     return ChatOpenAI(**kwargs)
+
+
+def build_client_llm(
+    *,
+    role: str,
+    vendor: str,
+    model: str,
+    api_key: str,
+    streaming: bool,
+) -> BaseChatModel:
+    """为单次 Web 调研构造固定厂商模型，不读取服务端厂商选择或执行回退。"""
+    if role not in VALID_ROLES:
+        raise ValueError(f"未知的 LLM 角色：{role!r}。可选值：{sorted(VALID_ROLES)}")
+
+    normalized_vendor = vendor.strip().lower()
+    models = CLIENT_VENDOR_MODELS.get(normalized_vendor)
+    if models is None:
+        raise ValueError(f"不支持的用户模型供应商：{normalized_vendor!r}")
+
+    normalized_model = model.strip()
+    if normalized_model not in models:
+        raise ValueError(
+            f"供应商 {normalized_vendor!r} 不支持模型 {normalized_model!r}"
+        )
+
+    normalized_key = api_key.strip()
+    if not normalized_key:
+        raise ValueError("用户 API Key 不能为空")
+
+    return _build_chat_model(
+        role,
+        normalized_vendor,
+        normalized_key,
+        model_override=normalized_model,
+        use_role_env=False,
+        overrides={"streaming": streaming},
+        fixed_base_url=VENDOR_REGISTRY[normalized_vendor].base_url,
+    )
 
 
 def get_llm(role: str, **overrides: Any) -> BaseChatModel | Runnable[Any, Any]:

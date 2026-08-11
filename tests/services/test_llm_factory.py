@@ -33,11 +33,13 @@ from openai import APIConnectionError, APIError, BadRequestError
 
 import backend.services.llm_factory as llm_factory
 from backend.services.llm_factory import (
+    CLIENT_VENDOR_MODELS,
     DEFAULT_MODELS,
     DEFAULT_VENDOR_PRIORITY,
     FALLBACK_EXCEPTIONS,
     OPENAI_BASE_URL,
     OPENROUTER_BASE_URL,
+    build_client_llm,
     get_llm,
     get_llm_credential_candidates,
 )
@@ -90,6 +92,66 @@ class _AsyncStreamRunnable(Runnable[Any, str]):
     ) -> AsyncIterator[str]:
         async for chunk in self._stream_factory():
             yield chunk
+
+
+# === Web 用户任务级模型 ===
+
+
+def test_client_llm_uses_selected_vendor_model_and_official_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_VENDOR", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-server-openai")
+    monkeypatch.setenv("LLM_BASE_URL", "https://proxy.example.invalid/v1")
+
+    llm = build_client_llm(
+        role="researcher",
+        vendor="qwen",
+        model="qwen3.7-plus",
+        api_key="sk-user-qwen",
+        streaming=True,
+    )
+
+    assert isinstance(llm, ChatOpenAI)
+    assert llm.model_name == "qwen3.7-plus"
+    assert "dashscope.aliyuncs.com/compatible-mode/v1" in str(
+        getattr(llm, "openai_api_base", "") or ""
+    )
+    assert "proxy.example.invalid" not in str(getattr(llm, "openai_api_base", "") or "")
+    assert "sk-user-qwen" not in repr(llm)
+
+
+def test_client_llm_rejects_unknown_vendor_or_mismatched_model() -> None:
+    with pytest.raises(ValueError, match="不支持的用户模型供应商"):
+        build_client_llm(
+            role="researcher",
+            vendor="deepseek",
+            model="deepseek-v4-flash",
+            api_key="sk-test",
+            streaming=True,
+        )
+
+    with pytest.raises(ValueError, match="不支持模型"):
+        build_client_llm(
+            role="researcher",
+            vendor="qwen",
+            model="gpt-5.6-terra",
+            api_key="sk-test",
+            streaming=True,
+        )
+
+
+def test_client_vendor_models_match_confirmed_web_form_options() -> None:
+    assert tuple(CLIENT_VENDOR_MODELS) == (
+        "qwen",
+        "glm",
+        "mimo",
+        "minimax",
+        "kimi",
+        "openrouter",
+        "openai",
+    )
+    assert CLIENT_VENDOR_MODELS["qwen"][0] == "qwen3.7-plus"
 
 
 # === OpenCode Zen 免费优先 ===
