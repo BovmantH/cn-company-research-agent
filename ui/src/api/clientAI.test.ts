@@ -68,6 +68,30 @@ describe('client AI contracts', () => {
     })).toBeNull();
   });
 
+  it('拒绝厂商展示字段缺失或类型错误', () => {
+    const provider = {
+      id: 'qwen',
+      name: '阿里百炼（Qwen）',
+      short_name: 'Qwen',
+      description: '阿里云百炼提供的通义千问模型服务。',
+      catalog_source: 'curated',
+      requires_key_to_list: false,
+      available_for_research: true,
+    };
+    const withoutField = (field: string) => Object.fromEntries(
+      Object.entries(provider).filter(([key]) => key !== field),
+    );
+
+    expect(parseClientProviders({ providers: [withoutField('short_name')] })).toBeNull();
+    expect(parseClientProviders({
+      providers: [{ ...provider, short_name: 7 }],
+    })).toBeNull();
+    expect(parseClientProviders({ providers: [withoutField('description')] })).toBeNull();
+    expect(parseClientProviders({
+      providers: [{ ...provider, description: 7 }],
+    })).toBeNull();
+  });
+
   it('加载动态目录时只把 Key 发给部署实例后端', async () => {
     const sentinel = 'sk-browser-sentinel';
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {

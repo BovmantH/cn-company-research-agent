@@ -11,3 +11,4 @@ export { default as CompanyResolutionPanel } from './CompanyResolutionPanel';
 export { default as ProfessionalDataStatus } from './ProfessionalDataStatus';
 export { default as AIConfigurationPanel } from './AIConfigurationPanel';
 export { default as OfficialVerificationPanel } from './OfficialVerificationPanel';
+export { default as ResearchNetworkBackground } from './ResearchNetworkBackground';
