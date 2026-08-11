@@ -85,7 +85,7 @@ describe('AIConfigurationPanel', () => {
     renderer.unmount();
   });
 
-  it('分别标识可用于联网调研和仅可查看模型目录的厂商', async () => {
+  it('分别标识可用于联网调研和暂未开放联网的厂商', async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
@@ -106,15 +106,46 @@ describe('AIConfigurationPanel', () => {
     expect(providerButtons).toHaveLength(2);
     expect(providerButtons[0].props['aria-describedby'])
       .toBe('provider-description-qwen');
-    expect(renderer.root.findByProps({ 'aria-label': '查看Qwen说明' })
-      .props['aria-describedby']).toBe('provider-description-qwen');
-    expect(renderer.root.findByProps({
-      id: 'provider-description-qwen',
+    const descriptionButton = renderer.root.findByProps({
+      'aria-label': '查看Qwen说明',
+    });
+    expect(descriptionButton.props['aria-expanded']).toBe(false);
+    expect(renderer.root.findAllByProps({ role: 'tooltip' })).toHaveLength(0);
+
+    await act(async () => descriptionButton.props.onFocus());
+    const tooltip = renderer.root.findByProps({
+      id: 'provider-tooltip-qwen',
       role: 'tooltip',
-    }).props.children).toBe('阿里云百炼提供的通义千问模型服务。');
+    });
+    expect(tooltip.props.children).toBe('阿里云百炼提供的通义千问模型服务。');
+    expect(tooltip.props.className).toContain('w-full');
+    expect(tooltip.props.className).not.toContain('absolute');
+    expect(descriptionButton.props['aria-expanded']).toBe(true);
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-provider-id': 'qwen' }).props.onBlurCapture({
+        currentTarget: { contains: () => false },
+        relatedTarget: null,
+      });
+    });
+    expect(renderer.root.findAllByProps({ role: 'tooltip' })).toHaveLength(0);
+
+    await act(async () => descriptionButton.props.onFocus());
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-provider-id': 'qwen' }).props.onKeyDown({
+        key: 'Escape',
+        stopPropagation: vi.fn(),
+      });
+    });
+    expect(renderer.root.findAllByProps({ role: 'tooltip' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ children: '可用于联网调研' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ children: '可查看模型目录' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ children: '暂未开放联网调研' })).toHaveLength(1);
     expect(JSON.stringify(renderer.toJSON())).toContain('项目维护的推荐清单');
+    await act(async () => providerButtons[1].props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      '本项目尚未开放它的逐来源引用联网适配',
+    );
     renderer.unmount();
   });
 

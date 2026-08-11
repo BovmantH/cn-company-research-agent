@@ -144,7 +144,7 @@ const ResearchForm = ({
                       companyName: event.target.value,
                     }))}
                     className={INPUT_CLASS}
-                    placeholder="例如：小米科技有限责任公司"
+                    placeholder={`例如：${EXAMPLE_COMPANIES[0].name}`}
                   />
                 </div>
               </div>
@@ -164,7 +164,7 @@ const ResearchForm = ({
                       companyUrl: event.target.value,
                     }))}
                     className={INPUT_CLASS}
-                    placeholder="例如：mi.com"
+                    placeholder={`例如：${EXAMPLE_COMPANIES[0].url}`}
                   />
                 </div>
               </div>

@@ -1,9 +1,9 @@
 export const EXAMPLE_COMPANIES = [
   {
-    name: "腾讯",
-    url: "tencent.com",
-    hq: "深圳,中国",
-    industry: "互联网",
+    name: "苹果公司",
+    url: "apple.com",
+    hq: "库比蒂诺,美国",
+    industry: "消费电子、软件服务",
   },
   {
     name: "字节跳动",

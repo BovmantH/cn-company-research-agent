@@ -1,5 +1,7 @@
 import { BookOpen, Github, Waypoints } from 'lucide-react';
 
+import { PROJECT_README_URL, PROJECT_REPOSITORY_URL } from '../constants/project';
+
 const Header = () => (
   <header className="relative z-20">
     <div className="border-b border-slate-200/80 bg-white/90 shadow-[0_1px_12px_rgba(15,39,73,0.06)] backdrop-blur-xl">
@@ -16,7 +18,7 @@ const Header = () => (
 
         <nav aria-label="主要导航" className="flex items-center gap-1 sm:gap-3">
           <a
-            href="https://github.com/BovmantH/cn-company-research-agent/blob/main/README.md"
+            href={PROJECT_README_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-base"
@@ -25,7 +27,7 @@ const Header = () => (
             <span className="hidden sm:inline">使用说明</span>
           </a>
           <a
-            href="https://github.com/BovmantH/cn-company-research-agent"
+            href={PROJECT_REPOSITORY_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-base"

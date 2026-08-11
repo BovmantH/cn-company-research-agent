@@ -64,6 +64,7 @@ const AIConfigurationPanel = forwardRef<
   const [loadedCatalogSource, setLoadedCatalogSource] = useState<
     'official_api' | 'curated' | null
   >(null);
+  const [openProviderDescription, setOpenProviderDescription] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const secretInputRef = useRef<HTMLInputElement>(null);
   const modelRequestRef = useRef<AbortController | null>(null);
@@ -243,8 +244,29 @@ const AIConfigurationPanel = forwardRef<
           {providers.map((provider) => {
             const selected = provider.id === selectedVendor;
             const descriptionId = `provider-description-${provider.id}`;
+            const tooltipId = `provider-tooltip-${provider.id}`;
+            const descriptionOpen = openProviderDescription === provider.id;
             return (
-              <div key={provider.id} className="group relative">
+              <div
+                key={provider.id}
+                data-provider-id={provider.id}
+                className="relative min-w-0"
+                onMouseEnter={() => setOpenProviderDescription(provider.id)}
+                onMouseLeave={() => setOpenProviderDescription((current) => (
+                  current === provider.id ? null : current
+                ))}
+                onBlurCapture={(event) => {
+                  if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                  setOpenProviderDescription((current) => (
+                    current === provider.id ? null : current
+                  ));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Escape') return;
+                  setOpenProviderDescription(null);
+                  event.stopPropagation();
+                }}
+              >
                 <button
                   type="button"
                   role="radio"
@@ -263,7 +285,7 @@ const AIConfigurationPanel = forwardRef<
                   <span className={`mt-1 block pr-4 text-xs ${
                     provider.availableForResearch ? 'text-emerald-700' : 'text-amber-700'
                   }`}>
-                    {provider.availableForResearch ? '可用于联网调研' : '可查看模型目录'}
+                    {provider.availableForResearch ? '可用于联网调研' : '暂未开放联网调研'}
                   </span>
                   {selected && (
                     <Check
@@ -275,18 +297,25 @@ const AIConfigurationPanel = forwardRef<
                 <button
                   type="button"
                   aria-label={`查看${provider.shortName}说明`}
-                  aria-describedby={descriptionId}
+                  aria-controls={tooltipId}
+                  aria-expanded={descriptionOpen}
+                  aria-describedby={descriptionOpen ? tooltipId : undefined}
+                  onClick={() => setOpenProviderDescription(provider.id)}
+                  onFocus={() => setOpenProviderDescription(provider.id)}
                   className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <Info aria-hidden="true" className="h-4 w-4" />
                 </button>
-                <span
-                  id={descriptionId}
-                  role="tooltip"
-                  className="pointer-events-none invisible absolute left-0 top-[calc(100%+0.4rem)] z-30 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-blue-100 bg-slate-950 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-                >
-                  {provider.description}
-                </span>
+                <span id={descriptionId} className="sr-only">{provider.description}</span>
+                {descriptionOpen && (
+                  <span
+                    id={tooltipId}
+                    role="tooltip"
+                    className="mt-2 block w-full break-words rounded-xl border border-blue-100 bg-slate-950 px-3 py-2 text-xs leading-5 text-white shadow-lg"
+                  >
+                    {provider.description}
+                  </span>
+                )}
               </div>
             );
           })}
@@ -409,7 +438,7 @@ const AIConfigurationPanel = forwardRef<
       <div aria-live="polite">
         {configurationMode === 'client' && selectedProvider && !selectedProvider.availableForResearch && (
           <p className="text-sm text-amber-700">
-            可以查看该厂商的官方模型目录，但原生联网搜索尚未接入，暂不能用它生成带来源引用的报告。
+            该厂商当前可查看模型目录，但本项目尚未开放它的逐来源引用联网适配，暂不能提交调研。
           </p>
         )}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}

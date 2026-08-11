@@ -10,6 +10,7 @@ import {
   CompanyResolutionPanel,
   ProfessionalDataStatus,
   ResearchNetworkBackground,
+  ProjectFooter,
 } from './components';
 import { glassStyle, fadeInAnimation } from './styles';
 import {
@@ -479,6 +480,7 @@ function App() {
         )}
         </div>
       </main>
+      <ProjectFooter />
     </div>
   );
 }
