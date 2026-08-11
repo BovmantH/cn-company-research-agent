@@ -6,6 +6,7 @@
 > - 🇨🇳 **国产原厂直连** —— 支持 DeepSeek、Kimi、Qwen、GLM、MiniMax、MiMo,无需经过聚合平台
 > - 🆓 **OpenCode Zen 免费优先** —— 部署者配置 Key 后优先使用 `deepseek-v4-flash-free`,可按需配置付费回退
 > - 🌏 **聚合与原生兼容入口** —— 保留 [OpenRouter](https://openrouter.ai) 和 OpenAI,部署者可按网络、成本与合规要求选择
+> - 🔐 **任务级用户 Key** —— Web 用户可为单次任务选择厂商与模型；Key 不持久化、不写应用日志,也可继续使用部署者的服务端配置
 > - 🇨🇳 **Prompt 全量中文化** —— 不是机翻,人工重写,对国内模型更友好
 > - 🎨 **UI 与示例公司中文化** —— 默认示例换成腾讯、字节、宁德时代、比亚迪
 > - 🔌 **检索层抽象化** —— 引入 `SearchProvider` 接口,Phase 2 接 Bocha AI / AKShare / 巨潮资讯网 / 企查查 等国内数据源不再动节点代码
@@ -28,6 +29,7 @@
   - **Briefing**(分类摘要,长上下文)— 各供应商使用通用或长上下文模型
   - **Editor**(终稿编辑,严谨格式)— 各供应商使用高质量终稿模型
 - **现代 React 前端**:进度跟踪、PDF 下载
+- **动态模型目录**:优先读取厂商官方模型列表接口；无可靠目录接口的 Qwen / GLM 明确使用项目推荐清单
 - **模块化架构**:每个 agent 是独立的 LangGraph 节点,易于替换扩展
 - **工商司法专业数据（预览）**:主体确认、预算账本、安全降级和确定性报告附录已经就绪；生产 QCC Provider 尚未完成真实响应适配,当前版本默认关闭
 
@@ -39,7 +41,7 @@
 |---|---|---|
 | 语言 | 英文 prompt + 英文 UI + 英文报告 | **中文** prompt + UI + 报告 |
 | Prompt 质量 | 英文(中文公司用英文 prompt 时模型偏向英文资料) | **人工重写而非机翻**,占位符与下游解析依赖的标题(`### 核心产品/服务` 等)同步迁移,对国产模型更友好 |
-| LLM provider | OpenAI(GPT 系列)+ Google(Gemini 系列)硬编码 | 统一 `llm_factory.get_llm(role)`,**OpenCode Zen 免费优先 + 六家国产原厂 + OpenRouter / OpenAI 兼容兜底**；所有 Key 仅由部署者在服务端配置 |
+| LLM provider | OpenAI(GPT 系列)+ Google(Gemini 系列)硬编码 | 统一 `llm_factory.get_llm(role)`,**OpenCode Zen 免费优先 + 六家国产原厂 + OpenRouter / OpenAI 兼容兜底**；支持部署者服务端配置与单次任务用户 Key |
 | 模型成本控制 | 无 | **`LLM_MAX_TOKENS` 兜底**避免 OpenRouter 按模型最大窗口预扣余额导致小余额账号 402 |
 | 检索层 | 直接调 Tavily 客户端,5 个文件分散调用 | **`SearchProvider` 抽象接口**,Tavily 收拢为默认 provider,新增 provider 无需改节点代码 |
 | 启动校验 | 缺 key 运行时报错 | **启动期校验**,中文报错并立即退出 |
@@ -127,7 +129,7 @@ flowchart LR
 | `briefing` | `deepseek-v4-flash-free` / `qwen/qwen3.7-plus` | DeepSeek V4 Flash、Kimi K3、Qwen 3.7 Plus、GLM 4.7、MiniMax M3、MiMo 2.5、GPT-5.6 Terra | `briefing.py` 生成分类摘要 |
 | `editor` | `deepseek-v4-flash-free` / `moonshotai/kimi-k3` | DeepSeek V4 Pro、Kimi K3、Qwen 3.7 Max、GLM 5.2、MiniMax M3、MiMo 2.5 Pro、GPT-5.6 Sol | `editor.py` 整合终稿(流式) |
 
-> 配置示例见下方 [环境变量](#环境变量)。Web 用户不会看到供应商选择或 Key 输入；模型能力完全由部署者的服务端配置决定。
+> 配置示例见下方 [环境变量](#环境变量)。Web 用户可以选择“用户自带 Key”或“使用部署者配置”。用户模式固定使用后端允许的厂商、模型和官方端点,不会继承部署者的付费回退链。
 
 ### 内容过滤系统
 
@@ -147,6 +149,8 @@ API 端点:
 | 方法 | 路径 | 用途 |
 |---|---|---|
 | `POST` | `/research` | 提交调研请求,返回 `job_id` |
+| `GET` | `/ai/providers` | 返回前端可展示的厂商能力,不含端点或 Key |
+| `POST` | `/ai/models` | 使用当前用户临时 Key 读取模型目录 |
 | `GET` | `/research/{job_id}` | 查询任务状态 |
 | `GET` | `/research/{job_id}/stream` | 订阅进度流(SSE) |
 | `GET` | `/research/{job_id}/report` | 拉取终稿报告 |
@@ -244,7 +248,7 @@ docker compose up --build
 ### 根目录 `.env`(后端)
 
 ```env
-# === LLM(必填:下方任意供应商 Key 至少配一个)===
+# === 服务端 LLM(可选:仅使用 Web 用户 Key 时可不配置)===
 # A) OpenCode Zen 限时免费优先
 OPENCODE_API_KEY=sk-...
 
@@ -273,7 +277,7 @@ TAVILY_API_KEY=tvly-...
 
 完整变量列表见 [`.env.example`](.env.example)。
 
-LLM Key 只应放在部署者控制的服务端 `.env` 或 Secret 中，不会下发到浏览器，Web 用户也不能选择供应商或填写 Key。
+部署者 Key 只应放在服务端 `.env` 或 Secret 中,不会下发到浏览器。Web 用户也可以选择“用户自带 Key”:Key 会先发送给当前部署实例后端,再由后端访问固定的厂商官方端点；只在本次任务处理期间驻留内存,不写入 MongoDB、任务状态、SSE 或应用日志。公开部署必须使用 HTTPS,用户应只在可信部署实例中填写 Key。
 
 ### `ui/.env`(前端)
 
@@ -321,6 +325,13 @@ MOONSHOT_API_KEY=sk-...
 | **MiMo**(小米) | `MIMO_API_KEY` | `https://api.xiaomimimo.com/v1` | `mimo-v2.5` / `mimo-v2.5-pro` |
 | **OpenRouter** | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | DeepSeek V4 / Qwen 3.7 / Kimi K3 |
 | **OpenAI** | `OPENAI_API_KEY` | `https://api.openai.com/v1` | `gpt-5.6-luna` / `gpt-5.6-terra` / `gpt-5.6-sol` |
+
+#### Web 用户模型目录与联网边界
+
+- OpenCode Zen、DeepSeek、Kimi、MiniMax、MiMo、OpenRouter、OpenAI:通过各厂商的官方模型列表 API 动态读取,前端不写死模型列表。
+- Qwen、GLM:当前没有适合普通按量推理选择器的可靠官方模型目录 API,因此后端集中维护推荐清单,界面明确标为“项目维护的推荐清单”。
+- 动态目录只说明 Key 能读取哪些模型,不自动证明模型适合本项目的联网和引用契约。当前 Web 用户单 Key 联网任务仅开放 Qwen `qwen3.7-plus` / `qwen3.7-max`;其余厂商会展示目录,但标记为“待接入联网”。
+- 选择“使用部署者配置”时继续使用服务端 LLM 与 `SearchProvider`;在默认配置下,部署者仍需分别承担 LLM 和 Tavily 检索费用。
 
 OpenCode Zen 的免费型号是**限时免费**，服务托管在美国，免费期间提交的数据可能用于模型改进。不要发送个人、机密或受合同/监管限制的数据；部署前请复核 [Zen 官方说明](https://opencode.ai/docs/zen)。如果启用付费回退,请在对应平台设置预算、月度限额，并谨慎配置或关闭自动充值。
 
