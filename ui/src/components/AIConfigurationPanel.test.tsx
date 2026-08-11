@@ -79,7 +79,7 @@ describe('AIConfigurationPanel', () => {
     renderer.unmount();
   });
 
-  it('展示全部厂商，但明确标识尚未开放联网调研的厂商', async () => {
+  it('分别标识可用于联网调研和仅可查看模型目录的厂商', async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
@@ -99,8 +99,64 @@ describe('AIConfigurationPanel', () => {
         .findByProps({ 'aria-label': '模型厂商' })
         .findAllByProps({ role: 'radio' }),
     ).toHaveLength(2);
-    expect(renderer.root.findAllByProps({ children: '待接入联网' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ children: '可用于联网调研' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ children: '可查看模型目录' })).toHaveLength(1);
     expect(JSON.stringify(renderer.toJSON())).toContain('项目维护的推荐清单');
+    renderer.unmount();
+  });
+
+  it('动态目录要求先填写 Key，再由用户主动加载模型列表', async () => {
+    const inputNode = { value: '' };
+    const loadModels = vi.fn(async () => qwenCatalog);
+    let renderer!: ReactTestRenderer;
+
+    await act(async () => {
+      renderer = create(
+        <AIConfigurationPanel
+          apiUrl=""
+          disabled={false}
+          loadProviders={async () => providers}
+          loadModels={loadModels}
+        />,
+        {
+          createNodeMock: (element) => (
+            element.type === 'input' && element.props.id === 'client-api-key'
+              ? inputNode
+              : null
+          ),
+        },
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const providerButtons = renderer.root
+      .findByProps({ 'aria-label': '模型厂商' })
+      .findAllByProps({ role: 'radio' });
+    await act(async () => providerButtons[1].props.onClick());
+
+    expect(renderer.root.findByProps({ id: 'client-model' }).props.children[0].props.children)
+      .toBe('填写 Key 后加载模型列表');
+    const loadButton = renderer.root.findByProps({ 'aria-label': '加载模型列表' });
+    expect(loadButton.props.disabled).toBe(true);
+    expect(loadModels).toHaveBeenCalledTimes(1);
+
+    inputNode.value = 'sk-kimi-sentinel';
+    await act(async () => {
+      renderer.root.findByProps({ id: 'client-api-key' }).props.onInput({
+        currentTarget: inputNode,
+      });
+    });
+    expect(loadButton.props.disabled).toBe(false);
+
+    await act(async () => loadButton.props.onClick());
+    expect(loadModels).toHaveBeenLastCalledWith(
+      '',
+      'kimi',
+      'sk-kimi-sentinel',
+      expect.any(AbortSignal),
+    );
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('sk-kimi-sentinel');
     renderer.unmount();
   });
 

@@ -249,9 +249,11 @@ const AIConfigurationPanel = forwardRef<
                   <span className="truncate text-sm font-medium">{provider.name}</span>
                   {selected && <Check aria-hidden="true" className="h-4 w-4 shrink-0" />}
                 </span>
-                {!provider.availableForResearch && (
-                  <span className="mt-1 block text-xs text-amber-700">待接入联网</span>
-                )}
+                <span className={`mt-1 block text-xs ${
+                  provider.availableForResearch ? 'text-emerald-700' : 'text-amber-700'
+                }`}>
+                  {provider.availableForResearch ? '可用于联网调研' : '可查看模型目录'}
+                </span>
               </button>
             );
           })}
@@ -263,46 +265,6 @@ const AIConfigurationPanel = forwardRef<
             正在读取模型厂商……
           </p>
         )}
-
-        <div>
-          <label htmlFor="client-model" className="mb-2 block text-sm font-medium text-slate-700">
-            联网模型
-          </label>
-          <div className="flex gap-2">
-            <select
-              id="client-model"
-              value={selectedModel}
-              onChange={(event) => setSelectedModel(event.target.value)}
-              disabled={disabled || isLoadingModels || models.length === 0}
-              className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
-            >
-              {models.length === 0 && <option value="">请先加载模型目录</option>}
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>{model.name}</option>
-              ))}
-            </select>
-            {selectedProvider?.requiresKeyToList && (
-              <button
-                type="button"
-                onClick={loadSelectedCatalog}
-                disabled={disabled || isLoadingModels || !hasSecret}
-                className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isLoadingModels
-                  ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-                  : <RefreshCw aria-hidden="true" className="h-4 w-4" />}
-                加载目录
-              </button>
-            )}
-          </div>
-          {selectedProvider && (
-            <p className="mt-2 text-xs text-slate-500">
-              目录来源：{(loadedCatalogSource ?? selectedProvider.catalogSource) === 'official_api'
-                ? '厂商官方动态目录'
-                : '项目维护的推荐清单'}
-            </p>
-          )}
-        </div>
 
         <div>
           <label htmlFor="client-api-key" className="mb-2 block text-sm font-medium text-slate-700">
@@ -340,13 +302,65 @@ const AIConfigurationPanel = forwardRef<
             Key 仅在本次任务处理期间驻留内存，不持久化、不写应用日志。Key 会先发送给当前部署实例后端，再由后端访问所选厂商官方端点；请只使用可信部署。
           </p>
         </div>
+
+        <div>
+          <label htmlFor="client-model" className="mb-2 block text-sm font-medium text-slate-700">
+            模型
+          </label>
+          <div className="flex gap-2">
+            <select
+              id="client-model"
+              value={selectedModel}
+              onChange={(event) => setSelectedModel(event.target.value)}
+              disabled={disabled || isLoadingModels || models.length === 0}
+              className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+            >
+              {models.length === 0 && (
+                <option value="">
+                  {selectedProvider?.requiresKeyToList
+                    ? '填写 Key 后加载模型列表'
+                    : '正在加载模型列表'}
+                </option>
+              )}
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>{model.name}</option>
+              ))}
+            </select>
+            {selectedProvider?.requiresKeyToList && (
+              <button
+                type="button"
+                aria-label="加载模型列表"
+                onClick={loadSelectedCatalog}
+                disabled={disabled || isLoadingModels || !hasSecret}
+                className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLoadingModels
+                  ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  : <RefreshCw aria-hidden="true" className="h-4 w-4" />}
+                加载模型列表
+              </button>
+            )}
+          </div>
+          {selectedProvider && (
+            <div className="mt-2 space-y-1 text-xs leading-5 text-slate-500">
+              <p>
+                目录来源：{(loadedCatalogSource ?? selectedProvider.catalogSource) === 'official_api'
+                  ? '厂商官方动态目录'
+                  : '项目维护的推荐清单'}
+              </p>
+              {selectedProvider.requiresKeyToList && (
+                <p>填写 Key 后点击“加载模型列表”；读取目录不会调用模型生成。</p>
+              )}
+            </div>
+          )}
+        </div>
       </fieldset>
       )}
 
       <div aria-live="polite">
         {configurationMode === 'client' && selectedProvider && !selectedProvider.availableForResearch && (
           <p className="text-sm text-amber-700">
-            该厂商的模型目录可以查看，但原生联网调研尚未开放，暂不能提交任务。
+            可以查看该厂商的官方模型目录，但原生联网搜索尚未接入，暂不能用它生成带来源引用的报告。
           </p>
         )}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
