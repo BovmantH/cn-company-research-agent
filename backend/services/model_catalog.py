@@ -153,6 +153,9 @@ def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
 
     if not options:
         raise ModelCatalogUnavailable("官方模型目录暂时不可用")
+    if vendor == "openrouter":
+        # OpenRouter 用稳定的 :free 路由后缀标识免费变体；稳定排序保留各组原顺序。
+        options.sort(key=lambda option: not option.id.endswith(":free"))
     return options
 
 

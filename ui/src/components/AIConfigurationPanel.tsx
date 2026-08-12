@@ -71,6 +71,8 @@ const AIConfigurationPanel = forwardRef<
     () => providers.find((provider) => provider.id === selectedVendor) ?? null,
     [providers, selectedVendor],
   );
+  const selectedModelIsFree = selectedVendor === 'openrouter'
+    && selectedModel.endsWith(':free');
 
   const orderedProviders = useMemo(
     () => providers
@@ -400,6 +402,11 @@ const AIConfigurationPanel = forwardRef<
               </p>
               {selectedProvider.requiresKeyToList && (
                 <p>填写 Key 后点击“加载模型列表”；读取目录不会调用模型生成。</p>
+              )}
+              {selectedModelIsFree && (
+                <p className="text-amber-700">
+                  免费模型推理不收取模型费用；联网搜索仍由 OpenRouter 单独计费，且免费模型通常有更低的额度与频率限制。
+                </p>
               )}
             </div>
           )}

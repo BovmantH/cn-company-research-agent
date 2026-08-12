@@ -180,6 +180,77 @@ describe('AIConfigurationPanel', () => {
     renderer.unmount();
   });
 
+  it('默认选择 OpenRouter 免费模型并说明联网搜索仍可能收费', async () => {
+    const inputNode = { value: '' };
+    const openRouterProvider: ClientAIProvider = {
+      id: 'openrouter',
+      name: 'OpenRouter',
+      shortName: 'OpenRouter',
+      description: 'OpenRouter 聚合模型服务。',
+      apiConsoleUrl: 'https://openrouter.ai/settings/keys',
+      catalogSource: 'official_api',
+      requiresKeyToList: true,
+      availableForResearch: true,
+    };
+    const openRouterCatalog: ClientAIModelCatalog = {
+      vendor: 'openrouter',
+      source: 'official_api',
+      availableForResearch: true,
+      models: [
+        { id: 'vendor/report-model:free', name: '免费报告模型' },
+        { id: 'vendor/report-model', name: '付费报告模型' },
+      ],
+    };
+    const panelRef = { current: null as AIConfigurationPanelHandle | null };
+    let renderer!: ReactTestRenderer;
+
+    await act(async () => {
+      renderer = create(
+        <AIConfigurationPanel
+          ref={panelRef}
+          apiUrl=""
+          disabled={false}
+          loadProviders={async () => [openRouterProvider]}
+          loadModels={async () => openRouterCatalog}
+        />,
+        {
+          createNodeMock: (element) => (
+            element.type === 'input' && element.props.id === 'client-api-key'
+              ? inputNode
+              : null
+          ),
+        },
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    inputNode.value = 'sk-openrouter-sentinel';
+    await act(async () => {
+      renderer.root.findByProps({ id: 'client-api-key' }).props.onInput({
+        currentTarget: inputNode,
+      });
+      renderer.root.findByProps({ 'aria-label': '加载模型列表' }).props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(renderer.root.findByProps({ id: 'client-model' }).props.value)
+      .toBe('vendor/report-model:free');
+    expect(panelRef.current?.getSubmission()).toEqual({
+      mode: 'client',
+      selection: {
+        vendor: 'openrouter',
+        model: 'vendor/report-model:free',
+        apiKey: 'sk-openrouter-sentinel',
+      },
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      '免费模型推理不收取模型费用；联网搜索仍由 OpenRouter 单独计费',
+    );
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('sk-openrouter-sentinel');
+    renderer.unmount();
+  });
+
   it('只显示所选厂商的官方 API 平台入口，且不携带用户 Key', async () => {
     const inputNode = { value: 'sk-browser-sentinel' };
     let renderer!: ReactTestRenderer;

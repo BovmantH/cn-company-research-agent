@@ -238,6 +238,55 @@ async def test_openrouter_catalog_requires_forced_tool_capability() -> None:
 
 
 @pytest.mark.asyncio
+async def test_openrouter_catalog_prioritizes_free_routes() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "vendor/paid-first",
+                        "name": "付费模型",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": ["tools", "tool_choice"],
+                    },
+                    {
+                        "id": "vendor/free-first:free",
+                        "name": "免费模型一",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": ["tools", "tool_choice"],
+                    },
+                    {
+                        "id": "vendor/free-second:free",
+                        "name": "免费模型二",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": ["tools", "tool_choice"],
+                    },
+                    {
+                        "id": "vendor/paid-second",
+                        "name": "付费模型二",
+                        "architecture": {"output_modalities": ["text"]},
+                        "supported_parameters": ["tools", "tool_choice"],
+                    },
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelCatalogService(client=client).list_models(
+            "openrouter",
+            "sk-test",
+        )
+
+    assert [model.id for model in result.models] == [
+        "vendor/free-first:free",
+        "vendor/free-second:free",
+        "vendor/paid-first",
+        "vendor/paid-second",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_openai_catalog_intersects_dynamic_ids_with_web_search_models() -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
