@@ -64,6 +64,7 @@ from backend.services.model_catalog import (
 )
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
+from backend.services.provider_errors import classify_provider_failure
 
 # 启动时从 .env 文件加载环境变量
 env_path = Path(__file__).parent / ".env"
@@ -828,6 +829,13 @@ async def process_research(
             job_status[job_id]["status"] = "failed"
 
     except Exception as e:
+        provider_failure = classify_provider_failure(e)
+        public_error = (
+            provider_failure.message if provider_failure else "调研任务执行失败"
+        )
+        public_reason = (
+            provider_failure.reason_code if provider_failure else "research_failed"
+        )
         logger.error(
             "调研失败，job_id=%s，异常类型=%s",
             job_id,
@@ -835,7 +843,7 @@ async def process_research(
         )
         job_status[job_id].update(
             {
-                "error": "调研任务执行失败",
+                "error": public_error,
                 "last_update": datetime.now().isoformat(),
                 "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
             }
@@ -843,8 +851,8 @@ async def process_research(
         job_status[job_id]["events"].append(
             {
                 "type": "error",
-                "error": "调研任务执行失败",
-                "reason": "research_failed",
+                "error": public_error,
+                "reason": public_reason,
             }
         )
         job_status[job_id]["status"] = "failed"
@@ -863,7 +871,7 @@ async def process_research(
             mongodb.update_job(
                 job_id=job_id,
                 status="failed",
-                error="调研任务执行失败",
+                error=public_error,
             )
     finally:
         if professional_task is not None and not professional_task.done():

@@ -213,6 +213,95 @@ async def test_research_failure_event_and_log_do_not_leak_exception_text(
     assert "upstream-secret" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("status_code", "expected_reason", "expected_message"),
+    [
+        (
+            400,
+            "provider_request_invalid",
+            "所选厂商不接受当前模型或请求参数，请重新加载模型列表后重试",
+        ),
+        (
+            401,
+            "provider_authentication_failed",
+            "所选厂商拒绝了 API Key，请检查 Key 是否正确或已失效",
+        ),
+        (
+            402,
+            "provider_balance_insufficient",
+            "所选厂商账户余额不足，请充值或改用免费模型后重试",
+        ),
+        (
+            403,
+            "provider_permission_denied",
+            "当前 API Key 无权使用所选模型或联网搜索，请检查厂商账户权限",
+        ),
+        (
+            404,
+            "provider_model_unavailable",
+            "所选模型不存在或已下线，请重新加载模型列表后选择其他模型",
+        ),
+        (408, "provider_timeout", "所选厂商响应超时，请稍后重试"),
+        (
+            429,
+            "provider_rate_limited",
+            "所选厂商请求过于频繁或免费额度已用完，请稍后重试或更换模型",
+        ),
+        (503, "provider_unavailable", "所选厂商服务暂时不可用，请稍后重试"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_provider_status_failure_returns_safe_actionable_message(
+    monkeypatch,
+    caplog,
+    status_code: int,
+    expected_reason: str,
+    expected_message: str,
+) -> None:
+    class ProviderStatusError(RuntimeError):
+        def __init__(self, message: str) -> None:
+            super().__init__(message)
+            self.status_code = status_code
+
+    class FailingGraph:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def run(self, thread):
+            if False:
+                yield {}
+            try:
+                raise ProviderStatusError(
+                    "Authorization: Bearer upstream-secret; account=-0.27"
+                )
+            except ProviderStatusError:
+                raise RuntimeError("严重 API 错误：查询词生成失败") from None
+
+    async def no_sleep(*_args, **_kwargs) -> None:
+        return None
+
+    job_id = f"job-provider-{status_code}-error"
+    monkeypatch.setattr(application, "Graph", FailingGraph)
+    monkeypatch.setattr(application.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(application, "mongodb", None)
+    job_status.pop(job_id, None)
+    try:
+        await application.process_research(
+            job_id,
+            application.ResearchRequest(company="示例科技"),
+        )
+        state = job_status[job_id]
+    finally:
+        job_status.pop(job_id, None)
+
+    event = state["events"][-1]
+    serialized = json.dumps(state, ensure_ascii=False, default=list)
+    assert event["reason"] == expected_reason
+    assert event["error"] == expected_message
+    assert "upstream-secret" not in serialized
+    assert "upstream-secret" not in caplog.text
+
+
 def test_terminal_job_ttl_pruning_removes_only_expired_state() -> None:
     expired_id = "job-expired"
     active_id = "job-active"
