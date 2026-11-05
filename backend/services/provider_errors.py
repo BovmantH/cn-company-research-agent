@@ -8,6 +8,8 @@ from typing import Final
 import httpx
 from openai import APIConnectionError, APITimeoutError
 
+from .search.native_http import NativeSearchRequestError
+
 
 @dataclass(frozen=True)
 class PublicProviderFailure:
@@ -80,6 +82,15 @@ def classify_provider_failure(
     """按异常类型和 HTTP 状态码映射公开错误，未知异常交给通用错误处理。"""
     chain = tuple(_exception_chain(exc))
     for current in chain:
+        if (
+            isinstance(current, NativeSearchRequestError)
+            and current.operation == "fetch"
+            and current.status_code in {403, 404}
+        ):
+            return PublicProviderFailure(
+                "source_page_unavailable",
+                "来源网页暂时无法获取正文，可使用检索摘要继续调研",
+            )
         status_code = getattr(current, "status_code", None)
         if type(status_code) is not int:
             continue

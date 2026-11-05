@@ -116,9 +116,28 @@ def get_search_provider() -> SearchProvider:
     """
     name = os.getenv("SEARCH_PROVIDER", "tavily").strip().lower()
 
+    if name in {"deepseek", "kimi"}:
+        from ..client_model import SelectedModel
+        from ..provider_registry import VENDOR_REGISTRY
+        from .bounded_provider import BoundedSearchProvider
+        from .deepseek_provider import DeepSeekSearchProvider
+        from .kimi_provider import KimiSearchProvider
+
+        config = VENDOR_REGISTRY[name]
+        api_key = os.getenv(config.env_keys[0], "")
+        provider_type = (
+            DeepSeekSearchProvider if name == "deepseek" else KimiSearchProvider
+        )
+        return BoundedSearchProvider(
+            provider_type(
+                api_key=api_key,
+                selection=SelectedModel(name, config.default_model("researcher")),
+            )
+        )
+
     if name not in _PROVIDERS:
         raise ValueError(
-            f"未知的 SEARCH_PROVIDER: {name!r}。当前已注册: {sorted(_PROVIDERS.keys())}"
+            f"未知的 SEARCH_PROVIDER: {name!r}。当前已注册: tavily/deepseek/kimi"
         )
 
     # 按 "module:Class" 形式延迟导入

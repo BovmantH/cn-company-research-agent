@@ -258,8 +258,10 @@ class BaseResearcher:
 
         # 处理并合并搜索结果
         merged_docs: dict[str, dict[str, Any]] = {}
+        failures: list[Exception] = []
         for query, result in zip(queries, results, strict=True):
             if isinstance(result, Exception):
+                failures.append(result)
                 logger.error(
                     "查询执行失败，异常类型=%s",
                     type(result).__name__,
@@ -275,6 +277,10 @@ class BaseResearcher:
             for item in result:
                 if doc := self._process_search_result(item, query):
                     merged_docs[doc["url"]] = doc
+
+        # 没有任何来源且有请求失败时，不能把故障伪装为“无相关记录”。
+        if not merged_docs and failures:
+            raise failures[0]
 
         # 产出搜索完成事件
         yield {

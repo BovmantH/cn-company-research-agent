@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 import application
 from backend.services.client_model import SelectedModel
 from backend.services.model_catalog import ModelCatalogService
+from backend.services.search.bounded_provider import BoundedSearchProvider
 from backend.services.search.glm_provider import GlmWebSearchProvider
 from backend.services.search.mimo_provider import MiMoNativeSearchProvider
 from backend.services.search.qwen_provider import QwenNativeSearchProvider
@@ -99,7 +100,8 @@ def test_provider_options_come_from_backend_capability_registry() -> None:
     assert all(provider["description"] for provider in providers.values())
     assert providers["kimi"]["catalog_source"] == "official_api"
     assert providers["kimi"]["requires_key_to_list"] is True
-    assert providers["kimi"]["available_for_research"] is False
+    assert providers["kimi"]["available_for_research"] is True
+    assert providers["deepseek"]["available_for_research"] is True
     assert providers["glm"]["available_for_research"] is True
     assert providers["mimo"]["available_for_research"] is True
     assert providers["openrouter"]["available_for_research"] is True
@@ -166,7 +168,7 @@ def test_model_catalog_reads_dynamic_vendor_from_fixed_endpoint() -> None:
 
     assert response.status_code == 200
     assert response.json()["models"] == [{"id": "kimi-k4", "name": "Kimi K4"}]
-    assert response.json()["available_for_research"] is False
+    assert response.json()["available_for_research"] is True
     assert requests[0].url == httpx.URL("https://api.moonshot.cn/v1/models")
     assert requests[0].headers["Authorization"] == f"Bearer {SENTINEL_KEY}"
     assert SENTINEL_KEY not in response.text
@@ -269,7 +271,7 @@ def test_mimo_token_plan_key_is_rejected_before_listing_models() -> None:
 @pytest.mark.parametrize(
     "ai_overrides",
     [
-        {"vendor": "deepseek"},
+        {"vendor": "minimax"},
         {"model": "gpt-5.6-terra"},
         {"base_url": "https://attacker.example/v1"},
         {"api_key": "short"},
@@ -298,6 +300,29 @@ def test_persistent_research_input_never_contains_client_ai_secret() -> None:
     assert persisted == {"company": "示例科技有限公司"}
     assert SENTINEL_KEY not in json.dumps(persisted, ensure_ascii=False)
     assert SENTINEL_KEY not in repr(request)
+
+
+@pytest.mark.parametrize(
+    ("vendor", "model"), [("deepseek", "deepseek-flash"), ("kimi", "kimi-k3.1-pro")]
+)
+def test_structured_search_is_available_and_task_scoped(
+    vendor, model, capture_research
+):
+    class StubCatalog:
+        async def require_model(self, **_kwargs):
+            return SelectedModel(vendor=vendor, model=model)
+
+    application.app.state.model_catalog = StubCatalog()
+    response = TestClient(application.app).post(
+        "/research", json=_payload(vendor=vendor, model=model)
+    )
+    assert response.status_code == 200
+    dependencies = capture_research["kwargs"]["research_dependencies"]
+    assert isinstance(dependencies.search, BoundedSearchProvider)
+    assert dependencies.researcher_llm.model_name == model
+    assert capture_research["data"].ai is None
+    assert SENTINEL_KEY not in response.text
+    assert SENTINEL_KEY not in repr(dependencies)
 
 
 def test_research_start_failure_does_not_expose_client_key(

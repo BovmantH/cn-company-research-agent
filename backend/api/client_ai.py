@@ -28,7 +28,10 @@ from backend.services.model_catalog import (
 )
 from backend.services.provider_registry import VENDOR_REGISTRY
 from backend.services.search import SearchProvider
+from backend.services.search.bounded_provider import BoundedSearchProvider
+from backend.services.search.deepseek_provider import DeepSeekSearchProvider
 from backend.services.search.glm_provider import GlmWebSearchProvider
+from backend.services.search.kimi_provider import KimiSearchProvider
 from backend.services.search.mimo_provider import MiMoNativeSearchProvider
 from backend.services.search.qwen_provider import QwenNativeSearchProvider
 from backend.services.search.responses_provider import ResponsesNativeSearchProvider
@@ -38,6 +41,8 @@ router = APIRouter(prefix="/ai", tags=["任务级模型"])
 MIN_CLIENT_API_KEY_LENGTH = 8
 MAX_CLIENT_API_KEY_LENGTH = 4_096
 CLIENT_SEARCH_PROVIDER_TYPES: dict[str, type[SearchProvider]] = {
+    "deepseek": DeepSeekSearchProvider,
+    "kimi": KimiSearchProvider,
     "qwen": QwenNativeSearchProvider,
     "glm": GlmWebSearchProvider,
     "mimo": MiMoNativeSearchProvider,
@@ -134,8 +139,11 @@ def build_client_research_dependencies(
     provider_type = CLIENT_SEARCH_PROVIDER_TYPES.get(selection.vendor)
     if provider_type is None:
         raise ValueError("当前尚未开放该厂商的用户自带 Key 联网调研")
+    search = provider_type(api_key=api_key, selection=selection)
+    if selection.vendor in {"deepseek", "kimi"}:
+        search = BoundedSearchProvider(search)
     return ResearchDependencies(
-        search=provider_type(api_key=api_key, selection=selection),
+        search=search,
         researcher_llm=build_client_llm(
             role="researcher",
             streaming=True,

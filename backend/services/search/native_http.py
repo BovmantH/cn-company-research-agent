@@ -16,6 +16,15 @@ class NativeSearchUnavailable(RuntimeError):
     """厂商原生联网暂时不可用，异常中不保留上游正文。"""
 
 
+class NativeSearchRequestError(NativeSearchUnavailable):
+    """只携带操作和状态码，禁止保留 HTTP 请求、响应或上游异常链。"""
+
+    def __init__(self, *, status_code: int, operation: str, provider_name: str):
+        super().__init__(f"{provider_name}网页检索服务请求失败")
+        self.status_code = status_code
+        self.operation = operation
+
+
 class NativeSearchResponseInvalid(RuntimeError):
     """厂商返回的成功响应不符合已核对契约。"""
 
@@ -27,9 +36,10 @@ async def _read_response(
     headers: Mapping[str, str],
     payload: Mapping[str, Any],
     provider_name: str,
+    operation: str,
 ) -> Mapping[str, Any]:
     """流式读取受限大小的 JSON，拒绝保留错误正文和异常链。"""
-    request_failed = False
+    failed_status: int | None = None
     content = bytearray()
     try:
         async with client.stream(
@@ -39,30 +49,33 @@ async def _read_response(
             json=dict(payload),
         ) as response:
             if response.status_code != 200:
-                raise NativeSearchUnavailable(
-                    f"{provider_name}联网搜索暂时不可用"
-                ) from None
-            content_length = response.headers.get("content-length")
-            if content_length is not None:
-                try:
-                    if int(content_length) > MAX_NATIVE_SEARCH_RESPONSE_BYTES:
+                failed_status = response.status_code
+            else:
+                content_length = response.headers.get("content-length")
+                if content_length is not None:
+                    try:
+                        if int(content_length) > MAX_NATIVE_SEARCH_RESPONSE_BYTES:
+                            raise NativeSearchResponseInvalid(
+                                f"{provider_name}联网搜索返回格式异常"
+                            ) from None
+                    except ValueError:
+                        pass
+                async for chunk in response.aiter_bytes():
+                    content.extend(chunk)
+                    if len(content) > MAX_NATIVE_SEARCH_RESPONSE_BYTES:
                         raise NativeSearchResponseInvalid(
                             f"{provider_name}联网搜索返回格式异常"
                         ) from None
-                except ValueError:
-                    pass
-            async for chunk in response.aiter_bytes():
-                content.extend(chunk)
-                if len(content) > MAX_NATIVE_SEARCH_RESPONSE_BYTES:
-                    raise NativeSearchResponseInvalid(
-                        f"{provider_name}联网搜索返回格式异常"
-                    ) from None
     except (NativeSearchUnavailable, NativeSearchResponseInvalid):
         raise
+    except httpx.TimeoutException:
+        failed_status = 408
     except httpx.HTTPError:
-        request_failed = True
-    if request_failed:
-        raise NativeSearchUnavailable(f"{provider_name}联网搜索暂时不可用")
+        failed_status = 503
+    if failed_status is not None:
+        raise NativeSearchRequestError(
+            status_code=failed_status, operation=operation, provider_name=provider_name
+        )
 
     json_failed = False
     try:
@@ -86,6 +99,7 @@ async def post_native_search_json(
     payload: Mapping[str, Any],
     provider_name: str,
     client: httpx.AsyncClient | None,
+    operation: str = "search",
 ) -> Mapping[str, Any]:
     """复用注入的测试客户端；生产调用使用一次性客户端并及时关闭。"""
     if client is not None:
@@ -95,6 +109,7 @@ async def post_native_search_json(
             headers=headers,
             payload=payload,
             provider_name=provider_name,
+            operation=operation,
         )
     async with httpx.AsyncClient(
         timeout=NATIVE_SEARCH_TIMEOUT_SECONDS,
@@ -106,11 +121,13 @@ async def post_native_search_json(
             headers=headers,
             payload=payload,
             provider_name=provider_name,
+            operation=operation,
         )
 
 
 __all__ = [
     "NativeSearchResponseInvalid",
     "NativeSearchUnavailable",
+    "NativeSearchRequestError",
     "post_native_search_json",
 ]
