@@ -76,6 +76,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
+_RESEARCH_SHUTDOWN_TIMEOUT_SECONDS = 5.0
 
 
 def _has_server_llm_config() -> bool:
@@ -90,7 +91,7 @@ def _has_server_llm_config() -> bool:
 
 
 @asynccontextmanager
-async def _application_lifespan(_: FastAPI):
+async def _application_lifespan(target_app: FastAPI):
     """在服务真正启动时校验 LLM 配置，保持模块导入可测试、可复用。"""
     if _has_server_llm_config():
         try:
@@ -101,7 +102,27 @@ async def _application_lifespan(_: FastAPI):
             ) from None
     else:
         logger.warning("未配置服务端 LLM Key，仅接受用户在本次任务中提供的 Key")
-    yield
+    try:
+        yield
+    finally:
+        tasks = {task for task in target_app.state.research_tasks if not task.done()}
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            _, pending = await asyncio.wait(
+                tasks, timeout=_RESEARCH_SHUTDOWN_TIMEOUT_SECONDS
+            )
+            if pending:
+                logger.warning("停机等待超时，仍有 %s 个后台任务未退出", len(pending))
+
+        # 取消调研时可能新建专业分支的收尾任务，不能重复取消正在释放预算的任务。
+        cleanup_tasks = {
+            task for task in target_app.state.research_tasks if not task.done()
+        } - tasks
+        if cleanup_tasks:
+            await asyncio.wait(
+                cleanup_tasks, timeout=_RESEARCH_SHUTDOWN_TIMEOUT_SECONDS
+            )
 
 
 app = FastAPI(title="公司调研助手 API", lifespan=_application_lifespan)
@@ -652,6 +673,29 @@ def _append_professional_evidence(
     return candidate, True
 
 
+def _fail_research_job(job_id: str, message: str, reason: str) -> None:
+    """统一写失败/取消终态；可选历史存储故障不得覆盖原始任务结果。"""
+    state = job_status[job_id]
+    state.update(
+        {
+            "error": message,
+            "last_update": datetime.now().isoformat(),
+            "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
+        }
+    )
+    state["events"].append({"type": "error", "error": message, "reason": reason})
+    state["status"] = "failed"
+    if mongodb:
+        try:
+            mongodb.update_job(job_id=job_id, status="failed", error=message)
+        except Exception as storage_error:
+            logger.warning(
+                "失败任务状态保存失败，job_id=%s，异常类型=%s",
+                job_id,
+                type(storage_error).__name__,
+            )
+
+
 async def process_research(
     job_id: str,
     data: ResearchRequest,
@@ -822,22 +866,21 @@ async def process_research(
             logger.error(
                 f"调研流程结束但未生成报告。state keys: {list(final_state.keys())}"
             )
-            job_status[job_id].update(
-                {
-                    "error": "未生成报告内容",
-                    "last_update": datetime.now().isoformat(),
-                    "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
-                }
-            )
-            job_status[job_id]["events"].append(
-                {
-                    "type": "error",
-                    "error": "未生成报告内容",
-                    "reason": "report_missing",
-                }
-            )
-            job_status[job_id]["status"] = "failed"
+            _fail_research_job(job_id, "未生成报告内容", "report_missing")
 
+    except asyncio.CancelledError:
+        _fail_research_job(job_id, "调研任务已取消", "research_cancelled")
+        if professional_preparation is not None and not professional_started:
+            try:
+                app.state.company_intelligence.abandon_professional_research(
+                    professional_preparation
+                )
+            except Exception as abandon_error:
+                logger.warning(
+                    "取消任务专业预留释放失败，异常类型=%s",
+                    type(abandon_error).__name__,
+                )
+        raise
     except Exception as e:
         provider_failure = classify_provider_failure(e)
         public_error = (
@@ -851,21 +894,7 @@ async def process_research(
             job_id,
             type(e).__name__,
         )
-        job_status[job_id].update(
-            {
-                "error": public_error,
-                "last_update": datetime.now().isoformat(),
-                "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
-            }
-        )
-        job_status[job_id]["events"].append(
-            {
-                "type": "error",
-                "error": public_error,
-                "reason": public_reason,
-            }
-        )
-        job_status[job_id]["status"] = "failed"
+        _fail_research_job(job_id, public_error, public_reason)
 
         if professional_preparation is not None and not professional_started:
             try:
@@ -876,19 +905,6 @@ async def process_research(
                 logger.warning(
                     "专业数据未启动终态写入失败，异常类型=%s",
                     type(abandon_error).__name__,
-                )
-        if mongodb:
-            try:
-                mongodb.update_job(
-                    job_id=job_id,
-                    status="failed",
-                    error=public_error,
-                )
-            except Exception as storage_error:
-                logger.warning(
-                    "失败任务状态保存失败，job_id=%s，异常类型=%s",
-                    job_id,
-                    type(storage_error).__name__,
                 )
     finally:
         if professional_task is not None and not professional_task.done():
