@@ -44,14 +44,14 @@
 2. 确认页面只创建一个 Docker Web Service，套餐为 Free，区域为 Singapore。
 3. 确认没有数据库、持久盘、付费实例或 Secret，然后创建服务。
 4. 等待 Docker 构建完成；Render 的健康检查必须通过 `/health`。
-5. 打开 Render 分配的 HTTPS 地址，确认首页能显示完整的 9 家模型厂商，其中 Qwen、GLM、MiMo、OpenRouter、OpenAI 标记为可用于联网调研。
-6. 分别访问 `/health` 和 `/ai/providers`；前者应返回服务正常，后者应返回 9 家厂商且上述 5 家的 `available_for_research` 为 `true`。
+5. 打开 Render 分配的 HTTPS 地址，确认首页能显示完整的 9 家模型厂商，其中 DeepSeek、Kimi、Qwen、GLM、MiMo、OpenRouter、OpenAI 标记为可用于联网调研。
+6. 分别访问 `/health` 和 `/ai/providers`；前者应返回服务正常，后者应返回 9 家厂商且上述 7 家的 `available_for_research` 为 `true`。目录与适配器可用不等于真实账户已开通对应模型或联网权限。
 
 验收过程不要填写真实 Key，也不要启动调研任务，避免产生模型或联网检索费用。
 
 ## 更新与排障
 
-`main` 每次 push 后，Render 会自动重新构建和部署。排障顺序：
+仓库 Blueprint 当前配置为 `main` 每次 push 后自动重新构建和部署。仓库已增加 GitHub Actions 前后端检查，但这不自动改变现有 Render 服务的发布门禁；若要检查通过后才部署，需在平台或 Blueprint 中另行配置并核验。排障顺序：
 
 1. 构建失败：先查看 Render Deploy 日志中的第一个明确错误，不要只看最后一行。
 2. 端口检测失败：确认容器监听 `0.0.0.0`，并使用 Render 注入的 `PORT`。

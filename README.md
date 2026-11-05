@@ -28,6 +28,7 @@
 
 - **多源调研**：从公司官网、新闻、财报和行业分析等公开来源采集信息
 - **来源引用**：只接收适配器能够归属到具体网页的来源，不把模型生成的链接冒充引用
+- **报告限制提示**：部分检索、摘要或格式整理降级时明确说明；历史保存失败不会抹掉本次已生成的报告，仍可在内存保留期内查看、复制和下载
 - **异步处理**：后台任务与可重放 SSE 进度流并行工作，断线后可从事件游标继续
 - **三段式 LLM 架构**（服务端可按角色配置，Web BYOK 使用任务模型）：
   - **Researcher**（搜集与初步分析）— 各供应商使用适合高频分析的当前模型
@@ -417,6 +418,24 @@ LLM_BASE_URL_DEEPSEEK=http://localhost:3000/v1
 ---
 
 ## 🤝 贡献
+
+### 开发验证
+
+在已激活的 Python 虚拟环境中安装开发依赖，并运行：
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+python -m ruff check .
+python -m ruff format --check .
+npm --prefix ui test
+npm --prefix ui run lint
+npm --prefix ui run build
+```
+
+pytest 会在应用导入前隔离部署配置并禁用 `.env`，默认拦截外部网络连接，使用内存桩验证厂商与数据库边界，不需要真实 Key。GitHub Actions 在 Pull Request 和 `main` 推送时执行同样的前后端检查。CI 通过不代表真实厂商计费链路或线上部署已验收；部署平台的发布门禁需要另外配置。
+
+### 提交改动
 
 1. Fork 仓库
 2. 创建功能分支：`git checkout -b feat/your-feature`
