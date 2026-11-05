@@ -1,11 +1,11 @@
 import logging
-from urllib.parse import urljoin, urlparse
 
 from langchain_core.messages import AIMessage
 
 from ..classes import ResearchState
 from ..classes.state import job_status
 from ..utils.references import process_references_from_search_results
+from ..utils.urls import normalize_source_url, source_url_identity
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +46,7 @@ class Curator:
                             if is_company_website
                             else f"分数 {relevance_score:.4f}"
                         )
-                        logger.info(
-                            "保留文档（%s）：%s",
-                            reason,
-                            doc.get("title", "无标题"),
-                        )
+                        logger.info("保留文档（%s）", reason)
 
                         evaluated_doc = {
                             **doc,
@@ -62,9 +58,8 @@ class Curator:
                         evaluated_docs.append(evaluated_doc)
                     else:
                         logger.info(
-                            "文档相关性低于阈值，分数=%.4f，标题=%s",
+                            "文档相关性低于阈值，分数=%.4f",
                             relevance_score,
-                            doc.get("title", "无标题"),
                         )
                 except (ValueError, TypeError) as exc:
                     logger.warning(
@@ -113,22 +108,13 @@ class Curator:
             if not data:
                 continue
 
-            # 筛选并规范化 URL
-            unique_docs = {}
+            # 保留可访问的原始查询参数；去重键不能替代正文提取地址。
+            docs = []
             for url, doc in data.items():
-                try:
-                    parsed = urlparse(url)
-                    if not parsed.scheme:
-                        url = urljoin("https://", url)
-                    clean_url = parsed._replace(query="", fragment="").geturl()
-                    if clean_url not in unique_docs:
-                        doc["url"] = clean_url
-                        doc["doc_type"] = doc_type
-                        unique_docs[clean_url] = doc
-                except Exception:
-                    continue
+                source_url = normalize_source_url(url)
+                if source_url:
+                    docs.append({**doc, "url": source_url, "doc_type": doc_type})
 
-            docs = list(unique_docs.values())
             msg.append(f"\n{emoji}：发现 {len(docs)} 份文档")
 
             evaluated_docs = self.evaluate_documents(docs, context)
@@ -155,8 +141,14 @@ class Curator:
                 msg.append("  ⚠️ 未找到相关文档")
                 continue
 
-            # 按相关性分数筛选并排序
-            relevant_docs = {doc["url"]: doc for doc in evaluated_docs}
+            # 评估结果已按分数降序，同资源的追踪变体只保留最佳文档。
+            seen_sources = set()
+            relevant_docs = {}
+            for doc in evaluated_docs:
+                identity = source_url_identity(doc["url"])
+                if identity not in seen_sources:
+                    seen_sources.add(identity)
+                    relevant_docs[doc["url"]] = doc
             sorted_items = sorted(
                 relevant_docs.items(),
                 key=lambda item: item[1]["evaluation"]["overall_score"],

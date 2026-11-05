@@ -3,6 +3,8 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from .urls import normalize_source_url, source_url_identity
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,11 +28,7 @@ def extract_domain_name(url: str) -> str:
             return main_name.capitalize()
         return domain.capitalize()
     except Exception as exc:
-        logger.error(
-            "提取域名失败，url=%s，异常类型=%s",
-            url,
-            type(exc).__name__,
-        )
+        logger.error("提取域名失败，异常类型=%s", type(exc).__name__)
         return "网站"
 
 
@@ -86,37 +84,19 @@ def clean_title(title: str) -> str:
 
     # 清理后标题为空时返回空字符串
     if not title:
-        logger.warning("标题清理后为空：%s", original_title)
+        logger.warning("标题清理后为空")
         return ""
 
     # 标题发生变化时记录日志
     if title != original_title:
-        logger.info("标题已从 %s 清理为 %s", original_title, title)
+        logger.info("引用标题已清理")
 
     return title
 
 
 def normalize_url(url: str) -> str:
-    """移除查询参数和片段，规范化 URL。"""
-    try:
-        if not url:
-            return ""
-
-        # 确保 URL 包含协议
-        if not url.startswith(("http://", "https://")):
-            url = "https://" + url
-
-        parsed = urlparse(url)
-        normalized_url = parsed._replace(query="", fragment="").geturl().rstrip("/")
-
-        return normalized_url
-    except Exception as exc:
-        logger.error(
-            "规范化 URL 失败，url=%s，异常类型=%s",
-            url,
-            type(exc).__name__,
-        )
-        return url
+    """保留资源身份和签名查询参数，返回可用于访问及引用的来源地址。"""
+    return normalize_source_url(url)
 
 
 def extract_website_name_from_domain(domain: str) -> str:
@@ -166,16 +146,14 @@ def process_references_from_search_results(
                         score = float(doc.get("score", 0))
 
                     logger.info(
-                        "在 %s 中发现引用：URL=%s，分数=%.4f",
+                        "在 %s 中发现引用，分数=%.4f",
                         data_type,
-                        url,
                         score,
                     )
-                    all_top_references.append((url, score))
+                    all_top_references.append((url, score, doc))
                 except (KeyError, ValueError, TypeError) as exc:
                     logger.warning(
-                        "处理引用分数失败：url=%s，数据类型=%s，异常类型=%s",
-                        url,
+                        "处理引用分数失败，数据类型=%s，异常类型=%s",
                         data_type,
                         type(exc).__name__,
                     )
@@ -188,8 +166,8 @@ def process_references_from_search_results(
 
     # 记录去重前分数最高的 20 条引用，用于验证排序
     logger.info("去重前分数最高的 20 条引用：")
-    for i, (url, score) in enumerate(all_top_references[:20]):
-        logger.info("第 %s 条：分数=%.4f，URL=%s", i + 1, score, url)
+    for i, (_url, score, _doc) in enumerate(all_top_references[:20]):
+        logger.info("第 %s 条：分数=%.4f", i + 1, score)
 
     # 使用集合保存唯一 URL，每个 URL 只保留分数最高的版本
     seen_urls = set()
@@ -197,46 +175,36 @@ def process_references_from_search_results(
     reference_titles = {}  # 保存引用标题
     reference_info = {}  # 保存 MLA 格式引用所需的附加信息
 
-    for url, score in all_top_references:
+    for url, score, doc in all_top_references:
         # 跳过无效 URL
         if not url or not url.startswith(("http://", "https://")):
-            logger.info("跳过无效 URL：%s", url)
+            logger.info("跳过无效来源 URL")
             continue
 
         # 规范化 URL
         normalized_url = normalize_url(url)
+        identity = source_url_identity(normalized_url)
+        if not identity:
+            continue
 
-        if normalized_url not in seen_urls:
-            seen_urls.add(normalized_url)
+        if identity not in seen_urls:
+            seen_urls.add(identity)
             unique_references.append((normalized_url, score))
 
             # 为网站引用提取域名
             parsed = urlparse(url)
             domain = parsed.netloc
 
-            # 查找并保存该 URL 的标题及其他信息
-            title = None
-            website_name = None
-
-            # 在全部数据类型中查找文档信息
-            for data_type in data_types:
-                if not title and (curated_data := state.get(data_type, {})):
-                    for doc in curated_data.values():
-                        if doc.get("url") == url:
-                            title = doc.get("title", "")
-                            if title:
-                                # 清理标题
-                                title = clean_title(title)
-                                if title and title.strip() and title != url:
-                                    reference_titles[normalized_url] = title
-                                    logger.info(
-                                        "已找到 URL 标题，url=%s，title=%s", url, title
-                                    )
-                                    break
+            # 标题和分数来自同一份获选文档，不能在其他类别中误取低分版本。
+            raw_title = doc.get("title", "")
+            title = clean_title(raw_title) if isinstance(raw_title, str) else ""
+            if title and title != url:
+                reference_titles[normalized_url] = title
+                logger.info("已找到引用标题")
 
             # 未找到标题时记录日志
             if not title:
-                logger.info("未找到有效标题，url=%s", url)
+                logger.info("未找到有效引用标题")
 
             # 从域名中提取更合适的网站名称
             website_name = extract_website_name_from_domain(domain)
@@ -249,7 +217,7 @@ def process_references_from_search_results(
                 "url": normalized_url,
                 "score": score,
             }
-            logger.info("已保存引用信息：url=%s，分数=%.4f", normalized_url, score)
+            logger.info("已保存引用信息，分数=%.4f", score)
 
     # 再次按分数排列唯一引用，确保顺序正确
     unique_references.sort(key=lambda x: float(x[1]), reverse=True)
@@ -257,8 +225,8 @@ def process_references_from_search_results(
     # 按分数记录唯一引用，用于验证排序
     logger.info("去重后得到 %s 条唯一引用", len(unique_references))
     logger.info("按分数排序后的唯一引用：")
-    for i, (url, score) in enumerate(unique_references):
-        logger.info("第 %s 条：分数=%.4f，URL=%s", i + 1, score, url)
+    for i, (_url, score) in enumerate(unique_references):
+        logger.info("第 %s 条：分数=%.4f", i + 1, score)
 
     # 最多保留 10 条唯一引用
     top_references = unique_references[:10]
@@ -268,7 +236,7 @@ def process_references_from_search_results(
     logger.info("最终选出前 %s 条引用：", len(top_reference_urls))
     for i, url in enumerate(top_reference_urls):
         score = next((s for u, s in unique_references if u == url), 0)
-        logger.info("第 %s 条：分数=%.4f，URL=%s", i + 1, score, url)
+        logger.info("第 %s 条：分数=%.4f", i + 1, score)
 
     return top_reference_urls, reference_titles, reference_info
 
@@ -328,7 +296,7 @@ def extract_link_info(line: str) -> tuple[str, str]:
                 return url, url
             return title, url
 
-        logger.debug("当前行未匹配到链接：%s", line)
+        logger.debug("当前参考资料行未匹配到链接")
         return "", ""
     except Exception as exc:
         logger.error(
@@ -360,19 +328,19 @@ def format_references_section(
         # reference_info 中没有标题时尝试从 reference_titles 获取
         if not title or title.strip() == "":
             title = reference_titles.get(ref, "")
-            logger.info("引用 %s 使用 reference_titles 中的标题：%s", ref, title)
+            logger.info("引用使用已保存的参考资料标题")
 
         domain = info.get("domain", "")
 
         # 没有标题时使用 URL
         if not title or title.strip() == "" or title == ref:
             title = ref
-            logger.info("引用 %s 没有标题，将 URL 用作标题", ref)
+            logger.info("引用没有标题，将来源 URL 用作标题")
 
         # 没有网站名称时从 URL 提取
         if not website or website.strip() == "":
             website = extract_domain_name(ref)
-            logger.info("引用 %s 没有网站名称，已提取为 %s", ref, website)
+            logger.info("引用没有网站名称，已从域名提取")
 
         # 创建包含全部信息的引用条目
         entry = {
@@ -382,7 +350,7 @@ def format_references_section(
             "domain": domain,
             "score": score,
         }
-        logger.info("已创建引用条目：%s", entry)
+        logger.info("已创建引用条目")
         reference_entries.append(entry)
 
     # 保持传入的引用顺序，该顺序应已按分数排列
@@ -394,7 +362,7 @@ def format_references_section(
     for entry in reference_entries:
         reference_line = format_reference_for_markdown(entry)
         reference_lines.append(reference_line)
-        logger.info("已添加引用：%s", reference_line)
+        logger.info("已格式化引用条目")
 
     reference_text = "\n".join(reference_lines)
     logger.info("参考资料章节已完成，共 %s 条", len(reference_entries))

@@ -26,8 +26,7 @@ class Enricher:
                 return {url: pages[0].raw_content}
         except Exception as exc:
             logger.error(
-                "抓取 URL 正文失败，url=%s，异常类型=%s",
-                url,
+                "抓取 URL 正文失败，异常类型=%s",
                 type(exc).__name__,
             )
             return {url: ""}
