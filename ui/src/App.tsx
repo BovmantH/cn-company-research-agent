@@ -20,6 +20,8 @@ import {
 } from './research/researchStreamReducer';
 import type { ResearchFormValues } from './research/model';
 import type { ClientAISelection } from './api/clientAI';
+import { ResearchSubmissionError, researchSubmissionErrorMessage } from './api/researchErrors';
+import { reportLimitations } from './research/reportLimitations';
 import {
   buildResearchRequest,
   parseResearchAcceptedResponse,
@@ -52,6 +54,7 @@ function App() {
   } = researchState;
   const isResearching = researchState.lifecycle === 'running';
   const isComplete = researchState.lifecycle === 'completed';
+  const limitations = reportLimitations(researchState.degradations);
   const isResolvingCompany = professionalFlow.flowState.status === 'resolving';
   const needsCompanyDecision = professionalFlow.flowState.status === 'candidates'
     || professionalFlow.flowState.status === 'fallback';
@@ -252,7 +255,7 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP 请求失败,状态码:${response.status}`);
+        throw new ResearchSubmissionError(await researchSubmissionErrorMessage(response));
       }
 
       const accepted = parseResearchAcceptedResponse(await response.json() as unknown);
@@ -261,12 +264,14 @@ function App() {
         professionalFlow.markResearchAccepted(accepted.professionalData);
         streamResults(accepted.jobId);
       } else {
-        throw new Error("未收到任务 ID");
+        throw new ResearchSubmissionError("服务响应不完整，请稍后重试");
       }
     } catch (err) {
       dispatchResearch({
         type: 'submit_failed',
-        message: err instanceof Error ? err.message : "启动调研失败",
+        message: err instanceof ResearchSubmissionError
+          ? err.message
+          : "启动调研失败，请检查网络后重试",
       });
     } finally {
       pendingClientAIRef.current = null;
@@ -423,6 +428,15 @@ function App() {
         />
 
         <ProfessionalDataStatus state={professional} />
+
+        {limitations.length > 0 && (
+          <section aria-label="报告限制" role="status" className={`${glassStyle.card} border-amber-200 bg-amber-50/90 text-amber-950`}>
+            <h2 className="font-semibold">报告限制</h2>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+              {limitations.map((message) => <li key={message}>{message}</li>)}
+            </ul>
+          </section>
+        )}
 
         {/* 调研报告：生成后始终置于内容区顶部 */}
         {output && output.details && (
