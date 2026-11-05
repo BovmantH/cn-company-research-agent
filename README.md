@@ -40,6 +40,24 @@
 - **模块化架构**：每个 Agent 是独立的 LangGraph 节点，模型与检索依赖按任务注入
 - **工商司法专业数据（预览）**：主体确认、预算账本、安全降级和确定性附录已就绪；生产 QCC Provider 尚未装配，默认关闭
 
+## 技术栈
+
+| 层级 | 技术 | 用途与边界 |
+| --- | --- | --- |
+| 前端 | React、TypeScript、Vite、Tailwind CSS、Lucide | 公司表单、模型配置、调研进度、报告展示及图标 |
+| 后端 | Python、FastAPI、Pydantic、Uvicorn | HTTP 接口、请求校验与 ASGI 服务 |
+| AI 编排 | LangGraph、LangChain、langchain-openai | 十节点调研流水线、角色模型调用与任务级依赖注入 |
+| 网页检索 | SearchProvider 适配器、HTTPX、Tavily SDK | 适配厂商搜索与正文提取，统一来源；用户模式优先复用模型 Key |
+| 实时通信 | REST API、SSE、浏览器 EventSource | 提交任务、读取模型目录、推送进度与终稿，支持事件游标重放 |
+| 任务与存储 | asyncio、进程内任务状态、JobEventLog；MongoDB / PyMongo（可选） | 活动任务和事件日志保存在单进程内存；MongoDB 可持久化任务记录与最终报告 |
+| 报告处理 | Markdown、react-markdown、remark-gfm、ReportLab | 渲染来源链接与表格、复制 Markdown、服务端生成 PDF |
+| 质量检查 | pytest、pytest-asyncio、Ruff、Vitest、ESLint、GitHub Actions | 离线回归、Python 格式与静态检查、前端测试及构建验证 |
+| 部署 | Docker 多阶段构建、Docker Compose | 前后端单镜像同源部署；Compose 用于本地联调 |
+
+工商司法增强另使用 MCP SDK 和独立预算账本模块，目前生产 Provider 尚未装配、默认关闭；基础 Web 调研无需配置该模块的凭证。项目当前没有引入 Redis、消息队列或分布式任务调度；MongoDB 不是任务队列，不能据此实现任务重启续跑或多实例接管。
+
+依赖版本以 [`requirements.txt`](requirements.txt)、[`requirements-dev.txt`](requirements-dev.txt)、[`ui/package.json`](ui/package.json) 和 [`ui/package-lock.json`](ui/package-lock.json) 为准，运行环境要求见下方“安装与运行”。
+
 ## 🆚 与原版的差异
 
 本项目并非简单翻译，而是围绕“中国用户调研中国公司”这一场景进行针对性改造。
