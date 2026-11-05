@@ -158,8 +158,8 @@ if [ "$setup_env" = true ]; then
     fi
 
     echo -e "\n请选择一个 LLM 服务商："
-    echo "1) OpenCode Zen（DeepSeek V4 Flash，限时免费）"
-    echo "2) DeepSeek"
+    echo "1) DeepSeek"
+    echo "2) OpenCode Console（按量付费）"
     echo "3) Moonshot（Kimi）"
     echo "4) 阿里百炼（Qwen）"
     echo "5) 智谱 GLM"
@@ -170,8 +170,8 @@ if [ "$setup_env" = true ]; then
     read -r llm_choice
     llm_choice=${llm_choice:-1}
     case "$llm_choice" in
-        1) llm_key_name="OPENCODE_API_KEY" ;;
-        2) llm_key_name="DEEPSEEK_API_KEY" ;;
+        1) llm_key_name="DEEPSEEK_API_KEY"; llm_vendor="deepseek" ;;
+        2) llm_key_name="OPENCODE_API_KEY"; llm_vendor="opencode" ;;
         3) llm_key_name="MOONSHOT_API_KEY" ;;
         4) llm_key_name="DASHSCOPE_API_KEY" ;;
         5) llm_key_name="ZAI_API_KEY" ;;
@@ -185,7 +185,7 @@ if [ "$setup_env" = true ]; then
             ;;
     esac
     if [ "$llm_key_name" = "OPENCODE_API_KEY" ]; then
-        echo -e "${YELLOW}注意：OpenCode Zen 的免费模型为限时免费，请求会发送到美国，免费期间的数据可能用于模型改进。请勿提交个人、机密或受监管的数据。${NC}"
+        echo -e "${YELLOW}OpenCode Console 在本项目使用按量付费 API，免费聊天模型仅供 OpenCode 客户端使用。${NC}"
     fi
     echo -n "${llm_key_name}："
     read -r -s llm_key
@@ -202,6 +202,9 @@ if [ "$setup_env" = true ]; then
     {
         printf 'TAVILY_API_KEY=%s\n' "$tavily_key"
         printf '%s=%s\n' "$llm_key_name" "$llm_key"
+        if [ -n "$llm_vendor" ]; then
+            printf 'LLM_VENDOR=%s\n' "$llm_vendor"
+        fi
     } > .env
 
     # 提供 MongoDB URI 时写入配置
@@ -210,7 +213,7 @@ if [ "$setup_env" = true ]; then
     fi
 
     echo -e "${GREEN}✓ 环境变量已保存到 .env${NC}"
-    echo "如需免费模型不可用时自动付费回退，请按 README 在 .env 中再配置一家或多家付费服务商 Key。"
+    echo "模型请求失败时不会切换到其他厂商账户计费，可在 .env 中显式调整 LLM_VENDOR。"
 fi
 
 # 显示完成说明和服务启动选项

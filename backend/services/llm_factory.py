@@ -3,9 +3,9 @@
 设计目标:
 - 通过 ``get_llm(role)`` 获取 LangChain ``BaseChatModel`` 实例
 - 后端所有 LLM 调用的唯一入口
-- 支持 OpenCode Zen 免费线路、国产模型原厂 OpenAI 兼容端点直连，
+- 支持显式选择 OpenCode Console 按量线路、国产模型原厂 OpenAI 兼容端点直连，
   以及 OpenRouter 聚合、OpenAI 原生
-- 启动期按服务端配置选择供应商；Zen 与付费候选并存时支持首块输出前回退
+- 启动期按服务端配置选择单个供应商，故障不会自动切换到其他账户计费
 - 通过 ``LLM_VENDOR`` 显式锁定可跳过探测,``LLM_VENDOR_PRIORITY`` 调整优先级
 - 解析 ``LLM_MODEL_<ROLE>``：OpenRouter 原样保留供应商前缀；
   原厂或 OpenAI 自动剥离前缀（环境变量触发时会记录警告）
@@ -14,7 +14,7 @@
 
 环境变量约定:
     # 供应商密钥（任意一个；多个时按优先级）
-    OPENCODE_API_KEY          OpenCode Zen
+    OPENCODE_API_KEY          OpenCode Console（需要显式 LLM_VENDOR=opencode）
     DEEPSEEK_API_KEY          DeepSeek 原厂
     DASHSCOPE_API_KEY         阿里百炼(Qwen)
     MOONSHOT_API_KEY          Moonshot(Kimi)
@@ -38,7 +38,7 @@
     LLM_MAX_TOKENS            响应 max_tokens 上限
 
     # base_url 覆盖
-    LLM_BASE_URL              全局 base_url(优先级最高,并关闭跨供应商回退)
+    LLM_BASE_URL              全局 base_url(优先级最高)
     LLM_BASE_URL_<VENDOR>     单供应商覆盖,如 LLM_BASE_URL_DEEPSEEK
 """
 
@@ -47,23 +47,11 @@ from __future__ import annotations
 import logging
 import math
 import os
-from collections.abc import AsyncIterator, Iterator, Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_openai import ChatOpenAI
-from openai import (
-    APIConnectionError,
-    APIError,
-    AuthenticationError,
-    ConflictError,
-    InternalServerError,
-    NotFoundError,
-    PermissionDeniedError,
-    RateLimitError,
-)
 
 from .client_model import (
     CLIENT_MODEL_ID_PATTERN,
@@ -74,136 +62,12 @@ from .provider_registry import CLIENT_MODEL_VENDORS, VENDOR_REGISTRY
 logger = logging.getLogger(__name__)
 
 
-# 默认探测顺序：Zen 免费线路 → 国内原厂 → OpenRouter → OpenAI。
-DEFAULT_VENDOR_PRIORITY: list[str] = list(VENDOR_REGISTRY)
+# 默认探测国内原厂、OpenRouter 与 OpenAI；Console 按量线路必须显式选择。
+DEFAULT_VENDOR_PRIORITY: list[str] = [
+    vendor for vendor in VENDOR_REGISTRY if vendor != "opencode"
+]
 
 VALID_ROLES = frozenset({"researcher", "briefing", "editor"})
-
-
-class ZenStreamUnavailable(RuntimeError):
-    """Zen 在完成首个流式响应块前返回无状态 SSE 错误。"""
-
-
-class ZenStreamRejected(RuntimeError):
-    """Zen 流式错误不符合自动付费回退条件。"""
-
-
-# 只处理可归因于上游不可用的异常，避免把本地参数错误或业务缺陷隐藏成付费回退。
-FALLBACK_EXCEPTIONS = (
-    APIConnectionError,
-    AuthenticationError,
-    PermissionDeniedError,
-    NotFoundError,
-    RateLimitError,
-    ConflictError,
-    InternalServerError,
-    ZenStreamUnavailable,
-)
-
-# 仅这些生成参数能安全复用于不同供应商；连接、认证、客户端或模型相关参数
-# 必须保持单供应商语义，防止凭证或专有配置被发送到其他端点。
-SAFE_CROSS_VENDOR_OVERRIDES = frozenset({"streaming", "temperature", "max_tokens"})
-
-RETRYABLE_ZEN_STREAM_ERROR_CODES = frozenset(
-    {
-        "internal_error",
-        "internal_server_error",
-        "model_not_found",
-        "not_found_error",
-        "overloaded_error",
-        "rate_limit_error",
-        "rate_limit_exceeded",
-        "server_error",
-        "service_unavailable",
-        "temporarily_unavailable",
-    }
-)
-
-
-class _ZenFallbackBoundary(Runnable[Any, Any]):
-    """把 SDK 的无状态流错误收敛为可安全回退且不含上游正文的异常。"""
-
-    def __init__(self, runnable: Runnable[Any, Any]) -> None:
-        self._runnable = runnable
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._runnable, name)
-
-    @staticmethod
-    def _translate_generic_error(exc: APIError) -> None:
-        # OpenAI SDK 对 SSE error 事件直接抛 APIError；有状态的 4xx/5xx
-        # 会使用其子类，继续交给既有的精确异常策略处理。
-        if type(exc) is not APIError:
-            return
-
-        body = exc.body
-        if isinstance(body, Mapping) and isinstance(body.get("error"), Mapping):
-            body = body["error"]
-
-        retryable = False
-        if isinstance(body, Mapping):
-            codes = {str(body.get(key, "")).strip().lower() for key in ("code", "type")}
-            status = body.get("status_code", body.get("status"))
-            retryable = bool(codes & RETRYABLE_ZEN_STREAM_ERROR_CODES) or (
-                isinstance(status, int) and (status == 429 or status >= 500)
-            )
-
-        if retryable:
-            raise ZenStreamUnavailable(
-                "OpenCode Zen 流式响应在完成前失败，已按安全策略处理。"
-            ) from None
-        raise ZenStreamRejected(
-            "OpenCode Zen 流式响应未完成，错误不符合自动付费回退条件。"
-        ) from None
-
-    def invoke(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        try:
-            return self._runnable.invoke(input, config=config, **kwargs)
-        except APIError as exc:
-            self._translate_generic_error(exc)
-            raise
-
-    async def ainvoke(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        try:
-            return await self._runnable.ainvoke(input, config=config, **kwargs)
-        except APIError as exc:
-            self._translate_generic_error(exc)
-            raise
-
-    def stream(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> Iterator[Any]:
-        try:
-            yield from self._runnable.stream(input, config=config, **kwargs)
-        except APIError as exc:
-            self._translate_generic_error(exc)
-            raise
-
-    async def astream(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> AsyncIterator[Any]:
-        try:
-            async for chunk in self._runnable.astream(input, config=config, **kwargs):
-                yield chunk
-        except APIError as exc:
-            self._translate_generic_error(exc)
-            raise
 
 
 # 第一阶段旧导入兼容
@@ -215,8 +79,7 @@ DEFAULT_MODELS: dict[str, str] = VENDOR_REGISTRY["openrouter"].default_models
 def get_llm_credential_candidates() -> tuple[tuple[str, str, str], ...]:
     """从注册表生成启动凭证提示，避免入口文件重复维护供应商清单。"""
     candidates: list[tuple[str, str, str]] = []
-    for vendor in DEFAULT_VENDOR_PRIORITY:
-        config = VENDOR_REGISTRY[vendor]
+    for config in VENDOR_REGISTRY.values():
         for index, env_key in enumerate(config.env_keys):
             label = config.display_name
             if index:
@@ -253,8 +116,7 @@ def _get_priority_list() -> list[str]:
     if not raw:
         return DEFAULT_VENDOR_PRIORITY
 
-    # Zen 免费线路按产品约定始终优先；部署者可调整其后的付费供应商顺序。
-    out: list[str] = ["opencode"]
+    out: list[str] = []
     has_known_value = False
     for token in raw.split(","):
         v = token.strip().lower()
@@ -265,6 +127,12 @@ def _get_priority_list() -> list[str]:
                 "LLM_VENDOR_PRIORITY 包含未知供应商 %r，已忽略。可选值：%s",
                 v,
                 sorted(VENDOR_REGISTRY.keys()),
+            )
+            continue
+        if v == "opencode":
+            logger.warning(
+                "OpenCode Console 按量线路仅支持显式 LLM_VENDOR=opencode，"
+                "已从自动优先级中忽略。"
             )
             continue
         has_known_value = True
@@ -326,9 +194,15 @@ def _resolve_vendor() -> tuple[str, str]:
             logger.info("已按 LLM_VENDOR_PRIORITY 选定供应商：%s", vendor)
             return vendor, key
 
+    if _get_vendor_api_key("opencode")[0]:
+        raise RuntimeError(
+            "OpenCode Console 不参与自动探测。若要使用该按量线路，"
+            "请显式设置 LLM_VENDOR=opencode；免费模型仅限 OpenCode 客户端。"
+        )
+
     available = "\n  ".join(
         f"- {env_key}  (vendor: {vendor})"
-        for vendor in DEFAULT_VENDOR_PRIORITY
+        for vendor in VENDOR_REGISTRY
         for env_key in VENDOR_REGISTRY[vendor].env_keys
     )
     raise RuntimeError(
@@ -412,6 +286,11 @@ def _build_chat_model(
         use_role_env=use_role_env,
     )
 
+    if vendor == "opencode" and model.lower().endswith(("-free", ":free")):
+        raise ValueError(
+            "免费模型仅限 OpenCode 客户端，本项目请使用 Console 按量模型。"
+        )
+
     kwargs: dict[str, Any] = {
         "model": model,
         "base_url": base_url,
@@ -431,7 +310,7 @@ def _build_chat_model(
                 raise ValueError(f"LLM_TEMPERATURE={temperature_env!r} 不是有限数字。")
             kwargs["temperature"] = temperature
     if vendor == "opencode":
-        # Zen 的免费 DeepSeek 使用 Chat Completions，禁止客户端自动切到 Responses。
+        # Console 的当前聊天模型走 Chat Completions，禁止客户端自动切换协议。
         kwargs["use_responses_api"] = False
     if vendor == "minimax":
         # MiniMax 原始响应可能把思考过程混入正文，显式要求拆分 reasoning_content。
@@ -498,74 +377,22 @@ def build_client_llm(
     )
 
 
-def get_llm(role: str, **overrides: Any) -> BaseChatModel | Runnable[Any, Any]:
-    """根据角色获取一个配置好的 LLM 实例。
+def get_llm(role: str, **overrides: Any) -> BaseChatModel:
+    """根据角色构造一个供应商隔离的 LLM，不自动切换到其他账户。
 
     参数:
         role: ``"researcher"`` / ``"briefing"`` / ``"editor"`` 之一。
-        **overrides: 任意可覆盖参数(``model``、``base_url``、``api_key``、
-            ``temperature``、``streaming``、``max_tokens`` 等)。
-
-    返回:
-        单供应商时返回 ``ChatOpenAI``；Zen 与后续供应商同时配置时返回
-        首块输出前可回退的 LangChain Runnable。所有候选均走彼此隔离的
-        OpenAI 协议兼容端点和服务端 Key。
-
-    抛出:
-        ValueError: 未知角色。
-        RuntimeError: 所有供应商密钥都未配置；或 ``LLM_VENDOR`` 显式锁定但对应
-            密钥缺失。
+        **overrides: 单次调用覆盖参数，例如模型、连接和生成参数。
     """
     if role not in VALID_ROLES:
         raise ValueError(f"未知的 LLM 角色：{role!r}。可选值：{sorted(VALID_ROLES)}")
 
     vendor, api_key = _resolve_vendor()
-    model_override = overrides.pop("model", None)
-    explicitly_locked = bool(os.getenv("LLM_VENDOR", "").strip())
-    primary = _build_chat_model(
+    return _build_chat_model(
         role,
         vendor,
         api_key,
-        model_override=model_override,
-        # 自动模式下固定使用 Zen 免费模型，避免旧的跨供应商模型配置污染免费线路。
-        use_role_env=vendor != "opencode" or explicitly_locked,
+        model_override=overrides.pop("model", None),
+        use_role_env=True,
         overrides=overrides,
-    )
-
-    # 显式锁定或自定义连接边界时保持单供应商语义，避免把覆盖 Key/URL 扇出。
-    custom_single_vendor_mode = (
-        bool(os.getenv("LLM_BASE_URL"))
-        or model_override is not None
-        or any(key not in SAFE_CROSS_VENDOR_OVERRIDES for key in overrides)
-    )
-    if vendor != "opencode" or explicitly_locked or custom_single_vendor_mode:
-        return primary
-
-    fallbacks: list[BaseChatModel] = []
-    fallback_names: list[str] = []
-    for fallback_vendor in _get_priority_list():
-        if fallback_vendor == "opencode":
-            continue
-        fallback_key, _ = _get_vendor_api_key(fallback_vendor)
-        if not fallback_key:
-            continue
-        fallbacks.append(
-            _build_chat_model(
-                role,
-                fallback_vendor,
-                fallback_key,
-                model_override=None,
-                use_role_env=False,
-                overrides=overrides,
-            )
-        )
-        fallback_names.append(fallback_vendor)
-
-    if not fallbacks:
-        return primary
-
-    logger.info("OpenCode Zen 不可用时将依次回退：%s", fallback_names)
-    return _ZenFallbackBoundary(primary).with_fallbacks(
-        fallbacks,
-        exceptions_to_handle=FALLBACK_EXCEPTIONS,
     )

@@ -28,7 +28,7 @@ OPENROUTER_RESEARCH_ENDPOINTS = [
 @pytest.mark.parametrize(
     ("vendor", "url"),
     [
-        ("opencode", "https://opencode.ai/zen/v1/models"),
+        ("opencode", "https://opencode.ai/inference/v1/models"),
         ("deepseek", "https://api.deepseek.com/models"),
         ("kimi", "https://api.moonshot.cn/v1/models"),
         ("minimax", "https://api.minimaxi.com/v1/models"),

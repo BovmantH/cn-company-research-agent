@@ -44,7 +44,29 @@ def test_application_startup_allows_client_byok_without_server_llm_key() -> None
 def test_application_startup_accepts_configured_llm_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+
+    with TestClient(application.app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+
+
+def test_application_startup_requires_explicit_opencode_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+
+    with pytest.raises(RuntimeError, match="LLM_VENDOR=opencode"):
+        with TestClient(application.app):
+            pass
+
+
+def test_application_startup_accepts_explicit_opencode_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "sk-opencode-test")
+    monkeypatch.setenv("LLM_VENDOR", "opencode")
 
     with TestClient(application.app) as client:
         response = client.get("/health")

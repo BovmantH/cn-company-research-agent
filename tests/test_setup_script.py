@@ -23,16 +23,17 @@ def test_setup_only_offers_supported_llm_keys() -> None:
     assert "XIAOMI_API_KEY" not in script
 
 
-def test_setup_prefers_opencode_and_explains_its_privacy_boundary() -> None:
+def test_setup_prefers_deepseek_and_explains_console_pay_as_you_go() -> None:
     script = SETUP_SCRIPT.read_text(encoding="utf-8")
 
-    assert 'echo "1) OpenCode Zen' in script
+    assert 'echo "1) DeepSeek' in script
     assert "llm_choice=${llm_choice:-1}" in script
-    assert '1) llm_key_name="OPENCODE_API_KEY"' in script
-    assert "限时免费" in script
-    assert "美国" in script
-    assert "模型改进" in script
-    assert "付费回退" in script
+    assert '1) llm_key_name="DEEPSEEK_API_KEY"' in script
+    assert "OpenCode Console" in script
+    assert "按量付费" in script
+    assert "LLM_VENDOR" in script
+    assert "限时免费" not in script
+    assert "自动付费回退" not in script
 
 
 def test_setup_uses_valid_backend_commands_and_hides_keys() -> None:

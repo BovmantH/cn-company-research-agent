@@ -29,23 +29,23 @@ class VendorConfig:
         return self.default_models.get(role, next(iter(self.default_models.values())))
 
 
-# 字典顺序同时是 Web 厂商展示和服务端默认探测顺序。
+# 字典顺序是 Web 展示顺序；工厂会排除必须显式选择的线路。
 VENDOR_REGISTRY: dict[str, VendorConfig] = {
     "opencode": VendorConfig(
-        display_name="OpenCode Zen 免费线路",
-        short_name="OpenCode Zen",
-        description="OpenCode Zen 提供的免费优先线路，模型范围和免费政策可能调整。",
+        display_name="OpenCode Console 按量线路",
+        short_name="OpenCode Console",
+        description="OpenCode Console 按量模型服务；免费聊天模型仅限 OpenCode 客户端使用。",
         api_console_url="https://opencode.ai/auth",
         env_keys=("OPENCODE_API_KEY",),
-        base_url="https://opencode.ai/zen/v1",
+        base_url="https://opencode.ai/inference/openai/v1",
         default_models={
-            "researcher": "deepseek-v4-flash-free",
-            "briefing": "deepseek-v4-flash-free",
-            "editor": "deepseek-v4-flash-free",
+            "researcher": "deepseek-v4.1-flash",
+            "briefing": "deepseek-v4.1-flash",
+            "editor": "deepseek-v4.1-flash",
         },
         catalog_source="official_api",
-        model_catalog_url="https://opencode.ai/zen/v1/models",
-        docs_url="https://opencode.ai/docs/zen",
+        model_catalog_url="https://opencode.ai/inference/v1/models",
+        docs_url="https://opencode.ai/v2/docs/console/api/inference/",
     ),
     "deepseek": VendorConfig(
         display_name="DeepSeek 原厂",
