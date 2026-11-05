@@ -87,8 +87,10 @@ const ResearchReport = ({
               div: ({node: _node, ...props}) => (
                 <div className="space-y-4 text-gray-800" {...props} />
               ),
-              h1: ({node: _node, children, ...props}) => {
-                const text = String(children);
+              h1: ({node, children, ...props}) => {
+                const text = node?.children
+                  .map((child) => child.type === 'text' ? child.value : '')
+                  .join('') ?? '';
                 // 第 5 组提示中文化后，LLM 输出的一级标题已改为
                 // "# {company} 调研报告",这里同步改为中文判断;
                 // "参考文献" 是 references.py 自己拼装的,保持中文一致
@@ -115,57 +117,24 @@ const ResearchReport = ({
                 <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3" {...props} />
               ),
               p: ({node: _node, children, ...props}) => {
-                const text = String(children);
+                // 只对纯文本猜测缺失的标题标记，链接与加粗等节点必须原样保留。
+                const text = typeof children === 'string' ? children : null;
                 // 把以中/英文冒号结尾的短句当 h3 渲染(LLM 偶尔会忘记 ### 前缀)
                 const isSubsectionHeader = (
+                  text !== null &&
                   text.includes('\n') === false &&
                   text.length < 50 &&
                   (text.endsWith(':') || text.endsWith('：') || /^[A-Z][A-Za-z\s/]+$/.test(text))
                 );
 
-                if (isSubsectionHeader) {
+                if (isSubsectionHeader && text !== null) {
                   return (
                     <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3">
                       {(text.endsWith(':') || text.endsWith('：')) ? text.slice(0, -1) : text}
                     </h3>
                   );
                 }
-                
-                const isBulletLabel = text.startsWith('•') && text.includes(':');
-                if (isBulletLabel) {
-                  const [label, content] = text.split(':');
-                  return (
-                    <div className="text-gray-800 my-2">
-                      <span className="font-semibold text-gray-900">
-                        {label.replace('•', '').trim()}:
-                      </span>
-                      {content}
-                    </div>
-                  );
-                }
-                
-                const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
-                if (urlRegex.test(text)) {
-                  const parts = text.split(urlRegex);
-                  return (
-                    <p className="text-gray-800 my-2" {...props}>
-                      {parts.map((part, i) => 
-                        urlRegex.test(part) ? (
-                          <a 
-                            key={i}
-                            href={part}
-                            className="text-[#468BFF] hover:text-[#8FBCFA] underline decoration-[#468BFF] hover:decoration-[#8FBCFA] cursor-pointer transition-colors"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {part}
-                          </a>
-                        ) : part
-                      )}
-                    </p>
-                  );
-                }
-                
+
                 return <p className="text-gray-800 my-2" {...props}>{children}</p>;
               },
               ul: ({node: _node, ...props}) => (

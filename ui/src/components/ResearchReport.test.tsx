@@ -43,4 +43,40 @@ describe('ResearchReport', () => {
     expect(html).toContain('<table>');
     expect(html).toContain('<td>正常</td>');
   });
+
+  it.each([
+    ['英文冒号标签和裸链接', '• 官网: https://example.com/company', 'https://example.com/company'],
+    ['中文冒号标签和裸链接', '• 官网：https://example.com/company', 'https://example.com/company'],
+    ['Markdown 链接', '• 官网: [公司官网](https://example.com/company)', '公司官网'],
+    ['加粗与链接混排', '• 官网: **公司信息**见[公司官网](https://example.com/company)', '公司官网'],
+    ['普通段落中的裸链接', '详情见 https://example.com/company', 'https://example.com/company'],
+  ])('保留%s的链接目标及正文', (_name, markdown, label) => {
+    const html = renderReport(markdown);
+
+    expect(html).toContain('href="https://example.com/company"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain(`>${label}</a>`);
+    expect(html).not.toContain('[object Object]');
+    if (markdown.includes('**公司信息**')) {
+      expect(html).toContain('<strong>公司信息</strong>');
+    }
+  });
+
+  it('不截断链接内的端口和正文内的冒号', () => {
+    const html = renderReport('• 官网: http://example.com:8080/company\n\n• 开放时间: 上午10:30');
+
+    expect(html).toContain('href="http://example.com:8080/company"');
+    expect(html).toContain('上午10:30');
+    expect(html).not.toContain('[object Object]');
+  });
+
+  it('保留纯文本标题样式，但不把混排节点当作字符串标题', () => {
+    const html = renderReport('核心业务：\n\n**公司信息：**\n\n# **公司**调研报告');
+
+    expect(html).toContain('>核心业务</h3>');
+    expect(html).toContain('<strong>公司信息：</strong>');
+    expect(html).toContain('<strong>公司</strong>调研报告</h1>');
+    expect(html).not.toContain('[object Object]');
+  });
 });
