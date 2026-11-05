@@ -23,7 +23,7 @@ MAX_RESULT_CONTENT_LENGTH = 8_000
 
 
 class ResponsesNativeSearchProvider:
-    """强制执行一次托管搜索，并标准化逐文本块 URL citation。"""
+    """执行受限托管搜索，并标准化逐文本块 URL citation。"""
 
     def __init__(
         self,
@@ -91,7 +91,7 @@ class ResponsesNativeSearchProvider:
         return _citation_results(payload, result_limit, self._provider)
 
     def _search_tool(self, result_limit: int) -> dict[str, Any]:
-        """返回厂商文档化的固定工具配置，并锁住单次搜索费用。"""
+        """返回固定工具配置；原生引擎是否执行 max_uses 取决于其支持范围。"""
         if self._provider == "openai":
             return {"type": "web_search", "search_context_size": "medium"}
         return {
@@ -146,11 +146,21 @@ def _has_search_evidence(payload: Mapping[str, Any], provider: str) -> bool:
     usage = payload.get("usage")
     if not isinstance(usage, Mapping):
         return False
-    server_tool_use = usage.get("server_tool_use")
-    if not isinstance(server_tool_use, Mapping):
-        return False
-    search_requests = server_tool_use.get("web_search_requests")
-    return type(search_requests) is int and search_requests > 0
+    counts: list[int] = []
+    for name in ("server_tool_use_details", "server_tool_use"):
+        if name not in usage:
+            continue
+        tool_usage = usage[name]
+        if not isinstance(tool_usage, Mapping):
+            return False
+        search_requests = tool_usage.get("web_search_requests")
+        if type(search_requests) is not int or search_requests < 0:
+            return False
+        counts.append(search_requests)
+    # 新旧字段可兼容，但出现冲突时不能把引用当作真实搜索证据。
+    return (
+        bool(counts) and counts[0] > 0 and all(count == counts[0] for count in counts)
+    )
 
 
 def _citation_results(

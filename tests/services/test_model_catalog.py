@@ -19,6 +19,11 @@ from backend.services.model_catalog import (
     official_model_catalog_url,
 )
 
+OPENROUTER_RESEARCH_ENDPOINTS = [
+    "/api/v1/chat/completions",
+    "/api/v1/responses",
+]
+
 
 @pytest.mark.parametrize(
     ("vendor", "url"),
@@ -112,6 +117,7 @@ async def test_catalog_keeps_only_safe_text_model_fields() -> None:
                 "description": "不应传给前端的上游说明",
                 "architecture": {"output_modalities": ["text"]},
                 "supported_parameters": ["tools", "tool_choice"],
+                "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
             },
             {
                 "id": "vendor/report-chat",
@@ -127,6 +133,7 @@ async def test_catalog_keeps_only_safe_text_model_fields() -> None:
                 "name": "视觉理解模型",
                 "architecture": {"output_modalities": ["text"]},
                 "supported_parameters": ["tools", "tool_choice"],
+                "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
             },
             {"id": "text-embedding-4", "name": "向量模型"},
             {"id": "包含 空格", "name": "非法标识"},
@@ -189,6 +196,7 @@ async def test_openrouter_uses_user_filtered_text_catalog() -> None:
                         "id": "vendor/chat",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": ["tools", "tool_choice"],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     }
                 ]
             },
@@ -213,16 +221,19 @@ async def test_openrouter_catalog_requires_forced_tool_capability() -> None:
                         "id": "vendor/search-ready",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": ["tools", "tool_choice"],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     },
                     {
                         "id": "vendor/tools-only",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": ["tools"],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     },
                     {
                         "id": "vendor/no-tools",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": [],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     },
                 ]
             },
@@ -249,24 +260,28 @@ async def test_openrouter_catalog_prioritizes_free_routes() -> None:
                         "name": "付费模型",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": ["tools", "tool_choice"],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     },
                     {
                         "id": "vendor/free-first:free",
                         "name": "免费模型一",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": ["tools", "tool_choice"],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     },
                     {
                         "id": "vendor/free-second:free",
                         "name": "免费模型二",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": ["tools", "tool_choice"],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     },
                     {
                         "id": "vendor/paid-second",
                         "name": "付费模型二",
                         "architecture": {"output_modalities": ["text"]},
                         "supported_parameters": ["tools", "tool_choice"],
+                        "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
                     },
                 ]
             },
@@ -310,6 +325,76 @@ async def test_openai_catalog_intersects_dynamic_ids_with_web_search_models() ->
     assert [model.id for model in result.models] == [
         "gpt-5.6-luna",
         "gpt-5.6-terra",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_openrouter_catalog_requires_both_synchronous_endpoints() -> None:
+    records = [
+        {
+            "id": "vendor/synchronous",
+            "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
+        },
+        {"id": "vendor/batch:batch", "endpoints": ["/api/v1/batches"]},
+        {"id": "vendor/chat-only", "endpoints": ["/api/v1/chat/completions"]},
+        {"id": "vendor/responses-only", "endpoints": ["/api/v1/responses"]},
+        {"id": "vendor/unknown-endpoints"},
+        {"id": "vendor/invalid-endpoints", "endpoints": [{"path": "unknown"}]},
+    ]
+    payload = {
+        "data": [
+            {
+                **record,
+                "architecture": {"output_modalities": ["text"]},
+                "supported_parameters": ["tools", "tool_choice"],
+            }
+            for record in records
+        ]
+    }
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelCatalogService(client=client).list_models(
+            "openrouter", "sk-test"
+        )
+
+    assert [model.id for model in result.models] == ["vendor/synchronous"]
+
+
+@pytest.mark.asyncio
+async def test_openrouter_catalog_excludes_expired_or_invalid_expiration() -> None:
+    records = [
+        {"id": "vendor/no-expiration", "expiration_date": None},
+        {"id": "vendor/future-expiration", "expiration_date": "2999-01-01"},
+        {"id": "vendor/expired", "expiration_date": "2000-01-01"},
+        {"id": "vendor/invalid-date", "expiration_date": "not-a-date"},
+        {"id": "vendor/invalid-type", "expiration_date": True},
+    ]
+    payload = {
+        "data": [
+            {
+                **record,
+                "architecture": {"output_modalities": ["text"]},
+                "supported_parameters": ["tools", "tool_choice"],
+                "endpoints": OPENROUTER_RESEARCH_ENDPOINTS,
+            }
+            for record in records
+        ]
+    }
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelCatalogService(client=client).list_models(
+            "openrouter", "sk-test"
+        )
+
+    assert [model.id for model in result.models] == [
+        "vendor/no-expiration",
+        "vendor/future-expiration",
     ]
 
 

@@ -98,9 +98,20 @@ async def test_openai_search_forces_one_web_call_and_maps_inline_citation() -> N
 
 
 @pytest.mark.asyncio
-async def test_openrouter_search_limits_paid_tool_and_prefers_citation_content() -> (
-    None
-):
+@pytest.mark.parametrize(
+    "usage",
+    [
+        {"server_tool_use_details": {"web_search_requests": 1}},
+        {"server_tool_use": {"web_search_requests": 1}},
+        {
+            "server_tool_use_details": {"web_search_requests": 1},
+            "server_tool_use": {"web_search_requests": 1},
+        },
+    ],
+)
+async def test_openrouter_search_limits_paid_tool_and_prefers_citation_content(
+    usage: dict[str, Any],
+) -> None:
     client = _client_with_response(
         {
             "output": [
@@ -122,7 +133,7 @@ async def test_openrouter_search_limits_paid_tool_and_prefers_citation_content()
                     ],
                 },
             ],
-            "usage": {"server_tool_use": {"web_search_requests": 1}},
+            "usage": usage,
         }
     )
     provider = ResponsesNativeSearchProvider(
@@ -166,6 +177,63 @@ async def test_openrouter_search_limits_paid_tool_and_prefers_citation_content()
         }
     ]
     assert "sk-openrouter-offline" not in repr(provider)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "usage",
+    [
+        {
+            "server_tool_use_details": {"web_search_requests": 0},
+            "server_tool_use": {"web_search_requests": 1},
+        },
+        {
+            "server_tool_use_details": {"web_search_requests": 1},
+            "server_tool_use": {"web_search_requests": 2},
+        },
+        {
+            "server_tool_use_details": None,
+            "server_tool_use": {"web_search_requests": 1},
+        },
+        {"server_tool_use_details": {"web_search_requests": True}},
+        {"server_tool_use_details": {"web_search_requests": "1"}},
+        {"server_tool_use_details": {"web_search_requests": -1}},
+        {"server_tool_use_details": {}},
+    ],
+)
+async def test_openrouter_rejects_conflicting_or_invalid_search_evidence(
+    usage: dict[str, Any],
+) -> None:
+    client = _client_with_response(
+        {
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "不应被接受的回答。",
+                            "annotations": [
+                                {
+                                    "type": "url_citation",
+                                    "url": "https://example.cn/apple",
+                                    "content": "不能凭引用伪造检索已完成。",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "usage": usage,
+        }
+    )
+    provider = ResponsesNativeSearchProvider(
+        api_key="sk-openrouter-offline",
+        selection=SelectedModel(vendor="openrouter", model="vendor/report-model"),
+        client=client,
+    )
+
+    assert await provider.search("苹果公司") == []
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 import httpx
@@ -21,6 +22,9 @@ from .provider_registry import CLIENT_MODEL_VENDORS, VENDOR_REGISTRY
 MODEL_CATALOG_TIMEOUT_SECONDS = 15.0
 MAX_MODEL_CATALOG_BYTES = 2_000_000
 MAX_MODEL_COUNT = 1_000
+OPENROUTER_RESEARCH_ENDPOINTS = frozenset(
+    {"/api/v1/chat/completions", "/api/v1/responses"}
+)
 NON_TEXT_MODEL_MARKERS = (
     "embedding",
     "moderation",
@@ -114,6 +118,32 @@ def _has_text_output(record: Mapping[str, Any]) -> bool:
     return not any(marker in normalized_id for marker in NON_TEXT_MODEL_MARKERS)
 
 
+def _supports_openrouter_research(record: Mapping[str, Any]) -> bool:
+    """只开放同时支持当前生成、托管检索协议且未到期的模型。"""
+    supported_parameters = record.get("supported_parameters")
+    endpoints = record.get("endpoints")
+    if (
+        not isinstance(supported_parameters, list)
+        or not all(isinstance(value, str) for value in supported_parameters)
+        or not {"tools", "tool_choice"}.issubset(supported_parameters)
+        or not isinstance(endpoints, list)
+        or not all(isinstance(value, str) for value in endpoints)
+        or not OPENROUTER_RESEARCH_ENDPOINTS.issubset(endpoints)
+    ):
+        return False
+
+    expiration = record.get("expiration_date")
+    if expiration is None:
+        return True
+    if not isinstance(expiration, str) or len(expiration) != 10:
+        return False
+    try:
+        # 官方目录使用日期；到期当日保守停用，不把未知时间推迟成仍可调用。
+        return date.fromisoformat(expiration) > datetime.now(UTC).date()
+    except ValueError:
+        return False
+
+
 def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
     """将 OpenAI 兼容目录收窄为无敏感字段的文本模型列表。"""
     if not isinstance(payload, Mapping):
@@ -137,13 +167,8 @@ def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
             continue
         if model_allowlist is not None and model_id not in model_allowlist:
             continue
-        if vendor == "openrouter":
-            supported_parameters = record.get("supported_parameters")
-            if not isinstance(supported_parameters, list) or not {
-                "tools",
-                "tool_choice",
-            }.issubset(supported_parameters):
-                continue
+        if vendor == "openrouter" and not _supports_openrouter_research(record):
+            continue
         raw_name = record.get("name")
         name = raw_name.strip() if isinstance(raw_name, str) else model_id
         if not name or any(ord(char) < 32 or ord(char) == 127 for char in name):
