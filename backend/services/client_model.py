@@ -8,14 +8,34 @@ from dataclasses import dataclass
 from .provider_registry import CLIENT_MODEL_VENDORS
 
 CLIENT_MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
-QWEN_RESPONSES_WEB_SEARCH_MODELS = ("qwen3.7-plus", "qwen3.7-max")
-GLM_WEB_SEARCH_MODELS = ("glm-4.7", "glm-5.2", "glm-4.7-flash")
-MIMO_WEB_SEARCH_MODELS = ("mimo-v2.5", "mimo-v2.5-pro")
+QWEN_RESPONSES_WEB_SEARCH_MODELS = (
+    "qwen3.7-plus",
+    "qwen3.8-flash",
+    "qwen3.8-max",
+    "qwen3.7-max",
+)
+GLM_WEB_SEARCH_MODELS = (
+    "glm-4.7",
+    "glm-5.2",
+    "glm-4.7-flash",
+    "glm-5.3",
+    "glm-5.3-flash",
+    "glm-5.3-flashx",
+)
+MIMO_WEB_SEARCH_MODELS = (
+    "mimo-v2.6-flash",
+    "mimo-v2.6-pro",
+    "mimo-v2.6-pro-ultraspeed",
+)
 OPENAI_RESPONSES_WEB_SEARCH_MODELS = (
     "gpt-5.6",
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
+    "gpt-6-luna",
+    "gpt-6.1-terra",
+    "gpt-6.1-sol",
+    "gpt-6-astra",
 )
 WEB_SEARCH_MODEL_ALLOWLISTS: dict[str, frozenset[str]] = {
     "qwen": frozenset(QWEN_RESPONSES_WEB_SEARCH_MODELS),

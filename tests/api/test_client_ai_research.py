@@ -72,6 +72,8 @@ def test_model_catalog_returns_curated_qwen_options_without_exposing_key() -> No
         "source": "curated",
         "models": [
             {"id": "qwen3.7-plus", "name": "Qwen3.7 Plus"},
+            {"id": "qwen3.8-flash", "name": "Qwen3.8 Flash"},
+            {"id": "qwen3.8-max", "name": "Qwen3.8 Max"},
             {"id": "qwen3.7-max", "name": "Qwen3.7 Max"},
         ],
         "available_for_research": True,
@@ -117,7 +119,7 @@ def test_provider_options_expose_safe_official_api_console_urls() -> None:
         "kimi": "https://platform.kimi.com/console/api-keys",
         "qwen": "https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key",
         "glm": "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
-        "minimax": "https://platform.minimaxi.com/console/access?tab=api-keys",
+        "minimax": "https://platform.minimax.cn/console/access?tab=api-keys",
         "mimo": "https://platform.xiaomimimo.com/",
         "openrouter": "https://openrouter.ai/settings/keys",
         "openai": "https://platform.openai.com/api-keys",
@@ -197,7 +199,7 @@ def test_research_uses_ephemeral_qwen_dependencies_without_exposing_key(
     ("vendor", "model", "expected_provider"),
     [
         ("glm", "glm-5.2", GlmWebSearchProvider),
-        ("mimo", "mimo-v2.5", MiMoNativeSearchProvider),
+        ("mimo", "mimo-v2.6-flash", MiMoNativeSearchProvider),
         ("openrouter", "vendor/report-model", ResponsesNativeSearchProvider),
         ("openai", "gpt-5.6-terra", ResponsesNativeSearchProvider),
     ],
@@ -238,7 +240,7 @@ def test_mimo_token_plan_key_is_rejected_before_model_catalog_request() -> None:
         "/research",
         json=_payload(
             vendor="mimo",
-            model="mimo-v2.5",
+            model="mimo-v2.6-flash",
             api_key="tp-offline-sentinel",
         ),
     )
@@ -323,6 +325,34 @@ def test_structured_search_is_available_and_task_scoped(
     assert capture_research["data"].ai is None
     assert SENTINEL_KEY not in response.text
     assert SENTINEL_KEY not in repr(dependencies)
+
+
+def test_qwen_workspace_binds_catalog_and_model_endpoint(capture_research):
+    class StubCatalog:
+        async def require_model(self, **kwargs):
+            assert kwargs["workspace_id"] == "business-1"
+            return SelectedModel("qwen", "qwen3.8-flash")
+
+    application.app.state.model_catalog = StubCatalog()
+    response = TestClient(application.app).post(
+        "/research", json=_payload(model="qwen3.8-flash", workspace_id="business-1")
+    )
+    assert response.status_code == 200
+    deps = capture_research["kwargs"]["research_dependencies"]
+    assert str(deps.researcher_llm.openai_api_base).startswith(
+        "https://business-1.cn-beijing.maas.aliyuncs.com/"
+    )
+    assert SENTINEL_KEY not in response.text
+
+
+@pytest.mark.parametrize("workspace", ["x.attacker.com", "x/y", "user@host"])
+def test_invalid_qwen_workspace_is_rejected_before_outbound_request(workspace):
+    response = TestClient(application.app).post(
+        "/ai/models",
+        json={"vendor": "qwen", "api_key": SENTINEL_KEY, "workspace_id": workspace},
+    )
+    assert response.status_code == 422
+    assert SENTINEL_KEY not in response.text
 
 
 def test_research_start_failure_does_not_expose_client_key(

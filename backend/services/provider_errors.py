@@ -8,7 +8,7 @@ from typing import Final
 import httpx
 from openai import APIConnectionError, APITimeoutError
 
-from .search.native_http import NativeSearchRequestError
+from .search.native_http import NativeSearchRequestError, NativeSearchResponseInvalid
 
 
 @dataclass(frozen=True)
@@ -82,6 +82,11 @@ def classify_provider_failure(
     """按异常类型和 HTTP 状态码映射公开错误，未知异常交给通用错误处理。"""
     chain = tuple(_exception_chain(exc))
     for current in chain:
+        if isinstance(current, NativeSearchResponseInvalid):
+            return PublicProviderFailure(
+                "provider_response_invalid",
+                "所选厂商未返回可验证的完整来源，请稍后重试或更换模型",
+            )
         if (
             isinstance(current, NativeSearchRequestError)
             and current.operation == "fetch"

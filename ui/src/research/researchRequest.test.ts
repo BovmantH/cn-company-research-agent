@@ -23,6 +23,9 @@ const clientAI: ClientAISelection = {
 
 
 describe('buildResearchRequest', () => {
+  it('调研提交沿用已加载目录的百炼业务空间', () => {
+    expect(buildResearchRequest(values, null, null, { ...clientAI, workspaceId: 'business-1' }).ai).toEqual({ vendor: 'qwen', model: 'qwen3.7-plus', api_key: 'sk-browser-sentinel', web_search: true, workspace_id: 'business-1' });
+  });
   it('关闭专业数据时保持旧 JSON 请求体', () => {
     expect(JSON.parse(JSON.stringify(buildResearchRequest(values, null, null)))).toEqual({
       company: '示例科技',

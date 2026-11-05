@@ -37,6 +37,7 @@ async def _read_response(
     payload: Mapping[str, Any],
     provider_name: str,
     operation: str,
+    sse: bool = False,
 ) -> Mapping[str, Any]:
     """流式读取受限大小的 JSON，拒绝保留错误正文和异常链。"""
     failed_status: int | None = None
@@ -79,7 +80,17 @@ async def _read_response(
 
     json_failed = False
     try:
-        decoded = json.loads(content)
+        if sse:
+            events = [
+                json.loads(line[5:].strip())
+                for line in content.decode("utf-8").splitlines()
+                if line.startswith("data:") and line[5:].strip() not in {"", "[DONE]"}
+            ]
+            if not events or any(not isinstance(event, Mapping) for event in events):
+                raise ValueError("流式事件格式异常")
+            decoded = {"events": events}
+        else:
+            decoded = json.loads(content)
     except (UnicodeDecodeError, ValueError):
         json_failed = True
         decoded = None
@@ -100,6 +111,7 @@ async def post_native_search_json(
     provider_name: str,
     client: httpx.AsyncClient | None,
     operation: str = "search",
+    sse: bool = False,
 ) -> Mapping[str, Any]:
     """复用注入的测试客户端；生产调用使用一次性客户端并及时关闭。"""
     if client is not None:
@@ -110,6 +122,7 @@ async def post_native_search_json(
             payload=payload,
             provider_name=provider_name,
             operation=operation,
+            sse=sse,
         )
     async with httpx.AsyncClient(
         timeout=NATIVE_SEARCH_TIMEOUT_SECONDS,
@@ -122,6 +135,7 @@ async def post_native_search_json(
             payload=payload,
             provider_name=provider_name,
             operation=operation,
+            sse=sse,
         )
 
 

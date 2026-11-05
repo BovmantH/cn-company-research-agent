@@ -116,11 +116,11 @@ describe('AIConfigurationPanel', () => {
     expect(renderer.root.findByProps({ id: 'provider-description-qwen' }).props.children)
       .toBe('阿里云百炼提供的通义千问模型服务。');
     expect(renderer.root.findAllByProps({ children: '可用于联网调研' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ children: '缺少可验证来源接口' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ children: '暂未开放联网调研' })).toHaveLength(1);
     expect(JSON.stringify(renderer.toJSON())).toContain('项目维护的推荐清单');
     await act(async () => providerButtons[1].props.onClick());
     expect(JSON.stringify(renderer.toJSON())).toContain(
-      '该厂商普通 API 当前未提供本项目调研所需的可验证逐来源引用联网接口',
+      '当前尚未开放该线路的联网调研',
     );
     renderer.unmount();
   });
@@ -339,6 +339,32 @@ describe('AIConfigurationPanel', () => {
       renderer.root.findByProps({ children: '使用部署者配置' }).props.onClick();
     });
     expect(panelRef.current?.getSubmission()).toEqual({ mode: 'server' });
+    renderer.unmount();
+  });
+
+  it('百炼空间变更后清空旧模型并将空间用于目录和本次提交', async () => {
+    const inputNode = { value: '' };
+    const loadModels = vi.fn(async () => ({ ...qwenCatalog, source: 'official_api' as const }));
+    const panelRef = { current: null as AIConfigurationPanelHandle | null };
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<AIConfigurationPanel ref={panelRef} apiUrl="" disabled={false} loadProviders={async () => [providers[0]]} loadModels={loadModels} />, {
+        createNodeMock: (element) => element.props.id === 'client-api-key' ? inputNode : null,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => renderer.root.findByProps({ id: 'qwen-workspace-id' }).props.onChange({ target: { value: 'business-1' } }));
+    expect(renderer.root.findByProps({ id: 'client-model' }).props.value).toBe('');
+    inputNode.value = 'sk-qwen-sentinel';
+    await act(async () => {
+      renderer.root.findByProps({ id: 'client-api-key' }).props.onInput({ currentTarget: inputNode });
+      renderer.root.findByProps({ 'aria-label': '加载模型列表' }).props.onClick();
+      await Promise.resolve();
+    });
+    expect(loadModels).toHaveBeenLastCalledWith('', 'qwen', 'sk-qwen-sentinel', expect.any(AbortSignal), undefined, 'business-1');
+    expect(panelRef.current?.getSubmission()).toEqual({ mode: 'client', selection: { vendor: 'qwen', model: 'qwen3.7-plus', apiKey: 'sk-qwen-sentinel', workspaceId: 'business-1' } });
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('sk-qwen-sentinel');
     renderer.unmount();
   });
 });

@@ -67,7 +67,7 @@ async def test_search_uses_mimo_web_tool_and_only_maps_citation_summaries() -> N
     )
     provider = MiMoNativeSearchProvider(
         api_key=SENTINEL_KEY,
-        selection=SelectedModel(vendor="mimo", model="mimo-v2.5"),
+        selection=SelectedModel(vendor="mimo", model="mimo-v2.6-flash"),
         client=client,
     )
     try:
@@ -99,7 +99,7 @@ async def test_search_uses_mimo_web_tool_and_only_maps_citation_summaries() -> N
     )
     assert requests[0].headers["api-key"] == SENTINEL_KEY
     assert json.loads(requests[0].content) == {
-        "model": "mimo-v2.5",
+        "model": "mimo-v2.6-flash",
         "messages": [
             {
                 "role": "user",
@@ -141,7 +141,7 @@ async def test_mimo_search_never_uses_combined_answer_as_source_content() -> Non
     )
     provider = MiMoNativeSearchProvider(
         api_key=SENTINEL_KEY,
-        selection=SelectedModel(vendor="mimo", model="mimo-v2.5-pro"),
+        selection=SelectedModel(vendor="mimo", model="mimo-v2.6-pro"),
         client=client,
     )
     try:
@@ -155,7 +155,7 @@ async def test_mimo_provider_explicitly_rejects_page_operations() -> None:
     client, _ = _client_with_response({"choices": []})
     provider = MiMoNativeSearchProvider(
         api_key=SENTINEL_KEY,
-        selection=SelectedModel(vendor="mimo", model="mimo-v2.5-pro"),
+        selection=SelectedModel(vendor="mimo", model="mimo-v2.6-pro"),
         client=client,
     )
     try:
@@ -170,10 +170,14 @@ async def test_mimo_provider_explicitly_rejects_page_operations() -> None:
 @pytest.mark.parametrize(
     ("api_key", "selection", "message"),
     [
-        (" ", SelectedModel(vendor="mimo", model="mimo-v2.5"), "API Key 不能为空"),
+        (
+            " ",
+            SelectedModel(vendor="mimo", model="mimo-v2.6-flash"),
+            "API Key 不能为空",
+        ),
         (
             "tp-token-plan-not-supported",
-            SelectedModel(vendor="mimo", model="mimo-v2.5"),
+            SelectedModel(vendor="mimo", model="mimo-v2.6-flash"),
             "不支持 Token Plan Key",
         ),
         (

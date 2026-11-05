@@ -53,6 +53,7 @@ const AIConfigurationPanel = forwardRef<
 }, ref) {
   const [providers, setProviders] = useState<ClientAIProvider[]>([]);
   const [selectedVendor, setSelectedVendor] = useState('');
+  const [workspaceId, setWorkspaceId] = useState('');
   const [models, setModels] = useState<ClientAIModel[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [isLoadingProviders, setIsLoadingProviders] = useState(true);
@@ -110,12 +111,9 @@ const AIConfigurationPanel = forwardRef<
     setIsLoadingModels(true);
     setError(null);
     try {
-      const catalog: ClientAIModelCatalog = await loadModels(
-        apiUrl,
-        provider.id,
-        apiKey,
-        controller.signal,
-      );
+      const catalog: ClientAIModelCatalog = provider.id === 'qwen' && workspaceId.trim()
+        ? await loadModels(apiUrl, provider.id, apiKey, controller.signal, undefined, workspaceId.trim())
+        : await loadModels(apiUrl, provider.id, apiKey, controller.signal);
       if (controller.signal.aborted) return;
       setModels(catalog.models);
       setSelectedModel(catalog.models[0]?.id ?? '');
@@ -132,7 +130,7 @@ const AIConfigurationPanel = forwardRef<
         setIsLoadingModels(false);
       }
     }
-  }, [apiUrl, loadModels]);
+  }, [apiUrl, loadModels, workspaceId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -158,10 +156,10 @@ const AIConfigurationPanel = forwardRef<
   }, [apiUrl, loadProviders]);
 
   useEffect(() => {
-    if (!selectedProvider || selectedProvider.requiresKeyToList) return;
+    if (!selectedProvider || selectedProvider.requiresKeyToList || (selectedVendor === 'qwen' && workspaceId)) return;
     void requestModels(selectedProvider, '');
     return () => modelRequestRef.current?.abort();
-  }, [requestModels, selectedProvider]);
+  }, [requestModels, selectedProvider, selectedVendor, workspaceId]);
 
   useEffect(() => () => modelRequestRef.current?.abort(), []);
 
@@ -178,16 +176,18 @@ const AIConfigurationPanel = forwardRef<
           vendor: selectedProvider.id,
           model: selectedModel,
           apiKey,
+          ...(selectedVendor === 'qwen' && workspaceId.trim() ? { workspaceId: workspaceId.trim() } : {}),
         },
       };
     },
     clearSecret,
-  }), [clearSecret, configurationMode, selectedModel, selectedProvider]);
+  }), [clearSecret, configurationMode, selectedModel, selectedProvider, selectedVendor, workspaceId]);
 
   const selectVendor = (provider: ClientAIProvider) => {
     if (provider.id === selectedVendor) return;
     clearCatalog();
     clearSecret();
+    setWorkspaceId('');
     setSelectedVendor(provider.id);
   };
 
@@ -280,7 +280,7 @@ const AIConfigurationPanel = forwardRef<
                   <span className={`mt-1 block pr-4 text-xs ${
                     provider.availableForResearch ? 'text-emerald-700' : 'text-amber-700'
                   }`}>
-                    {provider.availableForResearch ? '可用于联网调研' : '缺少可验证来源接口'}
+                    {provider.availableForResearch ? '可用于联网调研' : '暂未开放联网调研'}
                   </span>
                   {selected && (
                     <Check
@@ -316,6 +316,17 @@ const AIConfigurationPanel = forwardRef<
             <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
             正在读取模型厂商……
           </p>
+        )}
+
+        {selectedVendor === 'qwen' && (
+          <div>
+            <label htmlFor="qwen-workspace-id" className="mb-2 block text-sm font-medium text-slate-700">百炼业务空间 ID（可选）</label>
+            <input id="qwen-workspace-id" value={workspaceId} maxLength={64}
+              onChange={(event) => { clearCatalog(); setWorkspaceId(event.target.value); }}
+              className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-800"
+              placeholder="填写后可加载该空间的实时模型目录" />
+            <p className="mt-2 text-xs leading-5 text-slate-500">不是另一把 Key。留空使用推荐清单；填写后请加载模型列表。</p>
+          </div>
         )}
 
         <div>
@@ -369,7 +380,7 @@ const AIConfigurationPanel = forwardRef<
             >
               {models.length === 0 && (
                 <option value="">
-                  {selectedProvider?.requiresKeyToList
+                  {(selectedProvider?.requiresKeyToList || (selectedVendor === 'qwen' && workspaceId))
                     ? '填写 Key 后加载模型列表'
                     : '正在加载模型列表'}
                 </option>
@@ -378,7 +389,7 @@ const AIConfigurationPanel = forwardRef<
                 <option key={model.id} value={model.id}>{model.name}</option>
               ))}
             </select>
-            {selectedProvider?.requiresKeyToList && (
+            {(selectedProvider?.requiresKeyToList || selectedVendor === 'qwen') && (
               <button
                 type="button"
                 aria-label="加载模型列表"
@@ -417,7 +428,9 @@ const AIConfigurationPanel = forwardRef<
       <div aria-live="polite">
         {configurationMode === 'client' && selectedProvider && !selectedProvider.availableForResearch && (
           <p className="text-sm text-amber-700">
-            该厂商普通 API 当前未提供本项目调研所需的可验证逐来源引用联网接口，因此仅可查看模型目录，暂不能提交调研。
+            {selectedVendor === 'minimax'
+              ? '该厂商联网工具处于测试阶段，当前尚未开放联网调研。你仍可以查看模型目录。'
+              : '当前尚未开放该线路的联网调研，可先查看可用模型目录。'}
           </p>
         )}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}

@@ -566,8 +566,8 @@ def test_max_tokens_override_takes_precedence(
 @pytest.mark.parametrize(
     ("role", "expected_model"),
     [
-        ("researcher", "deepseek-v4-flash"),
-        ("briefing", "deepseek-v4-flash"),
+        ("researcher", "deepseek-flash"),
+        ("briefing", "deepseek-flash"),
         ("editor", "deepseek-v4-pro"),
     ],
 )
@@ -593,7 +593,7 @@ def test_detect_qwen_only(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = get_llm("editor")
     base_url = str(getattr(llm, "openai_api_base", "") or "")
     assert "dashscope.aliyuncs.com" in base_url
-    assert llm.model_name == "qwen3.7-max"
+    assert llm.model_name == "qwen3.8-max"
 
 
 def test_detect_kimi_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -602,7 +602,7 @@ def test_detect_kimi_only(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = get_llm("briefing")
     base_url = str(getattr(llm, "openai_api_base", "") or "")
     assert "api.moonshot.cn" in base_url
-    assert llm.model_name == "kimi-k3"
+    assert llm.model_name == "kimi-k3.1-pro"
 
 
 def test_kimi_editor_uses_current_flagship(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -610,7 +610,7 @@ def test_kimi_editor_uses_current_flagship(monkeypatch: pytest.MonkeyPatch) -> N
 
     llm = get_llm("editor")
 
-    assert llm.model_name == "kimi-k3"
+    assert llm.model_name == "kimi-k3.1-pro"
 
 
 def test_detect_mimo_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -619,7 +619,7 @@ def test_detect_mimo_only(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = get_llm("researcher")
     base_url = str(getattr(llm, "openai_api_base", "") or "")
     assert "api.xiaomimimo.com" in base_url
-    assert llm.model_name == "mimo-v2.5"
+    assert llm.model_name == "mimo-v2.6-flash"
 
 
 def test_detect_mimo_official_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -627,7 +627,7 @@ def test_detect_mimo_official_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
     llm = get_llm("editor")
 
-    assert llm.model_name == "mimo-v2.5-pro"
+    assert llm.model_name == "mimo-v2.6-pro"
     assert llm.openai_api_key.get_secret_value() == "sk-mimo-official"
 
 
@@ -660,12 +660,12 @@ def test_mimo_legacy_key_warns_without_exposing_value(
 @pytest.mark.parametrize(
     ("env_key", "role", "expected_host", "expected_model"),
     [
-        ("ZAI_API_KEY", "researcher", "open.bigmodel.cn", "glm-4.7-flash"),
-        ("ZAI_API_KEY", "briefing", "open.bigmodel.cn", "glm-4.7"),
-        ("ZAI_API_KEY", "editor", "open.bigmodel.cn", "glm-5.2"),
-        ("MINIMAX_API_KEY", "researcher", "api.minimaxi.com", "MiniMax-M3"),
-        ("MINIMAX_API_KEY", "briefing", "api.minimaxi.com", "MiniMax-M3"),
-        ("MINIMAX_API_KEY", "editor", "api.minimaxi.com", "MiniMax-M3"),
+        ("ZAI_API_KEY", "researcher", "open.bigmodel.cn", "glm-5.3-flash"),
+        ("ZAI_API_KEY", "briefing", "open.bigmodel.cn", "glm-5.3"),
+        ("ZAI_API_KEY", "editor", "open.bigmodel.cn", "glm-5.3"),
+        ("MINIMAX_API_KEY", "researcher", "api.minimax.cn", "MiniMax-M3.1-Flash"),
+        ("MINIMAX_API_KEY", "briefing", "api.minimax.cn", "MiniMax-M3.1-Flash"),
+        ("MINIMAX_API_KEY", "editor", "api.minimax.cn", "MiniMax-M3.1-Flash"),
     ],
 )
 def test_detect_new_domestic_vendors(
@@ -972,12 +972,12 @@ def test_credential_candidates_are_derived_from_registry() -> None:
 @pytest.mark.parametrize(
     ("vendor", "role", "expected_model"),
     [
-        ("openrouter", "researcher", "deepseek/deepseek-v4-flash"),
+        ("openrouter", "researcher", "deepseek/deepseek-v4.1-flash"),
         ("openrouter", "briefing", "qwen/qwen3.7-plus"),
-        ("openrouter", "editor", "moonshotai/kimi-k3"),
-        ("openai", "researcher", "gpt-5.6-luna"),
-        ("openai", "briefing", "gpt-5.6-terra"),
-        ("openai", "editor", "gpt-5.6-sol"),
+        ("openrouter", "editor", "moonshotai/kimi-k3.1-pro"),
+        ("openai", "researcher", "gpt-6-luna"),
+        ("openai", "briefing", "gpt-6.1-terra"),
+        ("openai", "editor", "gpt-6.1-sol"),
     ],
 )
 def test_fallback_vendor_current_default_models(
@@ -993,3 +993,14 @@ def test_fallback_vendor_current_default_models(
     llm = get_llm(role)
 
     assert llm.model_name == expected_model
+
+
+def test_reasoning_model_does_not_receive_incompatible_temperature(monkeypatch):
+    monkeypatch.setenv("LLM_TEMPERATURE", "0.7")
+    llm = build_client_llm(
+        role="researcher",
+        selection=SelectedModel("openai", "gpt-6.1-sol"),
+        api_key="sk-offline",
+        streaming=False,
+    )
+    assert llm.temperature is None

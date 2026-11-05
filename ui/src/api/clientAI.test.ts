@@ -9,6 +9,11 @@ import {
 
 
 describe('client AI contracts', () => {
+  it('仅将业务空间作为百炼目录参数发送到实例后端', async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ vendor: 'qwen', source: 'official_api', available_for_research: true, models: [{ id: 'qwen3.8-flash', name: 'Qwen Flash' }] }), { status: 200 }));
+    await loadClientModels('', 'qwen', 'sk-offline', undefined, fetcher, 'business-1');
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({ vendor: 'qwen', api_key: 'sk-offline', workspace_id: 'business-1' });
+  });
   it('严格解析服务端厂商能力且不接受端点字段', () => {
     expect(parseClientProviders({
       providers: [{

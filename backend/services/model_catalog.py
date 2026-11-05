@@ -18,6 +18,7 @@ from .client_model import (
     SelectedModel,
 )
 from .provider_registry import CLIENT_MODEL_VENDORS, VENDOR_REGISTRY
+from .qwen_config import normalize_qwen_workspace_id
 
 MODEL_CATALOG_TIMEOUT_SECONDS = 15.0
 MAX_MODEL_CATALOG_BYTES = 2_000_000
@@ -45,8 +46,7 @@ OFFICIAL_MODEL_CATALOG_URLS: dict[str, str] = {
     if config.model_catalog_url is not None
 }
 DYNAMIC_MODEL_VENDORS = frozenset(OFFICIAL_MODEL_CATALOG_URLS)
-# 千问按量推理和智谱当前没有文档化的模型目录接口。这里仅集中保留经过
-# 官方模型页核对的推荐项，不调用探测到但未承诺稳定性的兼容路由。
+# 百炼未指定业务空间时使用推荐清单；智谱暂未找到正式目录接口。
 CURATED_MODEL_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "qwen": tuple(
         (model_id, model_id.replace("qwen", "Qwen").replace("-", " ").title())
@@ -105,6 +105,11 @@ def official_model_catalog_url(vendor: str) -> str:
 
 def _has_text_output(record: Mapping[str, Any]) -> bool:
     """优先采用目录能力元数据，并排除明显的非文本专用模型。"""
+    if "output_modalities" in record:
+        return (
+            isinstance(record["output_modalities"], list)
+            and "text" in record["output_modalities"]
+        )
     architecture = record.get("architecture")
     if isinstance(architecture, Mapping):
         output_modalities = architecture.get("output_modalities")
@@ -167,6 +172,17 @@ def _parse_model_options(payload: object, vendor: str) -> list[ModelOption]:
             continue
         if model_allowlist is not None and model_id not in model_allowlist:
             continue
+        shutdown = record.get("shutdown_date")
+        if shutdown is not None:
+            try:
+                if (
+                    not isinstance(shutdown, str)
+                    or datetime.fromisoformat(shutdown).date()
+                    <= datetime.now(UTC).date()
+                ):
+                    continue
+            except ValueError:
+                continue
         if vendor == "openrouter" and not _supports_openrouter_research(record):
             continue
         raw_name = record.get("name")
@@ -189,6 +205,68 @@ class ModelCatalogService:
 
     def __init__(self, *, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
+
+    async def _list_qwen_workspace(self, workspace: str, api_key: str) -> ModelCatalog:
+        """有界分页读取百炼专用目录，不把普通兼容路由当目录接口。"""
+        if not api_key.strip():
+            raise ValueError("读取该厂商的官方模型目录需要 API Key")
+        records: list[dict[str, Any]] = []
+        for page in range(1, 11):
+            url = str(
+                httpx.URL(
+                    f"https://{workspace}.cn-beijing.maas.aliyuncs.com/api/v1/models",
+                    params={
+                        "page_no": page,
+                        "page_size": 100,
+                        "providers": "qwen",
+                        "capabilities": "TG",
+                        "features": "web-search",
+                    },
+                )
+            )
+            failed = False
+            try:
+                status, content = await self._get("qwen", url, api_key.strip())
+            except httpx.HTTPError:
+                failed = True
+                status, content = 0, b""
+            if failed:
+                raise ModelCatalogUnavailable("百炼模型目录暂时不可用")
+            if status in {401, 403}:
+                raise ModelCatalogCredentialError("API Key 无权读取百炼业务空间")
+            payload = None
+            if status == 200:
+                try:
+                    payload = json.loads(content)
+                except (ValueError, UnicodeDecodeError):
+                    pass
+            if not isinstance(payload, Mapping) or payload.get("success") is not True:
+                raise ModelCatalogUnavailable("百炼模型目录返回格式异常")
+            output = payload.get("output")
+            if not isinstance(output, Mapping) or not isinstance(
+                output.get("models"), list
+            ):
+                raise ModelCatalogUnavailable("百炼模型目录返回格式异常")
+            for record in output["models"]:
+                if (
+                    not isinstance(record, Mapping)
+                    or not isinstance(record.get("features"), list)
+                    or "web-search" not in record["features"]
+                ):
+                    continue
+                records.append({"id": record.get("model"), "name": record.get("name")})
+            total = output.get("total")
+            if type(total) is not int or total < 0:
+                raise ModelCatalogUnavailable("百炼模型目录分页信息异常")
+            if page * 100 >= total:
+                break
+        else:
+            raise ModelCatalogUnavailable("百炼模型目录超过分页上限")
+        return ModelCatalog(
+            vendor="qwen",
+            source="official_api",
+            models=tuple(_parse_model_options({"data": records}, "qwen")),
+        )
 
     async def _read_catalog(
         self,
@@ -229,9 +307,16 @@ class ModelCatalogService:
         ) as client:
             return await self._read_catalog(client, vendor, url, api_key)
 
-    async def list_models(self, vendor: str, api_key: str) -> ModelCatalog:
+    async def list_models(
+        self, vendor: str, api_key: str, *, workspace_id: str | None = None
+    ) -> ModelCatalog:
         """读取模型目录；错误只抛稳定中文类型，不透传 Key 或响应正文。"""
         normalized_vendor = vendor.strip().lower()
+        workspace = normalize_qwen_workspace_id(workspace_id)
+        if workspace and normalized_vendor != "qwen":
+            raise ValueError("业务空间 ID 仅适用于百炼")
+        if workspace:
+            return await self._list_qwen_workspace(workspace, api_key)
         if normalized_vendor not in CLIENT_MODEL_VENDORS:
             raise ValueError(f"不支持的模型供应商：{normalized_vendor!r}")
         curated = CURATED_MODEL_OPTIONS.get(normalized_vendor)
@@ -285,11 +370,14 @@ class ModelCatalogService:
         vendor: str,
         model: str,
         api_key: str,
+        workspace_id: str | None = None,
     ) -> SelectedModel:
         """再次读取当前目录，确保提交的模型仍属于所选官方厂商。"""
         normalized_vendor = vendor.strip().lower()
         normalized_model = model.strip()
-        catalog = await self.list_models(normalized_vendor, api_key)
+        catalog = await self.list_models(
+            normalized_vendor, api_key, workspace_id=workspace_id
+        )
         if normalized_model not in {option.id for option in catalog.models}:
             source = (
                 "官方模型目录" if catalog.source == "official_api" else "推荐模型清单"

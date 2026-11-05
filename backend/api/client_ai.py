@@ -27,6 +27,7 @@ from backend.services.model_catalog import (
     ModelCatalogUnavailable,
 )
 from backend.services.provider_registry import VENDOR_REGISTRY
+from backend.services.qwen_config import normalize_qwen_workspace_id
 from backend.services.search import SearchProvider
 from backend.services.search.bounded_provider import BoundedSearchProvider
 from backend.services.search.deepseek_provider import DeepSeekSearchProvider
@@ -69,6 +70,7 @@ class ModelCatalogRequest(BaseModel):
 
     vendor: str = Field(min_length=1, max_length=32)
     api_key: SecretStr | None = None
+    workspace_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("vendor")
     @classmethod
@@ -85,6 +87,9 @@ class ModelCatalogRequest(BaseModel):
     @model_validator(mode="after")
     def reject_mimo_token_plan_key(self) -> ModelCatalogRequest:
         """普通 MiMo 模型目录不能接收使用独立端点的 Token Plan Key。"""
+        self.workspace_id = normalize_qwen_workspace_id(self.workspace_id)
+        if self.workspace_id and self.vendor != "qwen":
+            raise ValueError("业务空间 ID 仅适用于百炼")
         if (
             self.vendor == "mimo"
             and self.api_key is not None
@@ -103,6 +108,7 @@ class ClientAIRequest(BaseModel):
     model: str = Field(min_length=1, max_length=128)
     api_key: SecretStr
     web_search: Literal[True] = True
+    workspace_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("vendor")
     @classmethod
@@ -120,6 +126,9 @@ class ClientAIRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_client_selection(self) -> ClientAIRequest:
+        self.workspace_id = normalize_qwen_workspace_id(self.workspace_id)
+        if self.workspace_id and self.vendor != "qwen":
+            raise ValueError("业务空间 ID 仅适用于百炼")
         if self.vendor not in CLIENT_WEB_SEARCH_VENDORS:
             raise ValueError("当前尚未开放该厂商的用户自带 Key 联网调研")
         if self.vendor == "mimo" and self.api_key.get_secret_value().startswith("tp-"):
@@ -136,10 +145,12 @@ def build_client_research_dependencies(
     """构造与当前请求绑定的模型和联网实例，不读取服务端厂商选择。"""
     api_key = config.api_key.get_secret_value()
     common = {"selection": selection, "api_key": api_key}
+    if config.workspace_id:
+        common["workspace_id"] = config.workspace_id
     provider_type = CLIENT_SEARCH_PROVIDER_TYPES.get(selection.vendor)
     if provider_type is None:
         raise ValueError("当前尚未开放该厂商的用户自带 Key 联网调研")
-    search = provider_type(api_key=api_key, selection=selection)
+    search = provider_type(**common)
     if selection.vendor in {"deepseek", "kimi"}:
         search = BoundedSearchProvider(search)
     return ResearchDependencies(
@@ -189,6 +200,7 @@ async def require_client_model(
         vendor=config.vendor,
         model=config.model,
         api_key=config.api_key.get_secret_value(),
+        **({"workspace_id": config.workspace_id} if config.workspace_id else {}),
     )
 
 
@@ -220,6 +232,7 @@ async def list_client_models(data: ModelCatalogRequest, request: Request):
         catalog = await request.app.state.model_catalog.list_models(
             data.vendor,
             data.api_key.get_secret_value() if data.api_key is not None else "",
+            **({"workspace_id": data.workspace_id} if data.workspace_id else {}),
         )
     except (ModelCatalogCredentialError, ModelCatalogUnavailable, ValueError) as exc:
         return model_catalog_error_response(exc)

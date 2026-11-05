@@ -17,6 +17,7 @@ type ResearchRequestPayload = {
     vendor: string;
     model: string;
     api_key: string;
+    workspace_id?: string;
     web_search: true;
   };
   professional_data?:
@@ -85,6 +86,7 @@ export const buildResearchRequest = (
             vendor: clientAI.vendor,
             model: clientAI.model,
             api_key: clientAI.apiKey,
+            ...(clientAI.workspaceId ? { workspace_id: clientAI.workspaceId } : {}),
             web_search: true as const,
           },
         }

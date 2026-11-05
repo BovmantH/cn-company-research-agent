@@ -2,6 +2,7 @@ export type ClientAISelection = {
   vendor: string;
   model: string;
   apiKey: string;
+  workspaceId?: string;
 };
 
 export type ClientAIProvider = {
@@ -180,6 +181,7 @@ export const loadClientModels = async (
   apiKey: string,
   signal?: AbortSignal,
   fetcher: FetchLike = fetch,
+  workspaceId?: string,
 ): Promise<ClientAIModelCatalog> => {
   let response: Response;
   try {
@@ -195,6 +197,7 @@ export const loadClientModels = async (
       body: JSON.stringify({
         vendor,
         ...(apiKey ? { api_key: apiKey } : {}),
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       }),
       signal,
     });

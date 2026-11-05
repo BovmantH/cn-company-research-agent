@@ -31,7 +31,7 @@ OPENROUTER_RESEARCH_ENDPOINTS = [
         ("opencode", "https://opencode.ai/inference/v1/models"),
         ("deepseek", "https://api.deepseek.com/models"),
         ("kimi", "https://api.moonshot.cn/v1/models"),
-        ("minimax", "https://api.minimaxi.com/v1/models"),
+        ("minimax", "https://api.minimax.cn/v1/models"),
         ("mimo", "https://api.xiaomimimo.com/v1/models"),
         ("openrouter", "https://openrouter.ai/api/v1/models/user"),
         ("openai", "https://api.openai.com/v1/models"),
@@ -165,6 +165,8 @@ async def test_mimo_catalog_only_exposes_models_with_confirmed_web_search() -> N
             200,
             json={
                 "data": [
+                    {"id": "mimo-v2.6-flash"},
+                    {"id": "mimo-v2.6-pro"},
                     {"id": "mimo-v2.5"},
                     {"id": "mimo-v2.5-pro"},
                     {"id": "mimo-v2"},
@@ -179,7 +181,7 @@ async def test_mimo_catalog_only_exposes_models_with_confirmed_web_search() -> N
             "sk-test",
         )
 
-    assert [model.id for model in result.models] == ["mimo-v2.5", "mimo-v2.5-pro"]
+    assert [model.id for model in result.models] == ["mimo-v2.6-flash", "mimo-v2.6-pro"]
 
 
 @pytest.mark.asyncio
@@ -402,8 +404,18 @@ async def test_openrouter_catalog_excludes_expired_or_invalid_expiration() -> No
 @pytest.mark.parametrize(
     ("vendor", "expected_ids"),
     [
-        ("qwen", ["qwen3.7-plus", "qwen3.7-max"]),
-        ("glm", ["glm-4.7", "glm-5.2", "glm-4.7-flash"]),
+        ("qwen", ["qwen3.7-plus", "qwen3.8-flash", "qwen3.8-max", "qwen3.7-max"]),
+        (
+            "glm",
+            [
+                "glm-4.7",
+                "glm-5.2",
+                "glm-4.7-flash",
+                "glm-5.3",
+                "glm-5.3-flash",
+                "glm-5.3-flashx",
+            ],
+        ),
     ],
 )
 async def test_catalog_marks_vendors_without_official_api_as_curated(
@@ -424,6 +436,62 @@ async def test_catalog_marks_vendors_without_official_api_as_curated(
 async def test_dynamic_catalog_requires_user_key_before_request() -> None:
     with pytest.raises(ValueError, match="需要 API Key"):
         await ModelCatalogService().list_models("kimi", "")
+
+
+@pytest.mark.asyncio
+async def test_qwen_workspace_catalog_uses_official_shape_and_fixed_host():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "output": {
+                    "total": 1,
+                    "models": [
+                        {
+                            "model": "qwen3.8-flash",
+                            "name": "Qwen Flash",
+                            "features": ["web-search"],
+                        }
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        catalog = await ModelCatalogService(client=client).list_models(
+            "qwen", "sk-offline", workspace_id="business-1"
+        )
+    assert catalog.source == "official_api"
+    assert [m.id for m in catalog.models] == ["qwen3.8-flash"]
+    assert requests[0].url.host == "business-1.cn-beijing.maas.aliyuncs.com"
+    assert requests[0].url.path == "/api/v1/models"
+    assert requests[0].url.params["page_no"] == "1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("features", [None, "web-search"])
+async def test_qwen_catalog_rejects_malformed_capabilities(features):
+    def handler(_request):
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "output": {
+                    "total": 1,
+                    "models": [{"model": "qwen3.8-flash", "features": features}],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ModelCatalogUnavailable):
+            await ModelCatalogService(client=client).list_models(
+                "qwen", "sk-offline", workspace_id="business-1"
+            )
 
 
 @pytest.mark.asyncio

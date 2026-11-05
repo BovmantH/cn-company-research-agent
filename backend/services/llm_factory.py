@@ -58,6 +58,7 @@ from .client_model import (
     SelectedModel,
 )
 from .provider_registry import CLIENT_MODEL_VENDORS, VENDOR_REGISTRY
+from .qwen_config import qwen_inference_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +326,20 @@ def _build_chat_model(
 
     kwargs.update(overrides)
 
+    # 新推理模型不接受采样参数；不把部署者的通用温度强加给用户所选模型。
+    if (
+        (
+            vendor == "openai"
+            and model.startswith(("gpt-5", "gpt-6"))
+            and kwargs.get("reasoning_effort") != "none"
+        )
+        or (vendor == "glm" and model.startswith("glm-5.3"))
+        or (vendor == "kimi" and model.startswith("kimi-k3"))
+        or (vendor == "mimo" and model.startswith("mimo-v2.6"))
+    ):
+        for parameter in ("temperature", "top_p", "top_logprobs", "logprobs"):
+            kwargs.pop(parameter, None)
+
     parsed_base_url = urlsplit(str(kwargs["base_url"]))
     endpoint = (
         f"{parsed_base_url.scheme}://{parsed_base_url.hostname}"
@@ -348,6 +363,7 @@ def build_client_llm(
     selection: SelectedModel,
     api_key: str,
     streaming: bool,
+    workspace_id: str | None = None,
 ) -> BaseChatModel:
     """为单次 Web 调研构造固定厂商模型，不读取服务端厂商选择或执行回退。"""
     if role not in VALID_ROLES:
@@ -356,6 +372,8 @@ def build_client_llm(
     normalized_vendor = selection.vendor.strip().lower()
     if normalized_vendor not in CLIENT_MODEL_VENDORS:
         raise ValueError(f"不支持的用户模型供应商：{normalized_vendor!r}")
+    if workspace_id and normalized_vendor != "qwen":
+        raise ValueError("业务空间 ID 仅适用于百炼")
 
     normalized_model = selection.model.strip()
     if not CLIENT_MODEL_ID_PATTERN.fullmatch(normalized_model):
@@ -372,7 +390,11 @@ def build_client_llm(
         model_override=normalized_model,
         use_role_env=False,
         overrides={"streaming": streaming},
-        fixed_base_url=VENDOR_REGISTRY[normalized_vendor].base_url,
+        fixed_base_url=(
+            qwen_inference_base_url(workspace_id)
+            if normalized_vendor == "qwen"
+            else VENDOR_REGISTRY[normalized_vendor].base_url
+        ),
         exact_model_id=normalized_model,
     )
 
