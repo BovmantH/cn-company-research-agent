@@ -7,7 +7,7 @@ from langchain_core.messages import SystemMessage
 from langchain_core.runnables import Runnable
 from langgraph.graph import StateGraph
 
-from .classes.state import InputState
+from .classes.state import InputState, ResearchState
 from .nodes import GroundingNode
 from .nodes.briefing import Briefing
 from .nodes.collector import Collector
@@ -98,7 +98,8 @@ class Graph:
 
     def _build_workflow(self):
         """配置状态图工作流。"""
-        self.workflow = StateGraph(InputState)
+        # 输入只接收公司信息，内部与最终输出保留完整调研状态及来源元信息。
+        self.workflow = StateGraph(ResearchState, input_schema=InputState)
 
         # 注册节点及其处理函数
         self.workflow.add_node("grounding", self.ground.run)

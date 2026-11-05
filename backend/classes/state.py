@@ -36,6 +36,8 @@ class ResearchState(InputState):
     industry_briefing: str
     company_briefing: str
     references: list[str]
+    reference_titles: dict[str, str]
+    reference_info: dict[str, dict[str, Any]]
     briefings: dict[str, Any]
     report: str
 
