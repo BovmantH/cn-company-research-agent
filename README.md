@@ -58,40 +58,56 @@
 
 ## 🧠 Agent 框架
 
-### 系统架构
+### 前后端系统架构
+
+前端负责输入、进度和报告展示；后端负责凭证校验、任务编排、厂商调用及 PDF 生成。浏览器不会直接携带 Key 调用模型厂商，任务 Key 经当前部署实例的后端转发到固定官方端点。
 
 ```mermaid
 flowchart TB
-    UI["前端 React + Vite<br/>(ui/)"] -- HTTP / SSE --> API
-    subgraph Backend["FastAPI 后端(application.py)"]
-        API["REST + SSE 接口<br/>POST /research · GET /research/{job_id}/stream"]
-        ClientDeps["任务级依赖<br/>用户厂商 + 模型 + 临时 Key"]
-        ServerDeps["部署者依赖<br/>LLM 工厂 + SearchProvider"]
-        Graph["LangGraph 编排<br/>(backend/graph.py)"]
-        API --> Graph
-        API -.用户自带 Key.-> ClientDeps
-        API -.部署者配置.-> ServerDeps
-        ClientDeps --> Graph
-        ServerDeps --> Graph
-        Graph --> Pipeline["10 节点 DAG<br/>见下方流水线"]
+    subgraph Frontend["浏览器 · React + Vite（ui/src/）"]
+        Form["ResearchForm + AIConfigurationPanel<br/>公司信息 · 厂商/模型 · 临时 Key"]
+        Progress["App + researchStreamReducer<br/>进度展示 · SSE 断线重连"]
+        Report["ResearchReport<br/>Markdown · 来源链接 · 复制/PDF 下载"]
+        Progress --> Report
     end
-    ClientDeps --> NativeSearch["同 Key 网页检索<br/>DeepSeek · Kimi · Qwen · GLM · MiMo · OpenRouter · OpenAI"]
-    ServerDeps --> LLM["llm_factory.get_llm(role)<br/>按配置选择单个供应商"]
-    ServerDeps --> Search["SearchProvider<br/>Tavily / DeepSeek / Kimi"]
-    ClientDeps --> Vendors
-    LLM --> Vendors
-    subgraph Vendors["LLM 供应商"]
-        OC[OpenCode Console]
-        D[DeepSeek 原厂]
-        Q[Qwen / 阿里百炼]
-        K[Kimi / Moonshot]
-        G[GLM / 智谱]
-        MM[MiniMax]
-        M[MiMo / 小米]
-        OR[OpenRouter 聚合]
-        OAI[OpenAI 兜底]
+    Form -->|HTTP：加载目录 / 提交任务| API
+    API -->|job_id / SSE 事件| Progress
+    Report -->|HTTP：提交 Markdown 下载 PDF| API
+
+    subgraph Backend["服务端 · FastAPI（application.py + backend/）"]
+        API["REST + SSE<br/>/ai/* · /research* · /generate-pdf"]
+        Catalog["ModelCatalogService<br/>官方动态目录 / 推荐清单 · 能力校验"]
+        Jobs["后台调研任务<br/>状态推进 · 安全错误 · 专业附录合并"]
+        Deps["ResearchDependencies · 任务级依赖<br/>用户 BYOK 或部署者配置，不跨厂商自动回退"]
+        Graph["LangGraph · 10 节点 DAG<br/>背景 → 四路调研 → 筛选/补全 → 摘要/终稿"]
+        Models["LLM 工厂<br/>researcher / briefing / editor"]
+        Search["SearchProvider 适配器<br/>搜索 · 来源归一化 · 支持时提取正文"]
+        Events["单进程内存 · job_status + JobEventLog<br/>活动状态 · 有界事件日志 · 游标重放"]
+        PDF["PDFService<br/>Markdown → PDF 字节流"]
+
+        API --> Catalog
+        API --> Jobs
+        API --> Deps
+        Deps -.注入.-> Graph
+        Jobs --> Graph
+        Graph --> Models
+        Graph --> Search
+        Jobs --> Events
+        Graph -->|节点进度 / 终稿片段| Events
+        Events -->|读取 / 重放| API
+        API --> PDF
     end
+
+    Catalog --> Vendors["外部官方服务<br/>模型目录 · 模型生成 · 网页搜索/提取"]
+    Models --> Vendors
+    Search --> Vendors
+    Jobs -.可选持久化.-> Mongo[("MongoDB<br/>任务记录 · 最终报告")]
+    API -.查询历史任务/报告.-> Mongo
 ```
+
+开发时前后端分别运行，Vite 将 API 请求代理到 FastAPI；生产镜像先构建 `ui/dist`，再由 FastAPI 同源托管静态页面和 API。MongoDB 是可选的结果持久化，不是任务队列：当前活动任务和 SSE 事件仍在单进程内存中，重启不能续跑，也不支持多实例接管。
+
+工商司法模块独立于网页检索；当前生产 Provider 尚未装配，默认关闭。其预算准入、主体确认和确定性附录由后端处理，不交给 LLM 自由调用付费工具，专业分支失败不阻断基础报告。
 
 ### 调研流水线
 
