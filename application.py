@@ -788,12 +788,6 @@ async def process_research(
         if report_content:
             logger.info(f"调研完成,报告长度: {len(report_content)} 字符")
 
-            if mongodb:
-                mongodb.update_job(job_id=job_id, status="completed")
-                mongodb.store_report(
-                    job_id=job_id, report_data={"report": report_content}
-                )
-
             job_status[job_id].update(
                 {
                     "report": report_content,
@@ -802,6 +796,22 @@ async def process_research(
                     "expires_at_epoch": time.time() + JOB_TERMINAL_TTL_SECONDS,
                 }
             )
+            if mongodb:
+                try:
+                    # 先保存成果再标记历史任务完成；存储故障不能抹掉内存成果。
+                    mongodb.store_report(
+                        job_id=job_id, report_data={"report": report_content}
+                    )
+                    mongodb.update_job(job_id=job_id, status="completed")
+                except Exception as exc:
+                    logger.warning(
+                        "报告历史保存失败，job_id=%s，异常类型=%s",
+                        job_id,
+                        type(exc).__name__,
+                    )
+                    job_status[job_id]["events"].append(
+                        {"type": "report_degraded", "reason": "persistence_failed"}
+                    )
             job_status[job_id]["events"].append(
                 {"type": "complete", "report": report_content}
             )
@@ -868,11 +878,18 @@ async def process_research(
                     type(abandon_error).__name__,
                 )
         if mongodb:
-            mongodb.update_job(
-                job_id=job_id,
-                status="failed",
-                error=public_error,
-            )
+            try:
+                mongodb.update_job(
+                    job_id=job_id,
+                    status="failed",
+                    error=public_error,
+                )
+            except Exception as storage_error:
+                logger.warning(
+                    "失败任务状态保存失败，job_id=%s，异常类型=%s",
+                    job_id,
+                    type(storage_error).__name__,
+                )
     finally:
         if professional_task is not None and not professional_task.done():
             _detach_professional_task(
@@ -1004,11 +1021,12 @@ async def stream_research(job_id: str, request: Request):
 @app.get("/research/{job_id}/report")
 async def get_research_report(job_id: str):
     prune_expired_jobs()
+    # 活动实例已有的成果优先于可选数据库，避免临时写入失败让报告无法下载。
+    if job_id in job_status and (report := job_status[job_id].get("report")):
+        return {"report": report}
     if not mongodb:
         if job_id in job_status:
             result = job_status[job_id]
-            if report := result.get("report"):
-                return {"report": report}
             # 任务存在但报告还没生成完
             return JSONResponse(
                 status_code=202,
